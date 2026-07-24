@@ -75,14 +75,29 @@ export default function DynamicForm() {
 
       if (webinar) {
         // Field keys in a Form-Builder-built form are random uids, not
-        // semantic names — the admin never gets to mark "this is the name/
-        // email field". Resolve them from the form's own schema instead of
-        // guessing literal keys like "name"/"email" (which only ever match
-        // the separate, hardcoded default webinar-registration form).
-        const nameField = (form.fields || []).find(f => f.type !== 'email' && /name/i.test(f.label || ''))
-        const emailField = (form.fields || []).find(f => f.type === 'email')
-        const rawName = (nameField && clean[nameField.key]) || clean.name || clean.fullName || clean.Name || ''
-        const email = (emailField && clean[emailField.key]) || clean.email || clean.Email || ''
+        // semantic names — resolve name/email by searching the schema.
+        // Priority order: field type match → label contains keyword → key contains keyword → flat key fallback.
+        const fields = form.fields || []
+
+        // Resolve NAME field: prefer a non-email field whose label or key contains "name"
+        const nameField =
+          fields.find(f => f.type !== 'email' && /name/i.test(f.label || '')) ||
+          fields.find(f => f.type !== 'email' && /name/i.test(f.key || '')) ||
+          fields.find(f => f.type === 'text' && /full|student|participant/i.test(f.label || ''))
+        const rawName =
+          (nameField && clean[nameField.key]) ||
+          clean.name || clean.fullName || clean.full_name ||
+          clean.Name || clean.FullName || clean.studentName || ''
+
+        // Resolve EMAIL field: prefer type=email, then label/key containing "email"
+        const emailField =
+          fields.find(f => f.type === 'email') ||
+          fields.find(f => /email/i.test(f.label || '')) ||
+          fields.find(f => /email/i.test(f.key || ''))
+        const email =
+          (emailField && clean[emailField.key]) ||
+          clean.email || clean.Email || clean.emailAddress || clean.email_address || ''
+
         generateAndIssueCertificate({ submissionId, webinar, rawName, email }).catch(() => {})
       }
     } catch (e) { setStatus('error'); setError(e.message) }

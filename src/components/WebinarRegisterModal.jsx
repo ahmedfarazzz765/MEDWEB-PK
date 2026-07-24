@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, CheckCircle } from 'lucide-react'
-import { formsService } from '../firebase/services'
+import { X, CheckCircle, Mail } from 'lucide-react'
+import { formsService, webinarsService } from '../firebase/services'
 import { uploadToCloudinary } from '../firebase/cloudinary'
+import { generateAndIssueCertificate } from '../lib/certificateGenerator'
 
 const inputCls =
   'w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#1655c3]/30 focus:border-[#1655c3] transition-all placeholder:text-gray-400 bg-gray-50'
@@ -10,12 +11,15 @@ const inputCls =
 // Public-facing animated registration popup — same Form Builder field types
 // and the same formSubmissions storage as DynamicForm.jsx's full-page form,
 // just presented as a modal instead of a page navigation.
-export default function WebinarRegisterModal({ formId, webinarTopic, onClose }) {
-  const [form, setForm]       = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [values, setValues]   = useState({})
-  const [status, setStatus]   = useState('idle')
-  const [error, setError]     = useState('')
+// webinar prop is optional — pass the full webinar object when this modal
+// is used for a feedback form so certificates can be auto-generated.
+export default function WebinarRegisterModal({ formId, webinarTopic, webinar: webinarProp, onClose }) {
+  const [form, setForm]             = useState(null)
+  const [loading, setLoading]       = useState(true)
+  const [values, setValues]         = useState({})
+  const [status, setStatus]         = useState('idle')
+  const [error, setError]           = useState('')
+  const [certIssued, setCertIssued] = useState(false)
 
   useEffect(() => {
     formsService.getOne(formId)
@@ -48,13 +52,37 @@ export default function WebinarRegisterModal({ formId, webinarTopic, onClose }) 
     try {
       const clean = {}
       Object.keys(values).forEach(k => { if (!k.endsWith('__uploading')) clean[k] = values[k] })
-      await formsService.addSubmission({
+      const submissionId = await formsService.addSubmission({
         formId,
         formTitle: form.title,
         values: clean,
         submittedAt: new Date().toISOString(),
       })
       setStatus('success')
+
+      // Auto-generate and email certificate if this modal is used for a
+      // feedback form tied to a webinar that has a certificate template.
+      // Fire-and-forget — never blocks or affects the success screen.
+      const webinar = webinarProp || await webinarsService.getByFeedbackFormId(formId).catch(() => null)
+      if (webinar?.certTemplate?.imageUrl) {
+        setCertIssued(true)
+        const fields = form.fields || []
+        const nameField =
+          fields.find(f => f.type !== 'email' && /name/i.test(f.label || '')) ||
+          fields.find(f => f.type !== 'email' && /name/i.test(f.key || '')) ||
+          fields.find(f => f.type === 'text' && /full|student|participant/i.test(f.label || ''))
+        const emailField =
+          fields.find(f => f.type === 'email') ||
+          fields.find(f => /email/i.test(f.label || '')) ||
+          fields.find(f => /email/i.test(f.key || ''))
+        const rawName =
+          (nameField && clean[nameField.key]) ||
+          clean.name || clean.fullName || clean.full_name || clean.Name || ''
+        const email =
+          (emailField && clean[emailField.key]) ||
+          clean.email || clean.Email || clean.emailAddress || ''
+        generateAndIssueCertificate({ submissionId, webinar, rawName, email }).catch(() => {})
+      }
     } catch (e) { setStatus('error'); setError(e.message) }
   }
 
@@ -140,8 +168,18 @@ export default function WebinarRegisterModal({ formId, webinarTopic, onClose }) 
                 <div className="w-16 h-16 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-4">
                   <CheckCircle size={32} className="text-[#64ac37]" />
                 </div>
-                <h3 className="text-lg font-black text-[#1a1a1a] mb-1">Registered! 🎉</h3>
-                <p className="text-gray-500 text-sm mb-6">Thank you — your response has been recorded.</p>
+                <h3 className="text-lg font-black text-[#1a1a1a] mb-1">Submitted! 🎉</h3>
+                {certIssued ? (
+                  <>
+                    <p className="text-gray-500 text-sm mb-1">Thank you for your feedback!</p>
+                    <div className="flex items-center justify-center gap-1.5 text-[#1655c3] text-xs font-semibold mb-6">
+                      <Mail size={13} />
+                      Your certificate is on its way to your inbox.
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-gray-500 text-sm mb-6">Thank you — your response has been recorded.</p>
+                )}
                 <button onClick={onClose} className="px-6 py-2.5 rounded-xl text-sm font-semibold text-white"
                   style={{ background: 'linear-gradient(135deg, #1655c3, #64ac37)' }}>
                   Close

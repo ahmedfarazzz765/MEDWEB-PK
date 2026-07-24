@@ -1,26 +1,27 @@
-// ── MEDWEB Auto-Email Service (EmailJS) ──────────────────────────────────────
-// Frontend email sending — no backend required.
+// ── MEDWEB Auto-Email Service (Brevo) ────────────────────────────────────────
+// Frontend email sending via Brevo's free REST API — no backend required.
+// Free plan: 300 emails/day, ~9 000/month, no credit card needed.
 //
 // SETUP (one time):
-//   1. Create a free account at https://www.emailjs.com
-//   2. Add an Email Service (Gmail/Outlook/etc.)  → copy the SERVICE ID
-//   3. Create an Email Template with these variables:
-//        {{to_name}} {{to_email}} {{subject}} {{message}}
-//        {{webinar_topic}} {{webinar_date}} {{webinar_time}} {{speaker}}
-//      → copy the TEMPLATE ID
-//   4. Account → API Keys → copy your PUBLIC KEY
-//   5. Paste all three into Admin Panel → Email Settings (saved in Firestore).
+//   1. Create a free account at https://app.brevo.com
+//   2. Go to  Account → SMTP & API → API Keys → Generate a new API key
+//      → copy it (starts with "xkeysib-…")
+//   3. Under Senders & IP → Senders, add + verify the email address
+//      you want to send FROM (e.g. info@medweb.pk or your Gmail).
+//   4. In the Admin Panel → Email Settings paste:
+//        • Brevo API Key  (the "xkeysib-…" key)
+//        • Sender Email   (the verified sender address)
+//        • From Name      (e.g. "MEDWEB-PK")
+//      Tick "Enable automatic emails" → Save.
 //
-// Once configured, registration confirmations, certificate emails, and
-// newsletter sends all go through this same one configured Service/Template
-// — there's no separate email pathway per feature.
+// All certificate, confirmation, newsletter, and ambassador emails flow
+// through the single sendEmail() function below.
 
-import emailjs from '@emailjs/browser'
 import { settingsService, emailUsageService } from './services'
 
 let cachedConfig = null
 
-// Load EmailJS config (publicKey / serviceId / templateId) from Firestore settings.
+// Load Brevo config from Firestore settings.
 export async function loadEmailConfig(force = false) {
   if (cachedConfig && !force) return cachedConfig
   const settings = await settingsService.get().catch(() => null)
@@ -29,42 +30,92 @@ export async function loadEmailConfig(force = false) {
 }
 
 export function isEmailEnabled(cfg) {
-  return !!(cfg && cfg.enabled && cfg.publicKey && cfg.serviceId && cfg.templateId)
+  return !!(cfg && cfg.enabled && cfg.brevoApiKey && cfg.senderEmail)
 }
 
-// EmailJS's free-plan quota (shared across every feature using this one
-// account) — see emailUsageService in services.js for how usage is tracked,
-// since EmailJS itself exposes no "remaining quota" API.
-export const EMAILJS_MONTHLY_QUOTA = 200
+// Brevo free plan: 300 emails/day ≈ 9 000/month
+export const BREVO_MONTHLY_QUOTA = 9000
 
 export async function getRemainingEmailQuota() {
   const usage = await emailUsageService.get().catch(() => null)
   const monthKey = new Date().toISOString().slice(0, 7)
   const used = (usage && usage.month === monthKey) ? (usage.count || 0) : 0
-  return Math.max(0, EMAILJS_MONTHLY_QUOTA - used)
+  return Math.max(0, BREVO_MONTHLY_QUOTA - used)
+}
+
+// ── HTML email wrapper ────────────────────────────────────────────────────────
+function wrapHtml(bodyHtml) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f0f4f8;font-family:'Helvetica Neue',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f4f8;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+
+        <!-- HEADER -->
+        <tr><td style="background:linear-gradient(135deg,#1655c3,#64ac37);border-radius:16px 16px 0 0;padding:28px 32px;text-align:center;">
+          <h1 style="margin:0;color:#fff;font-size:22px;font-weight:900;letter-spacing:-0.5px;">MEDWEB<span style="color:rgba(255,255,255,0.7)">-PK</span></h1>
+          <p style="margin:4px 0 0;color:rgba(255,255,255,0.8);font-size:13px;">Connecting Medical Minds</p>
+        </td></tr>
+
+        <!-- BODY -->
+        <tr><td style="background:#fff;padding:32px;border-radius:0 0 16px 16px;box-shadow:0 4px 24px rgba(0,0,0,0.06);">
+          ${bodyHtml}
+        </td></tr>
+
+        <!-- FOOTER -->
+        <tr><td style="padding:20px;text-align:center;">
+          <p style="margin:0;color:#aaa;font-size:11px;">© ${new Date().getFullYear()} MEDWEB-PK · Pakistan's Medical Education Platform</p>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`
 }
 
 /**
- * Send an automated email through EmailJS.
- * Silently no-ops (returns {skipped:true}) if email is not configured,
- * so registration never fails just because email isn't set up yet.
+ * Core send function — calls Brevo's transactional email API.
+ * Silently no-ops (returns {skipped:true}) if not configured.
  */
-export async function sendEmail(params) {
+export async function sendEmail({ to_name, to_email, subject, htmlContent, message }) {
   try {
     const cfg = await loadEmailConfig()
     if (!isEmailEnabled(cfg)) {
       return { skipped: true, reason: 'Email not configured' }
     }
-    emailjs.init({ publicKey: cfg.publicKey })
-    const res = await emailjs.send(cfg.serviceId, cfg.templateId, {
-      from_name: cfg.fromName || 'MEDWEB',
-      reply_to:  cfg.replyTo  || '',
-      ...params,
+
+    // Fall back to plain-text → basic HTML if caller didn't supply htmlContent
+    const html = htmlContent || wrapHtml(
+      `<p style="color:#333;line-height:1.7;">${
+        (message || '').replace(/\n/g, '<br>')
+      }</p>`
+    )
+
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': cfg.brevoApiKey,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        sender: { name: cfg.fromName || 'MEDWEB', email: cfg.senderEmail },
+        to: [{ email: to_email, name: to_name }],
+        subject,
+        htmlContent: html,
+      }),
     })
-    // Counts against the shared quota whether or not the send actually
-    // reached the inbox — matches how EmailJS itself meters requests.
+
     emailUsageService.increment().catch(() => {})
-    return { sent: true, res }
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      return { sent: false, error: err.message || `HTTP ${res.status}` }
+    }
+    return { sent: true }
   } catch (err) {
     console.error('sendEmail error:', err)
     emailUsageService.increment().catch(() => {})
@@ -72,147 +123,178 @@ export async function sendEmail(params) {
   }
 }
 
-// Convenience: webinar registration confirmation email.
+// ── Convenience senders ───────────────────────────────────────────────────────
+
+// Webinar registration confirmation
 export async function sendWebinarConfirmation({ name, email, webinar }) {
+  const topic = webinar?.topic || webinar?.title || 'MEDWEB Webinar'
   return sendEmail({
-    to_name:  name,
+    to_name: name,
     to_email: email,
-    subject:  `Registration Confirmed — ${webinar?.topic || webinar?.title || 'MEDWEB Webinar'}`,
-    message:  `Hi ${name}, your seat for "${webinar?.topic || webinar?.title || 'the webinar'}" is confirmed. We look forward to seeing you!`,
-    webinar_topic: webinar?.topic || webinar?.title || '',
-    webinar_date:  webinar?.date  || '',
-    webinar_time:  webinar?.time  || '',
-    speaker:       webinar?.speaker || '',
+    subject: `Registration Confirmed — ${topic}`,
+    htmlContent: wrapHtml(`
+      <h2 style="margin:0 0 8px;color:#1a1a1a;font-size:20px;">You're Registered! 🎉</h2>
+      <p style="color:#555;margin:0 0 20px;">Hi <strong>${name}</strong>, your seat for the webinar below is confirmed.</p>
+      <div style="background:#f7f9fc;border-radius:12px;padding:20px;margin-bottom:24px;">
+        <p style="margin:0 0 6px;font-weight:700;color:#1655c3;font-size:15px;">${topic}</p>
+        ${webinar?.speaker ? `<p style="margin:0 0 4px;color:#666;font-size:13px;">🎤 ${webinar.speaker}</p>` : ''}
+        ${webinar?.date   ? `<p style="margin:0 0 4px;color:#666;font-size:13px;">📅 ${webinar.date}</p>` : ''}
+        ${webinar?.time   ? `<p style="margin:0;color:#666;font-size:13px;">🕐 ${webinar.time}</p>` : ''}
+      </div>
+      <p style="color:#888;font-size:13px;margin:0;">We look forward to seeing you! Stay tuned for the join link.</p>
+      <br><p style="color:#888;font-size:13px;margin:0;">— MEDWEB Team</p>
+    `),
   })
 }
 
-// Convenience: certificate email after a webinar feedback submission
-// (client-side generated — see src/lib/certificateGenerator.js). Plain,
-// professional subject/body — no ALL-CAPS or spam-trigger wording. The
-// Certificate ID is included as plain selectable text (not only baked into
-// the attached/linked image) so the student can copy it for verification.
+// Certificate email after feedback submission
 export async function sendCertificateEmail({ name, email, certCode, webinarTitle, certificateImageUrl }) {
   const verifyUrl = `${window.location.origin}/certificate/${encodeURIComponent(certCode)}`
   return sendEmail({
-    to_name:  name,
+    to_name: name,
     to_email: email,
-    subject:  `Your Certificate for ${webinarTitle || 'MEDWEB Webinar'} — MEDWEB-PK`,
-    message:
-      `Hi ${name},\n\n` +
-      `Congratulations on completing "${webinarTitle || 'the webinar'}". Your certificate is ready.\n\n` +
-      `Certificate ID: ${certCode}\n\n` +
-      `Verify your certificate: ${verifyUrl}\n` +
-      `Download your certificate image: ${certificateImageUrl}\n\n` +
-      `— MEDWEB Team`,
-    webinar_topic: webinarTitle || '',
-    webinar_date: '', webinar_time: '', speaker: '',
+    subject: `Your Certificate — ${webinarTitle || 'MEDWEB Webinar'}`,
+    htmlContent: wrapHtml(`
+      <h2 style="margin:0 0 6px;color:#1a1a1a;font-size:20px;">Congratulations, ${name}! 🏆</h2>
+      <p style="color:#555;margin:0 0 24px;">You've successfully completed <strong>"${webinarTitle || 'the webinar'}"</strong>. Your certificate is ready.</p>
+
+      ${certificateImageUrl ? `
+      <div style="text-align:center;margin-bottom:24px;">
+        <img src="${certificateImageUrl}" alt="Certificate" style="max-width:100%;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.1);" />
+      </div>` : ''}
+
+      <div style="background:#eff6ff;border:2px solid #1655c3;border-radius:12px;padding:16px;text-align:center;margin-bottom:24px;">
+        <p style="margin:0 0 4px;color:#666;font-size:11px;text-transform:uppercase;letter-spacing:1px;font-weight:700;">Certificate ID</p>
+        <p style="margin:0;color:#1655c3;font-size:20px;font-weight:900;font-family:monospace;">${certCode}</p>
+      </div>
+
+      <div style="text-align:center;margin-bottom:24px;">
+        <a href="${verifyUrl}"
+           style="display:inline-block;background:linear-gradient(135deg,#1655c3,#64ac37);color:#fff;text-decoration:none;padding:14px 32px;border-radius:10px;font-weight:700;font-size:14px;">
+          Verify Certificate →
+        </a>
+      </div>
+
+      <p style="color:#aaa;font-size:12px;margin:0;text-align:center;">
+        Share your certificate link: <a href="${verifyUrl}" style="color:#1655c3;">${verifyUrl}</a>
+      </p>
+      <br><p style="color:#888;font-size:13px;margin:0;">— MEDWEB Team</p>
+    `),
   })
 }
 
-// Convenience: one newsletter email for one subscriber, sent when an admin
-// publishes a blog post (see AdminBlog.jsx / NewsletterSendModal.jsx) —
-// looped per-recipient from the admin's own open tab, no batching needed
-// since this isn't a background job.
+// Newsletter email per subscriber
 export async function sendNewsletterEmail({ toEmail, title, excerpt, postUrl, unsubscribeUrl }) {
   return sendEmail({
-    to_name:  'Subscriber',
+    to_name: 'Subscriber',
     to_email: toEmail,
-    subject:  `New on MEDWEB: ${title}`,
-    message:
-      `${excerpt}\n\n` +
-      `Read more: ${postUrl}\n\n` +
-      `— MEDWEB Team\n\n` +
-      `Unsubscribe: ${unsubscribeUrl}`,
-    webinar_topic: '', webinar_date: '', webinar_time: '', speaker: '',
+    subject: `New on MEDWEB: ${title}`,
+    htmlContent: wrapHtml(`
+      <h2 style="margin:0 0 8px;color:#1a1a1a;font-size:18px;">${title}</h2>
+      <p style="color:#555;margin:0 0 20px;line-height:1.7;">${excerpt}</p>
+      <div style="text-align:center;margin-bottom:24px;">
+        <a href="${postUrl}" style="display:inline-block;background:linear-gradient(135deg,#1655c3,#64ac37);color:#fff;text-decoration:none;padding:12px 28px;border-radius:10px;font-weight:700;font-size:14px;">Read More →</a>
+      </div>
+      <p style="color:#aaa;font-size:12px;text-align:center;margin:0;">
+        <a href="${unsubscribeUrl}" style="color:#aaa;">Unsubscribe</a>
+      </p>
+    `),
   })
 }
 
-// Ambassador program notifications — sent from the admin's own browser at
-// the moment of save/delete (see AdminAmbassadors.jsx), same fire-and-forget
-// pattern as the certificate/newsletter emails above. Each covers a
-// genuinely different situation with its own copy, rather than one generic
-// "your profile changed" email for everything.
-
-// New ambassador added — a warm welcome confirming their role/code/university.
+// Ambassador welcome email
 export async function sendAmbassadorWelcomeEmail({ name, email, ambCode, university, rank }) {
   return sendEmail({
-    to_name:  name,
+    to_name: name,
     to_email: email,
-    subject:  `Welcome to the MEDWEB-PK Ambassador Program!`,
-    message:
-      `Hi ${name},\n\n` +
-      `Congratulations, and welcome aboard! You've officially joined the MEDWEB-PK Ambassador Program` +
-      `${rank ? ` as a ${rank}` : ''}${university ? `, representing ${university}` : ''}.\n\n` +
-      `Your Ambassador Code: ${ambCode || '(will be shared shortly)'}\n\n` +
-      `Keep this code handy — it's your identifier on your Ambassador Card and Letter. We're genuinely excited ` +
-      `to have you on the team and can't wait to see the impact you'll make on campus.\n\n` +
-      `— MEDWEB Team`,
-    webinar_topic: '', webinar_date: '', webinar_time: '', speaker: '',
+    subject: `Welcome to the MEDWEB-PK Ambassador Program!`,
+    htmlContent: wrapHtml(`
+      <h2 style="margin:0 0 8px;color:#1a1a1a;">Welcome aboard, ${name}! 🌟</h2>
+      <p style="color:#555;margin:0 0 16px;line-height:1.7;">
+        Congratulations! You've officially joined the MEDWEB-PK Ambassador Program
+        ${rank ? ` as a <strong>${rank}</strong>` : ''}
+        ${university ? `, representing <strong>${university}</strong>` : ''}.
+      </p>
+      ${ambCode ? `
+      <div style="background:#f0fdf4;border:2px solid #64ac37;border-radius:12px;padding:16px;text-align:center;margin-bottom:20px;">
+        <p style="margin:0 0 4px;color:#666;font-size:11px;text-transform:uppercase;letter-spacing:1px;font-weight:700;">Your Ambassador Code</p>
+        <p style="margin:0;color:#64ac37;font-size:20px;font-weight:900;font-family:monospace;">${ambCode}</p>
+      </div>` : ''}
+      <p style="color:#888;font-size:13px;margin:0;">We're excited to have you on the team. Keep this code handy — it's your identifier on your Ambassador Card and Letter.</p>
+      <br><p style="color:#888;font-size:13px;margin:0;">— MEDWEB Team</p>
+    `),
   })
 }
 
-// Points changed — names the exact new total, kept short and encouraging.
+// Ambassador points updated
 export async function sendAmbassadorPointsUpdateEmail({ name, email, points }) {
   return sendEmail({
-    to_name:  name,
+    to_name: name,
     to_email: email,
-    subject:  `Your MEDWEB Ambassador Points Have Been Updated`,
-    message:
-      `Hi ${name},\n\n` +
-      `Your points have been updated to ${Number(points).toLocaleString()}. Every referral and activity you put in adds up, ` +
-      `and it's reflected right here.\n\n` +
-      `Keep up the great work!\n\n` +
-      `— MEDWEB Team`,
-    webinar_topic: '', webinar_date: '', webinar_time: '', speaker: '',
+    subject: `Your MEDWEB Ambassador Points Have Been Updated`,
+    htmlContent: wrapHtml(`
+      <h2 style="margin:0 0 8px;color:#1a1a1a;">Points Updated 🏅</h2>
+      <p style="color:#555;margin:0 0 20px;">Hi <strong>${name}</strong>, your ambassador points have been updated.</p>
+      <div style="background:#eff6ff;border-radius:12px;padding:20px;text-align:center;margin-bottom:20px;">
+        <p style="margin:0 0 4px;color:#666;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Your Total Points</p>
+        <p style="margin:0;color:#1655c3;font-size:32px;font-weight:900;">${Number(points).toLocaleString()}</p>
+      </div>
+      <p style="color:#888;font-size:13px;margin:0;">Every referral and activity you put in adds up. Keep up the great work!</p>
+      <br><p style="color:#888;font-size:13px;margin:0;">— MEDWEB Team</p>
+    `),
   })
 }
 
-// Removed or deactivated — a respectful, professional notice, not a generic update.
+// Ambassador removed
 export async function sendAmbassadorRemovedEmail({ name, email }) {
   return sendEmail({
-    to_name:  name,
+    to_name: name,
     to_email: email,
-    subject:  `An Update on Your MEDWEB Ambassador Status`,
-    message:
-      `Hi ${name},\n\n` +
-      `We're writing to let you know that your status as a MEDWEB-PK Ambassador has been deactivated as of today.\n\n` +
-      `We genuinely appreciate the time, effort, and enthusiasm you brought to representing MEDWEB, and we're grateful ` +
-      `for everything you contributed to the community. If you believe this was a mistake or have any questions, please ` +
-      `don't hesitate to reach out to us directly.\n\n` +
-      `Thank you again for everything.\n\n` +
-      `— MEDWEB Team`,
-    webinar_topic: '', webinar_date: '', webinar_time: '', speaker: '',
+    subject: `An Update on Your MEDWEB Ambassador Status`,
+    htmlContent: wrapHtml(`
+      <h2 style="margin:0 0 8px;color:#1a1a1a;">Ambassador Status Update</h2>
+      <p style="color:#555;margin:0 0 16px;line-height:1.7;">Hi <strong>${name}</strong>,</p>
+      <p style="color:#555;margin:0 0 16px;line-height:1.7;">
+        We're writing to let you know that your status as a MEDWEB-PK Ambassador has been deactivated as of today.
+      </p>
+      <p style="color:#555;margin:0 0 16px;line-height:1.7;">
+        We genuinely appreciate the time, effort, and enthusiasm you brought to representing MEDWEB, and we're grateful for everything you contributed. If you believe this was a mistake, please don't hesitate to reach out.
+      </p>
+      <br><p style="color:#888;font-size:13px;margin:0;">— MEDWEB Team</p>
+    `),
   })
 }
 
-// Any other field edited (rank, university, etc.) — a short notice
-// summarizing exactly what changed, not a vague "something was updated".
+// Ambassador profile edited
 export async function sendAmbassadorUpdatedEmail({ name, email, changes }) {
   return sendEmail({
-    to_name:  name,
+    to_name: name,
     to_email: email,
-    subject:  `Your MEDWEB Ambassador Profile Has Been Updated`,
-    message:
-      `Hi ${name},\n\n` +
-      `Your ambassador profile was just updated:\n\n` +
-      (changes || []).map(c => `• ${c}`).join('\n') + `\n\n` +
-      `If anything here looks unexpected, feel free to reach out to the MEDWEB team.\n\n` +
-      `— MEDWEB Team`,
-    webinar_topic: '', webinar_date: '', webinar_time: '', speaker: '',
+    subject: `Your MEDWEB Ambassador Profile Has Been Updated`,
+    htmlContent: wrapHtml(`
+      <h2 style="margin:0 0 8px;color:#1a1a1a;">Profile Updated</h2>
+      <p style="color:#555;margin:0 0 16px;">Hi <strong>${name}</strong>, your ambassador profile was just updated:</p>
+      <ul style="color:#555;margin:0 0 16px;padding-left:20px;line-height:2;">
+        ${(changes || []).map(c => `<li>${c}</li>`).join('')}
+      </ul>
+      <p style="color:#888;font-size:13px;margin:0;">If anything looks unexpected, feel free to reach out to the MEDWEB team.</p>
+      <br><p style="color:#888;font-size:13px;margin:0;">— MEDWEB Team</p>
+    `),
   })
 }
 
-// Send a test email (used by the admin Email Settings page).
+// Test email from admin Email Settings page
 export async function sendTestEmail(toEmail) {
   cachedConfig = null // force reload latest saved config
   return sendEmail({
-    to_name:  'MEDWEB Admin',
+    to_name: 'MEDWEB Admin',
     to_email: toEmail,
-    subject:  'MEDWEB Test Email ✅',
-    message:  'This is a test email from your MEDWEB admin panel. If you received this, auto-email is working correctly!',
-    webinar_topic: 'Test',
-    webinar_date:  new Date().toLocaleDateString(),
-    webinar_time:  new Date().toLocaleTimeString(),
-    speaker:       'MEDWEB',
+    subject: 'MEDWEB Test Email ✅',
+    htmlContent: wrapHtml(`
+      <h2 style="margin:0 0 8px;color:#1a1a1a;">Email is Working! ✅</h2>
+      <p style="color:#555;margin:0 0 16px;">This is a test email from your MEDWEB admin panel.</p>
+      <p style="color:#555;margin:0;">If you received this, your Brevo email integration is configured correctly and all automated emails (certificates, confirmations, newsletters) will be sent successfully.</p>
+      <br><p style="color:#888;font-size:13px;margin:0;">— MEDWEB Team</p>
+    `),
   })
 }
