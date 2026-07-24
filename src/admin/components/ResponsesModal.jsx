@@ -3,6 +3,12 @@ import { Download } from 'lucide-react'
 import Modal from './Modal'
 import { inputCls } from './FormField'
 import AdminButton from './AdminButton'
+import { toIsoString } from '../../firebase/services'
+
+const formatDateStr = (val) => {
+  const str = toIsoString(val)
+  return str ? str.split('T')[0] : '-'
+}
 
 // Shared full-submission viewer — one column per field, labeled from the
 // owning form's own schema (so it works even though Form Builder field keys
@@ -68,7 +74,7 @@ export default function ResponsesModal({ form, subs, onClose }) {
               <tbody>
                 {filtered.map((s, i) => (
                   <tr key={s.id || i} className="border-t border-gray-100">
-                    <td className="px-3 py-2 text-gray-400 whitespace-nowrap">{(s.submittedAt || '').split('T')[0]}</td>
+                    <td className="px-3 py-2 text-gray-400 whitespace-nowrap">{formatDateStr(s.submittedAt || s.createdAt)}</td>
                     {showCertColumn && (
                       <td className="px-3 py-2 whitespace-nowrap">
                         {s.certificateStatus ? (

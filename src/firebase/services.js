@@ -10,14 +10,14 @@ import { db } from './config'
 
 // ─── Collection names ────────────────────────────────────────────────────────
 const COLS = {
-  students:     'students',
-  webinars:     'webinars',
-  courses:      'courses',
+  students: 'students',
+  webinars: 'webinars',
+  courses: 'courses',
   certificates: 'certificates',
-  ambassadors:  'ambassadors',
-  blog:         'blogPosts',
-  team:         'team',
-  advisory:     'advisory',
+  ambassadors: 'ambassadors',
+  blog: 'blogPosts',
+  team: 'team',
+  advisory: 'advisory',
 }
 
 // ─── Generic helpers ─────────────────────────────────────────────────────────
@@ -56,13 +56,13 @@ async function remove(colName, id) {
 
 // ─── STUDENTS ────────────────────────────────────────────────────────────────
 export const studentsService = {
-  getAll:  () => getAll(COLS.students, orderBy('createdAt', 'desc')),
-  getOne:  id  => getOne(COLS.students, id),
-  add:     data => add(COLS.students, data),
-  update:  (id, data) => update(COLS.students, id, data),
-  delete:  id  => remove(COLS.students, id),
+  getAll: () => getAll(COLS.students, orderBy('createdAt', 'desc')),
+  getOne: id => getOne(COLS.students, id),
+  add: data => add(COLS.students, data),
+  update: (id, data) => update(COLS.students, id, data),
+  delete: id => remove(COLS.students, id),
   // Real-time listener
-  listen:  cb  => onSnapshot(
+  listen: cb => onSnapshot(
     query(col(COLS.students), orderBy('createdAt', 'desc')),
     snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
     err => console.error("Firebase listen error:", err)
@@ -71,14 +71,14 @@ export const studentsService = {
 
 // ─── WEBINARS ────────────────────────────────────────────────────────────────
 export const webinarsService = {
-  getAll:    () => getAll(COLS.webinars, orderBy('createdAt', 'desc')),
+  getAll: () => getAll(COLS.webinars, orderBy('createdAt', 'desc')),
   getUpcoming: () => getAll(COLS.webinars, where('status', '==', 'Upcoming'), orderBy('date')),
-  getLive:   () => getAll(COLS.webinars, where('status', '==', 'Live')),
-  getOne:    id   => getOne(COLS.webinars, id),
-  add:       data => add(COLS.webinars, { ...data, registered: 0, attended: 0 }),
-  update:    (id, data) => update(COLS.webinars, id, data),
-  delete:    id   => remove(COLS.webinars, id),
-  register:  id   => update(COLS.webinars, id, { registered: increment(1) }),
+  getLive: () => getAll(COLS.webinars, where('status', '==', 'Live')),
+  getOne: id => getOne(COLS.webinars, id),
+  add: data => add(COLS.webinars, { ...data, registered: 0, attended: 0 }),
+  update: (id, data) => update(COLS.webinars, id, data),
+  delete: id => remove(COLS.webinars, id),
+  register: id => update(COLS.webinars, id, { registered: increment(1) }),
   markAttended: id => update(COLS.webinars, id, { attended: increment(1) }),
   // Save a user registration / join application
   addRegistration: data => add('webinarRegistrations', data),
@@ -90,7 +90,7 @@ export const webinarsService = {
     const rows = await getAll(COLS.webinars, where('feedbackFormId', '==', formId), limit(1))
     return rows[0] || null
   },
-  listen:    cb   => onSnapshot(
+  listen: cb => onSnapshot(
     query(col(COLS.webinars), orderBy('createdAt', 'desc')),
     snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
     err => console.error("Firebase listen error:", err)
@@ -99,13 +99,13 @@ export const webinarsService = {
 
 // ─── COURSES ─────────────────────────────────────────────────────────────────
 export const coursesService = {
-  getAll:   () => getAll(COLS.courses, orderBy('createdAt', 'desc')),
+  getAll: () => getAll(COLS.courses, orderBy('createdAt', 'desc')),
   getActive: () => getAll(COLS.courses, where('status', '==', 'Active')),
-  getOne:   id  => getOne(COLS.courses, id),
-  add:      data => add(COLS.courses, { ...data, students: 0, rating: 0 }),
-  update:   (id, data) => update(COLS.courses, id, data),
-  delete:   id  => remove(COLS.courses, id),
-  listen:   cb  => onSnapshot(
+  getOne: id => getOne(COLS.courses, id),
+  add: data => add(COLS.courses, { ...data, students: 0, rating: 0 }),
+  update: (id, data) => update(COLS.courses, id, data),
+  delete: id => remove(COLS.courses, id),
+  listen: cb => onSnapshot(
     query(col(COLS.courses), orderBy('createdAt', 'desc')),
     snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
     err => console.error("Firebase listen error:", err)
@@ -114,10 +114,10 @@ export const coursesService = {
 
 // ─── CERTIFICATES ────────────────────────────────────────────────────────────
 export const certificatesService = {
-  getAll:  () => getAll(COLS.certificates, orderBy('createdAt', 'desc')),
-  getOne:  id  => getOne(COLS.certificates, id),
+  getAll: () => getAll(COLS.certificates, orderBy('createdAt', 'desc')),
+  getOne: id => getOne(COLS.certificates, id),
   // Verify by certificate code
-  verify:  async certId => {
+  verify: async certId => {
     const results = await getAll(COLS.certificates, where('certCode', '==', certId))
     if (results.length > 0) {
       // Increment verifications
@@ -128,7 +128,7 @@ export const certificatesService = {
     }
     return null
   },
-  add:     data => add(COLS.certificates, { ...data, verifications: 0, status: 'Valid' }),
+  add: data => add(COLS.certificates, { ...data, verifications: 0, status: 'Valid' }),
   // Read-only lookup by code (does NOT increment) — used by the public certificate page
   getByCode: async certId => {
     const results = await getAll(COLS.certificates, where('certCode', '==', certId))
@@ -157,10 +157,10 @@ export const certificatesService = {
     }
     throw new Error('Could not generate a unique certificate code — please try again.')
   },
-  update:  (id, data) => update(COLS.certificates, id, data),
-  revoke:  id  => update(COLS.certificates, id, { status: 'Revoked' }),
-  delete:  id  => remove(COLS.certificates, id),
-  listen:  cb  => onSnapshot(
+  update: (id, data) => update(COLS.certificates, id, data),
+  revoke: id => update(COLS.certificates, id, { status: 'Revoked' }),
+  delete: id => remove(COLS.certificates, id),
+  listen: cb => onSnapshot(
     query(col(COLS.certificates), orderBy('createdAt', 'desc')),
     snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
     err => console.error("Firebase listen error:", err)
@@ -169,13 +169,13 @@ export const certificatesService = {
 
 // ─── AMBASSADORS ─────────────────────────────────────────────────────────────
 export const ambassadorsService = {
-  getAll:  () => getAll(COLS.ambassadors, orderBy('createdAt', 'desc')),
+  getAll: () => getAll(COLS.ambassadors, orderBy('createdAt', 'desc')),
   getActive: () => getAll(COLS.ambassadors, where('status', '==', 'Active')),
-  getOne:  id  => getOne(COLS.ambassadors, id),
-  add:     data => add(COLS.ambassadors, { ...data, students: 0 }),
-  update:  (id, data) => update(COLS.ambassadors, id, data),
-  delete:  id  => remove(COLS.ambassadors, id),
-  listen:  cb  => onSnapshot(
+  getOne: id => getOne(COLS.ambassadors, id),
+  add: data => add(COLS.ambassadors, { ...data, students: 0 }),
+  update: (id, data) => update(COLS.ambassadors, id, data),
+  delete: id => remove(COLS.ambassadors, id),
+  listen: cb => onSnapshot(
     query(col(COLS.ambassadors), orderBy('createdAt', 'desc')),
     snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
     err => console.error("Firebase listen error:", err)
@@ -184,23 +184,23 @@ export const ambassadorsService = {
 
 // ─── BLOG POSTS ──────────────────────────────────────────────────────────────
 export const blogService = {
-  getAll:       () => getAll(COLS.blog, orderBy('createdAt', 'desc')),
+  getAll: () => getAll(COLS.blog, orderBy('createdAt', 'desc')),
   getPublished: () => getAll(COLS.blog, where('status', '==', 'Published'), orderBy('createdAt', 'desc')),
-  getLatest:    n  => getAll(COLS.blog, where('status', '==', 'Published'), orderBy('createdAt', 'desc'), limit(n || 3)),
-  getOne:       id => getOne(COLS.blog, id),
+  getLatest: n => getAll(COLS.blog, where('status', '==', 'Published'), orderBy('createdAt', 'desc'), limit(n || 3)),
+  getOne: id => getOne(COLS.blog, id),
   // Public lookup for the dedicated post page (BlogPostPage.jsx) — only
   // ever called with a slug typed/clicked by a visitor, same trust level
   // as getOne(id) elsewhere.
-  getBySlug:    async slug => {
+  getBySlug: async slug => {
     const rows = await getAll(COLS.blog, where('slug', '==', slug), limit(1))
     return rows[0] || null
   },
-  add:          data => add(COLS.blog, { ...data, views: 0 }),
-  update:       (id, data) => update(COLS.blog, id, data),
-  publish:      id => update(COLS.blog, id, { status: 'Published', published: new Date().toISOString().split('T')[0] }),
-  delete:       id => remove(COLS.blog, id),
+  add: data => add(COLS.blog, { ...data, views: 0 }),
+  update: (id, data) => update(COLS.blog, id, data),
+  publish: id => update(COLS.blog, id, { status: 'Published', published: new Date().toISOString().split('T')[0] }),
+  delete: id => remove(COLS.blog, id),
   incrementView: id => update(COLS.blog, id, { views: increment(1) }),
-  listen:       cb => onSnapshot(
+  listen: cb => onSnapshot(
     query(col(COLS.blog), orderBy('createdAt', 'desc')),
     snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
     err => console.error("Firebase listen error:", err)
@@ -209,12 +209,12 @@ export const blogService = {
 
 // ─── TEAM ────────────────────────────────────────────────────────────────────
 export const teamService = {
-  getAll:  () => getAll(COLS.team, orderBy('createdAt', 'desc')),
-  getOne:  id  => getOne(COLS.team, id),
-  add:     data => add(COLS.team, data),
-  update:  (id, data) => update(COLS.team, id, data),
-  delete:  id  => remove(COLS.team, id),
-  listen:  cb  => onSnapshot(
+  getAll: () => getAll(COLS.team, orderBy('createdAt', 'desc')),
+  getOne: id => getOne(COLS.team, id),
+  add: data => add(COLS.team, data),
+  update: (id, data) => update(COLS.team, id, data),
+  delete: id => remove(COLS.team, id),
+  listen: cb => onSnapshot(
     query(col(COLS.team), orderBy('createdAt', 'desc')),
     snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
     err => console.error("Firebase listen error:", err)
@@ -223,12 +223,12 @@ export const teamService = {
 
 // ─── ADVISORY BOARD ──────────────────────────────────────────────────────────
 export const advisoryService = {
-  getAll:  () => getAll(COLS.advisory, orderBy('createdAt', 'desc')),
-  getOne:  id  => getOne(COLS.advisory, id),
-  add:     data => add(COLS.advisory, data),
-  update:  (id, data) => update(COLS.advisory, id, data),
-  delete:  id  => remove(COLS.advisory, id),
-  listen:  cb  => onSnapshot(
+  getAll: () => getAll(COLS.advisory, orderBy('createdAt', 'desc')),
+  getOne: id => getOne(COLS.advisory, id),
+  add: data => add(COLS.advisory, data),
+  update: (id, data) => update(COLS.advisory, id, data),
+  delete: id => remove(COLS.advisory, id),
+  listen: cb => onSnapshot(
     query(col(COLS.advisory), orderBy('createdAt', 'desc')),
     snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
     err => console.error("Firebase listen error:", err)
@@ -245,24 +245,24 @@ export async function getDashboardStats() {
     getDocs(col(COLS.ambassadors)),
   ])
   return {
-    totalStudents:     students.size,
-    activeStudents:    students.docs.filter(d => d.data().status === 'Active').length,
-    totalWebinars:     webinars.size,
-    upcomingWebinars:  webinars.docs.filter(d => d.data().status === 'Upcoming').length,
-    activeCourses:     courses.docs.filter(d => d.data().status === 'Active').length,
-    validCerts:        certs.docs.filter(d => d.data().status === 'Valid').length,
+    totalStudents: students.size,
+    activeStudents: students.docs.filter(d => d.data().status === 'Active').length,
+    totalWebinars: webinars.size,
+    upcomingWebinars: webinars.docs.filter(d => d.data().status === 'Upcoming').length,
+    activeCourses: courses.docs.filter(d => d.data().status === 'Active').length,
+    validCerts: certs.docs.filter(d => d.data().status === 'Valid').length,
     activeAmbassadors: ambassadors.docs.filter(d => d.data().status === 'Active').length,
   }
 }
 
 // ─── TESTIMONIALS ─────────────────────────────────────────────────────────────
 export const testimonialsService = {
-  getAll:       () => getAll('testimonials', orderBy('createdAt', 'desc')),
-  getApproved:  () => getAll('testimonials', where('status', '==', 'Approved'), orderBy('createdAt', 'desc')),
-  add:          data => add('testimonials', { ...data, status: 'Approved' }),
-  update:       (id, data) => update('testimonials', id, data),
-  delete:       id => remove('testimonials', id),
-  listen:       cb => onSnapshot(
+  getAll: () => getAll('testimonials', orderBy('createdAt', 'desc')),
+  getApproved: () => getAll('testimonials', where('status', '==', 'Approved'), orderBy('createdAt', 'desc')),
+  add: data => add('testimonials', { ...data, status: 'Approved' }),
+  update: (id, data) => update('testimonials', id, data),
+  delete: id => remove('testimonials', id),
+  listen: cb => onSnapshot(
     query(collection(db, 'testimonials'), orderBy('createdAt', 'desc')),
     snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
     err => console.error("Firebase listen error:", err)
@@ -291,16 +291,16 @@ export const pendingTestimonialsService = {
     const snap = await getDocs(collection(db, 'pendingTestimonials'))
     return new Set(snap.docs.map(d => d.data().dedupeKey))
   },
-  add:     data => add('pendingTestimonials', { ...data, status: 'Pending' }),
-  reject:  id   => update('pendingTestimonials', id, { status: 'Rejected' }),
+  add: data => add('pendingTestimonials', { ...data, status: 'Pending' }),
+  reject: id => update('pendingTestimonials', id, { status: 'Rejected' }),
   approve: async pending => {
     await testimonialsService.add({
-      name:     pending.name,
-      uni:      pending.uni || '',
-      role:     '',
-      text:     pending.text,
-      img:      pending.img || '',
-      stars:    pending.stars || 5,
+      name: pending.name,
+      uni: pending.uni || '',
+      role: '',
+      text: pending.text,
+      img: pending.img || '',
+      stars: pending.stars || 5,
       category: pending.category || (pending.source === 'Google' ? 'Google Review' : 'YouTube Review'),
     })
     await update('pendingTestimonials', pending.id, { status: 'Approved' })
@@ -309,7 +309,7 @@ export const pendingTestimonialsService = {
 
 // ─── SITE SETTINGS (stats, hero text, etc.) ───────────────────────────────────
 export const settingsService = {
-  get:    () => getOne('settings', 'site'),
+  get: () => getOne('settings', 'site'),
   update: data => setDoc(doc(db, 'settings', 'site'), { ...data, updatedAt: serverTimestamp() }, { merge: true }),
   // Real-time listener for the single site settings doc
   listen: cb => onSnapshot(doc(db, 'settings', 'site'), snap => cb(snap.exists() ? { id: snap.id, ...snap.data() } : null), err => console.error('Firebase settings listen error:', err)),
@@ -344,7 +344,7 @@ export const emailUsageService = {
 // Missing doc/field = treated as visible (true) — see HomePage.jsx — so nothing
 // disappears for sites that existed before this shipped.
 export const sectionVisibilityService = {
-  get:    () => getOne('settings', 'sectionVisibility'),
+  get: () => getOne('settings', 'sectionVisibility'),
   update: data => setDoc(doc(db, 'settings', 'sectionVisibility'), { ...data, updatedAt: serverTimestamp() }, { merge: true }),
   listen: cb => onSnapshot(doc(db, 'settings', 'sectionVisibility'), snap => cb(snap.exists() ? snap.data() : null), err => console.error('Firebase sectionVisibility listen error:', err)),
 }
@@ -473,25 +473,25 @@ export const adminInvitesService = {
 // A "form" is an admin-built schema (collection: forms). Each form has a list of
 // fields. User submissions are stored in formSubmissions, keyed by formId.
 export const formsService = {
-  getAll:    () => getAll('forms', orderBy('createdAt', 'desc')),
+  getAll: () => getAll('forms', orderBy('createdAt', 'desc')),
   getActive: () => getAll('forms', where('status', '==', 'Active')),
-  getOne:    id   => getOne('forms', id),
-  add:       data => add('forms', { fields: [], status: 'Active', ...data }),
-  update:    (id, data) => update('forms', id, data),
-  delete:    id   => remove('forms', id),
-  listen:    cb   => onSnapshot(
+  getOne: id => getOne('forms', id),
+  add: data => add('forms', { fields: [], status: 'Active', ...data }),
+  update: (id, data) => update('forms', id, data),
+  delete: id => remove('forms', id),
+  listen: cb => onSnapshot(
     query(col('forms'), orderBy('createdAt', 'desc')),
     snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
     err => console.error("Firebase listen error:", err)
   ),
   // ── Submissions ──
-  addSubmission:     data => add('formSubmissions', data),
+  addSubmission: data => add('formSubmissions', data),
   // Used by the client-side certificate generator to record success/failure
   // (certificateStatus/certificateError) on the submission that triggered it.
-  updateSubmission:  (id, data) => update('formSubmissions', id, data),
-  getSubmissions:    formId => getAll('formSubmissions', where('formId', '==', formId), orderBy('createdAt', 'desc')),
+  updateSubmission: (id, data) => update('formSubmissions', id, data),
+  getSubmissions: formId => getAll('formSubmissions', where('formId', '==', formId), orderBy('createdAt', 'desc')),
   getAllSubmissions: () => getAll('formSubmissions', orderBy('createdAt', 'desc')),
-  deleteSubmission:  id => remove('formSubmissions', id),
+  deleteSubmission: id => remove('formSubmissions', id),
   listenSubmissions: cb => onSnapshot(
     query(col('formSubmissions'), orderBy('createdAt', 'desc')),
     snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
@@ -503,13 +503,13 @@ export const formsService = {
 // same {key, type, label, placeholder, required, options} shape AdminForms.jsx
 // builds — so this form is fully editable there like any other.
 export const DEFAULT_WEBINAR_FORM_FIELDS = [
-  { key: 'name',          type: 'text',          label: 'Full Name',                          placeholder: 'Your full name', required: true,  options: [] },
-  { key: 'email',         type: 'email',         label: 'Email',                               placeholder: 'you@email.com',  required: true,  options: [] },
-  { key: 'whatsapp',      type: 'phone',         label: 'WhatsApp Number',                     placeholder: '03XX-XXXXXXX',   required: true,  options: [] },
-  { key: 'qualification', type: 'qualification', label: 'Qualification',                       placeholder: '',               required: true,  options: [] },
-  { key: 'semester',      type: 'semester',      label: 'Semester / Year',                     placeholder: '',               required: false, options: [] },
-  { key: 'question',      type: 'textarea',      label: 'Question related to this webinar',    placeholder: "Anything you'd like the speaker to address?", required: false, options: [] },
-  { key: 'joinGroup',     type: 'checkbox',      label: 'Join WhatsApp Group',                 placeholder: 'Join our WhatsApp group for updates & resources', required: false, options: [] },
+  { key: 'name', type: 'text', label: 'Full Name', placeholder: 'Your full name', required: true, options: [] },
+  { key: 'email', type: 'email', label: 'Email', placeholder: 'you@email.com', required: true, options: [] },
+  { key: 'whatsapp', type: 'phone', label: 'WhatsApp Number', placeholder: '03XX-XXXXXXX', required: true, options: [] },
+  { key: 'qualification', type: 'qualification', label: 'Qualification', placeholder: '', required: true, options: [] },
+  { key: 'semester', type: 'semester', label: 'Semester / Year', placeholder: '', required: false, options: [] },
+  { key: 'question', type: 'textarea', label: 'Question related to this webinar', placeholder: "Anything you'd like the speaker to address?", required: false, options: [] },
+  { key: 'joinGroup', type: 'checkbox', label: 'Join WhatsApp Group', placeholder: 'Join our WhatsApp group for updates & resources', required: false, options: [] },
 ]
 
 // Idempotently creates the default "Webinar Registration" form in the Form
@@ -527,6 +527,22 @@ export async function ensureDefaultWebinarForm() {
   })
 }
 
+// Helper to safely convert Firestore Timestamps, Date objects, or string values to ISO strings
+export function toIsoString(val) {
+  if (!val) return ''
+  if (typeof val === 'string') return val
+  if (typeof val.toDate === 'function') {
+    try { return val.toDate().toISOString() } catch (e) { return '' }
+  }
+  if (typeof val.seconds === 'number') {
+    try { return new Date(val.seconds * 1000).toISOString() } catch (e) { return '' }
+  }
+  if (val instanceof Date) {
+    try { return val.toISOString() } catch (e) { return '' }
+  }
+  return String(val ?? '')
+}
+
 // ─── UNIFIED SUBMISSIONS (webinar registrations + custom form submissions) ─────
 // The admin "Submissions" page wants ONE feed of everything. This merges the two
 // collections and normalizes them into { type, refName, name, email, whatsapp, date }.
@@ -538,29 +554,32 @@ export const submissionsService = {
         ...regs.map(r => ({
           id: 'reg_' + r.id, type: 'Webinar', refName: r.webinarTopic || r.webinarTitle || '-',
           name: r.name || '-', email: r.email || '-', whatsapp: r.whatsapp || '-',
-          date: r.registeredAt || r.createdAt, raw: r,
+          date: toIsoString(r.registeredAt || r.createdAt), raw: r,
         })),
         ...forms.map(f => ({
           id: 'form_' + f.id, type: 'Form', refName: f.formTitle || '-',
           name: f.values?.name || f.values?.fullName || '-',
           email: f.values?.email || '-',
           whatsapp: f.values?.whatsapp || f.values?.phone || '-',
-          date: f.submittedAt || f.createdAt, raw: f,
+          date: toIsoString(f.submittedAt || f.createdAt), raw: f,
         })),
         ...newsletter.map(n => ({
           id: 'news_' + n.id, type: 'Newsletter', refName: 'Newsletter Signup',
           name: '-', email: n.email || '-', whatsapp: '-',
-          date: n.subscribedAt || n.createdAt, raw: n,
+          date: toIsoString(n.subscribedAt || n.createdAt), raw: n,
         })),
       ].sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
       cb(merged)
     }
     const u1 = onSnapshot(query(col('webinarRegistrations'), orderBy('createdAt', 'desc')),
-      snap => { regs = snap.docs.map(d => ({ id: d.id, ...d.data() })); emit() })
+      snap => { regs = snap.docs.map(d => ({ id: d.id, ...d.data() })); emit() },
+      err => { console.error('webinarRegistrations snapshot error:', err); emit() })
     const u2 = onSnapshot(query(col('formSubmissions'), orderBy('createdAt', 'desc')),
-      snap => { forms = snap.docs.map(d => ({ id: d.id, ...d.data() })); emit() })
+      snap => { forms = snap.docs.map(d => ({ id: d.id, ...d.data() })); emit() },
+      err => { console.error('formSubmissions snapshot error:', err); emit() })
     const u3 = onSnapshot(query(col('newsletterSubscribers'), orderBy('createdAt', 'desc')),
-      snap => { newsletter = snap.docs.map(d => ({ id: d.id, ...d.data() })); emit() })
+      snap => { newsletter = snap.docs.map(d => ({ id: d.id, ...d.data() })); emit() },
+      err => { console.error('newsletterSubscribers snapshot error:', err); emit() })
     return () => { u1(); u2(); u3() }
   },
 }

@@ -3,7 +3,12 @@ import { Inbox, Download, Video, FileText, Mail } from 'lucide-react'
 import StatCard from '../components/StatCard'
 import { inputCls } from '../components/FormField'
 import AdminButton from '../components/AdminButton'
-import { submissionsService } from '../../firebase/services'
+import { submissionsService, toIsoString } from '../../firebase/services'
+
+const formatDateStr = (dateVal) => {
+  const str = toIsoString(dateVal)
+  return str ? str.split('T')[0] : '-'
+}
 
 export default function AdminSubmissions() {
   const [rows, setRows] = useState([])
@@ -19,12 +24,12 @@ export default function AdminSubmissions() {
   const filtered = rows.filter(r => {
     if (filter !== 'All' && r.type !== filter) return false
     if (!q) return true
-    return [r.refName, r.name, r.email, r.whatsapp].join(' ').toLowerCase().includes(q.toLowerCase())
+    return [r.refName || '', r.name || '', r.email || '', r.whatsapp || ''].join(' ').toLowerCase().includes(q.toLowerCase())
   })
 
   const exportCsv = () => {
     const header = ['Type', 'Webinar/Event', 'Name', 'Email', 'WhatsApp', 'Date']
-    const body = filtered.map(r => [r.type, r.refName, r.name, r.email, r.whatsapp, (r.date || '').split('T')[0]])
+    const body = filtered.map(r => [r.type, r.refName, r.name, r.email, r.whatsapp, formatDateStr(r.date)])
     const csv = [header, ...body].map(line => line.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
     const a = document.createElement('a')
@@ -82,7 +87,7 @@ export default function AdminSubmissions() {
                   <td className="px-3 py-2.5 text-gray-700">{r.name}</td>
                   <td className="px-3 py-2.5 text-gray-500">{r.email}</td>
                   <td className="px-3 py-2.5 text-gray-500">{r.whatsapp}</td>
-                  <td className="px-3 py-2.5 text-gray-400 whitespace-nowrap">{(r.date || '').split('T')[0]}</td>
+                  <td className="px-3 py-2.5 text-gray-400 whitespace-nowrap">{formatDateStr(r.date)}</td>
                 </tr>
               ))}
             </tbody>
