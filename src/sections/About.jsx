@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight, Linkedin } from 'lucide-react'
+import { ArrowRight, Users, Linkedin, ShieldCheck, Award, Star } from 'lucide-react'
 import { teamService } from '../firebase/services'
 import { useSiteSettings } from '../hooks/useSiteSettings'
 import SectionHeading from '../components/SectionHeading'
@@ -23,6 +23,7 @@ function Initials({ name }) {
   )
 }
 
+// ─── MEMBER CARD (Used on the dedicated /team page) ────────────────────────
 export function MemberCard({ member }) {
   const [imgError, setImgError] = useState(false)
   const showImage = member.imageUrl && !imgError
@@ -98,9 +99,57 @@ export function MemberCard({ member }) {
   )
 }
 
+// ─── CATEGORY CARD (Displayed on Homepage Slider) ───────────────────────────
+export function CategoryCard({ category, count, onSelect }) {
+  const isEven = category.length % 2 === 0
+  const textColor = isEven ? '#64ac37' : '#1655c3'
+  const bgColor = isEven ? '#f0fdf4' : '#eff6ff'
+
+  return (
+    <div
+      onClick={() => onSelect(category)}
+      className="bg-white rounded-3xl border border-gray-100 shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col justify-between cursor-pointer group h-full p-6 relative text-left w-[270px] sm:w-[310px]"
+    >
+      {/* Top Tilted Accent Line */}
+      <div className="absolute top-0 left-0 right-0 h-2 bg-[#64ac37]">
+        <div
+          className="absolute inset-0 bg-[#1655c3]"
+          style={{ clipPath: 'polygon(45% 0, 100% 0, 100% 100%, 55% 100%)' }}
+        />
+      </div>
+
+      <div>
+        <div
+          className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4 transition-transform group-hover:scale-110 shadow-sm"
+          style={{ background: bgColor }}
+        >
+          <Users size={22} style={{ color: textColor }} />
+        </div>
+
+        <h3 className="text-lg font-black text-[#0f172a] group-hover:text-[#1655c3] transition-colors mb-1.5">
+          {category}
+        </h3>
+
+        <span className="inline-block text-xs font-bold px-3 py-1 rounded-full mb-3" style={{ background: bgColor, color: textColor }}>
+          {count} {count === 1 ? 'Member' : 'Members'}
+        </span>
+
+        <p className="text-xs text-gray-400 leading-relaxed line-clamp-2">
+          Click to view all dedicated {category} team members behind MEDWEB.
+        </p>
+      </div>
+
+      <div className="mt-6 pt-4 border-t border-gray-50 flex items-center justify-between text-xs font-bold" style={{ color: textColor }}>
+        <span>Explore Category</span>
+        <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+      </div>
+    </div>
+  )
+}
+
+// ─── HOMEPAGE "OUR TEAM" SECTION ───────────────────────────────────────────
 export default function Team() {
   const [team, setTeam] = useState(null) // null = loading
-  const [activeCategory, setActiveCategory] = useState('All')
   const h = useSiteSettings(HEADING_DEFAULTS)
   const navigate = useNavigate()
 
@@ -113,30 +162,29 @@ export default function Team() {
     return () => unsub()
   }, [])
 
-  // Derive unique categories from active team members
-  const categories = useMemo(() => {
+  // Derive unique categories with member counts from active team members
+  const categoryStats = useMemo(() => {
     if (!team) return []
-    const catSet = new Set()
+    const map = new Map()
     team.forEach(m => {
-      if (m.category?.trim()) catSet.add(m.category.trim())
+      const cat = m.category?.trim() || 'Chief Executive'
+      map.set(cat, (map.get(cat) || 0) + 1)
     })
-    return Array.from(catSet)
+    return Array.from(map.entries()).map(([name, count]) => ({ name, count }))
   }, [team])
 
-  // Filtered members list
-  const filteredMembers = useMemo(() => {
-    if (!team) return []
-    if (activeCategory === 'All') return team
-    return team.filter(m => (m.category || 'Executive') === activeCategory)
-  }, [team, activeCategory])
+  const handleCategorySelect = catName => {
+    navigate(`/team?category=${encodeURIComponent(catName)}`)
+  }
 
   // If section confirmed empty, hide the entire section (heading, watermark, container)
   if (team !== null && team.length === 0) return null
 
   return (
-    <section id="team" className="py-10 sm:py-14 px-4 bg-white relative overflow-hidden">
+    <section id="team" className="py-12 sm:py-16 px-4 bg-white relative overflow-hidden">
       <BrandWatermark seed={6} />
       <div className="max-w-7xl mx-auto relative z-10">
+        {/* Original Heading Treatment restored */}
         <SectionHeading
           word1={h.teamHeading1}
           word2={h.teamHeading2}
@@ -144,65 +192,38 @@ export default function Team() {
           className="mb-4"
         />
 
-        {/* Category Tabs */}
-        {team && team.length > 0 && categories.length > 0 && (
-          <div className="flex flex-wrap items-center justify-center gap-2 mb-8">
-            <button
-              onClick={() => setActiveCategory('All')}
-              className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all duration-300 shadow-sm ${
-                activeCategory === 'All'
-                  ? 'bg-[#64ac37] text-white shadow-green-200 scale-105'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              All ({team.length})
-            </button>
-            {categories.map(cat => {
-              const count = team.filter(m => (m.category || 'Executive') === cat).length
-              return (
-                <button
-                  key={cat}
-                  onClick={() => setActiveCategory(cat)}
-                  className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all duration-300 shadow-sm ${
-                    activeCategory === cat
-                      ? 'bg-[#64ac37] text-white shadow-green-200 scale-105'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  {cat} ({count})
-                </button>
-              )
-            })}
-          </div>
-        )}
-
-        <div className="text-center mb-6 sm:mb-8">
-          <button
-            onClick={() => navigate(activeCategory === 'All' ? '/team' : `/team?category=${encodeURIComponent(activeCategory)}`)}
+        <div className="text-center mb-8 sm:mb-10">
+          <Link
+            to="/team"
             className="inline-flex items-center gap-2 text-[#1655c3] font-semibold text-sm hover:gap-3 transition-all duration-200"
           >
             See All Members <ArrowRight size={15} />
-          </button>
+          </Link>
         </div>
 
         {team === null ? (
-          <CardRowSkeleton count={4} cardWidth={280} cardHeight={360} />
-        ) : activeCategory === 'All' && team.length > 4 ? (
+          <CardRowSkeleton count={4} cardWidth={280} cardHeight={260} />
+        ) : categoryStats.length === 0 ? (
+          <div className="text-center text-gray-400 text-sm py-8">
+            Team categories will appear here once added in the admin panel.
+          </div>
+        ) : (
+          /* Smooth Marquee Slider of Category Cards */
           <InfiniteMarquee
-            items={team}
+            items={categoryStats}
             pauseOnHover
             showNav
-            gap={20}
-            itemClassName="w-[260px] sm:w-[300px]"
-            keyFn={(member, i) => member.id || i}
-            renderItem={member => <MemberCard member={member} />}
+            gap={24}
+            itemClassName="w-[270px] sm:w-[310px]"
+            keyFn={(item, i) => item.name || i}
+            renderItem={item => (
+              <CategoryCard
+                category={item.name}
+                count={item.count}
+                onSelect={handleCategorySelect}
+              />
+            )}
           />
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 max-w-6xl mx-auto">
-            {filteredMembers.map((member, i) => (
-              <MemberCard key={member.id || i} member={member} />
-            ))}
-          </div>
         )}
       </div>
     </section>
