@@ -181,10 +181,11 @@ export function WhyMedwebCategoryCard({ category, memberCount, onSelect }) {
   return (
     <div
       onClick={() => onSelect(category.name)}
-      className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col justify-between cursor-pointer group h-full w-[260px] sm:w-[300px] text-left border border-gray-100"
+      className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col justify-between cursor-pointer group h-full w-[260px] sm:w-[300px] shrink-0 text-left border border-gray-100"
     >
-      {/* Thumbnail Aspect-Video Header */}
-      <div className="relative aspect-video" style={{ background: accent.bg }}>
+      {/* Thumbnail Header — fixed pixel height (not aspect-ratio) so every
+          card's thumbnail is identically sized no matter the source image */}
+      <div className="relative h-[146px] sm:h-[169px] shrink-0 overflow-hidden" style={{ background: accent.bg }}>
         {category.imageUrl ? (
           <img
             src={category.imageUrl}
