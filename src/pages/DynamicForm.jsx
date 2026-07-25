@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { CheckCircle, ArrowLeft } from 'lucide-react'
-import { formsService, webinarsService } from '../firebase/services'
+import { formsService, webinarsService, settingsService, studentsDbService } from '../firebase/services'
 import { uploadToCloudinary } from '../firebase/cloudinary'
 import { generateAndIssueCertificate } from '../lib/certificateGenerator'
+import { resolveFormField } from '../lib/formFieldResolve'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
 
@@ -98,7 +99,26 @@ export default function DynamicForm() {
           (emailField && clean[emailField.key]) ||
           clean.email || clean.Email || clean.emailAddress || clean.email_address || ''
 
+        // Ensures the student's record exists / gets enriched even when the
+        // webinar has no certificate template configured (upsertFromCertificate
+        // below only fires once a certificate is actually issued).
+        studentsDbService.upsertFromFeedback({ email, name: rawName, phone: clean.whatsapp || clean.phone || '' }).catch(() => {})
+
         generateAndIssueCertificate({ submissionId, webinar, rawName, email }).catch(() => {})
+      } else {
+        // Not a webinar feedback form — check whether it's the Ambassador
+        // Program's public application form, and if so feed it into the same
+        // Students database (per scope: Ambassador registrations are a source).
+        settingsService.get().then(s => {
+          if (!s?.ambassadorApplyFormId || s.ambassadorApplyFormId !== id) return
+          const fields = form.fields || []
+          const name = resolveFormField(fields, clean, { labelRegex: /name/i, flatKeys: ['name', 'fullName', 'full_name', 'Name'] })
+          const email = resolveFormField(fields, clean, { type: 'email', labelRegex: /email/i, flatKeys: ['email', 'Email', 'emailAddress'] })
+          const phone = resolveFormField(fields, clean, { type: 'phone', labelRegex: /phone|whatsapp|contact/i, flatKeys: ['phone', 'whatsapp', 'contact'] })
+          const university = resolveFormField(fields, clean, { labelRegex: /university|institute|college/i, flatKeys: ['university', 'institute'] })
+          const degree = resolveFormField(fields, clean, { type: 'qualification', labelRegex: /degree|qualification|program/i, flatKeys: ['degree', 'qualification', 'degreeProgram'] })
+          if (email) studentsDbService.upsertFromAmbassador({ email, name, phone, university, degree }).catch(() => {})
+        }).catch(() => {})
       }
     } catch (e) { setStatus('error'); setError(e.message) }
   }

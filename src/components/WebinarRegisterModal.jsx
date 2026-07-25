@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { X, CheckCircle, Mail } from 'lucide-react'
-import { formsService, webinarsService } from '../firebase/services'
+import { formsService, webinarsService, studentsDbService } from '../firebase/services'
 import { uploadToCloudinary } from '../firebase/cloudinary'
 import { generateAndIssueCertificate } from '../lib/certificateGenerator'
 
@@ -64,8 +64,7 @@ export default function WebinarRegisterModal({ formId, webinarTopic, webinar: we
       // feedback form tied to a webinar that has a certificate template.
       // Fire-and-forget — never blocks or affects the success screen.
       const webinar = webinarProp || await webinarsService.getByFeedbackFormId(formId).catch(() => null)
-      if (webinar?.certTemplate?.imageUrl) {
-        setCertIssued(true)
+      if (webinar) {
         const fields = form.fields || []
         const nameField =
           fields.find(f => f.type !== 'email' && /name/i.test(f.label || '')) ||
@@ -81,7 +80,15 @@ export default function WebinarRegisterModal({ formId, webinarTopic, webinar: we
         const email =
           (emailField && clean[emailField.key]) ||
           clean.email || clean.Email || clean.emailAddress || ''
-        generateAndIssueCertificate({ submissionId, webinar, rawName, email }).catch(() => {})
+
+        // Ensures the student's record exists / gets enriched even when the
+        // webinar has no certificate template configured.
+        studentsDbService.upsertFromFeedback({ email, name: rawName, phone: clean.whatsapp || clean.phone || '' }).catch(() => {})
+
+        if (webinar.certTemplate?.imageUrl) {
+          setCertIssued(true)
+          generateAndIssueCertificate({ submissionId, webinar, rawName, email }).catch(() => {})
+        }
       }
     } catch (e) { setStatus('error'); setError(e.message) }
   }

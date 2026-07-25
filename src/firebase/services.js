@@ -4,13 +4,12 @@
 import {
   collection, doc, addDoc, setDoc, updateDoc, deleteDoc,
   getDocs, getDoc, query, where, orderBy, limit,
-  serverTimestamp, increment, onSnapshot,
+  serverTimestamp, increment, onSnapshot, runTransaction,
 } from 'firebase/firestore'
 import { db } from './config'
 
 // ─── Collection names ────────────────────────────────────────────────────────
 const COLS = {
-  students: 'students',
   webinars: 'webinars',
   courses: 'courses',
   certificates: 'certificates',
@@ -52,21 +51,6 @@ async function update(colName, id, data) {
 
 async function remove(colName, id) {
   await deleteDoc(ref(colName, id))
-}
-
-// ─── STUDENTS ────────────────────────────────────────────────────────────────
-export const studentsService = {
-  getAll: () => getAll(COLS.students, orderBy('createdAt', 'desc')),
-  getOne: id => getOne(COLS.students, id),
-  add: data => add(COLS.students, data),
-  update: (id, data) => update(COLS.students, id, data),
-  delete: id => remove(COLS.students, id),
-  // Real-time listener
-  listen: cb => onSnapshot(
-    query(col(COLS.students), orderBy('createdAt', 'desc')),
-    snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
-    err => console.error("Firebase listen error:", err)
-  ),
 }
 
 // ─── WEBINARS ────────────────────────────────────────────────────────────────
@@ -182,6 +166,90 @@ export const ambassadorsService = {
   ),
 }
 
+// ─── STUDENT DATABASE (aggregated, deduped-by-email) ─────────────────────────
+// One doc per unique email, doc ID = the email itself (URL-encoded so it's a
+// valid Firestore doc ID). Fed from 3 places only — webinar registrations,
+// webinar feedback submissions, and ambassador registrations — never
+// overwritten wholesale, always merged via a transaction so concurrent
+// upserts (e.g. two webinars registering the same email at once) can't
+// clobber each other's registrations/certificates arrays.
+const STUDENT_DB_COL = 'studentDatabase'
+const studentDocId = email => encodeURIComponent(String(email).trim().toLowerCase())
+
+async function upsertStudent(email, patch) {
+  if (!email?.trim()) return
+  const ref = doc(db, STUDENT_DB_COL, studentDocId(email))
+  await runTransaction(db, async tx => {
+    const snap = await tx.get(ref)
+    const base = snap.exists() ? snap.data() : {
+      name: '', email: email.trim().toLowerCase(), phone: '', university: '', degree: '',
+      registrations: [], certificates: [],
+      createdAt: serverTimestamp(),
+    }
+    tx.set(ref, { ...patch(base), updatedAt: serverTimestamp() }, { merge: true })
+  })
+}
+
+export const studentsDbService = {
+  getAll: () => getAll(STUDENT_DB_COL, orderBy('updatedAt', 'desc')),
+  listen: cb => onSnapshot(
+    query(col(STUDENT_DB_COL), orderBy('updatedAt', 'desc')),
+    snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+    err => console.error('Firebase studentDatabase listen error:', err)
+  ),
+
+  // Webinar Registration submission — one entry per distinct webinarId.
+  upsertFromRegistration: ({ email, name, phone, university, degree, webinarId, webinarTitle, registeredAt }) =>
+    upsertStudent(email, base => {
+      const already = (base.registrations || []).some(r => r.webinarId === webinarId)
+      return {
+        ...base,
+        name: name?.trim() || base.name,
+        phone: phone?.trim() || base.phone,
+        university: university?.trim() || base.university,
+        degree: degree?.trim() || base.degree,
+        registrations: already ? base.registrations : [
+          ...(base.registrations || []),
+          { webinarId: webinarId || '', webinarTitle: webinarTitle || '', registeredAt: registeredAt || new Date().toISOString() },
+        ],
+      }
+    }),
+
+  // Webinar Feedback submission — doesn't add a registration/certificate,
+  // just ensures the student record exists and enriches contact details.
+  upsertFromFeedback: ({ email, name, phone }) =>
+    upsertStudent(email, base => ({
+      ...base,
+      name: name?.trim() || base.name,
+      phone: phone?.trim() || base.phone,
+    })),
+
+  // Certificate issuance — one entry per distinct certCode.
+  upsertFromCertificate: ({ email, name, webinarId, webinarTitle, certCode, issuedAt }) =>
+    upsertStudent(email, base => {
+      const already = (base.certificates || []).some(c => c.certCode === certCode)
+      return {
+        ...base,
+        name: name?.trim() || base.name,
+        certificates: already ? base.certificates : [
+          ...(base.certificates || []),
+          { webinarId: webinarId || '', webinarTitle: webinarTitle || '', certCode: certCode || '', issuedAt: issuedAt || new Date().toISOString() },
+        ],
+      }
+    }),
+
+  // Ambassador registration (public application form, or an admin manually
+  // adding an ambassador) — enriches contact/university/degree only.
+  upsertFromAmbassador: ({ email, name, phone, university, degree }) =>
+    upsertStudent(email, base => ({
+      ...base,
+      name: name?.trim() || base.name,
+      phone: phone?.trim() || base.phone,
+      university: university?.trim() || base.university,
+      degree: degree?.trim() || base.degree,
+    })),
+}
+
 // ─── BLOG POSTS ──────────────────────────────────────────────────────────────
 export const blogService = {
   getAll: () => getAll(COLS.blog, orderBy('createdAt', 'desc')),
@@ -263,7 +331,7 @@ export const advisoryService = {
 // ─── DASHBOARD STATS ─────────────────────────────────────────────────────────
 export async function getDashboardStats() {
   const [students, webinars, courses, certs, ambassadors] = await Promise.all([
-    getDocs(col(COLS.students)),
+    getDocs(col(STUDENT_DB_COL)),
     getDocs(col(COLS.webinars)),
     getDocs(col(COLS.courses)),
     getDocs(col(COLS.certificates)),
@@ -271,7 +339,7 @@ export async function getDashboardStats() {
   ])
   return {
     totalStudents: students.size,
-    activeStudents: students.docs.filter(d => d.data().status === 'Active').length,
+    activeStudents: students.size, // studentDatabase has no Active/Inactive concept — every aggregated record counts
     totalWebinars: webinars.size,
     upcomingWebinars: webinars.docs.filter(d => d.data().status === 'Upcoming').length,
     activeCourses: courses.docs.filter(d => d.data().status === 'Active').length,

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Calendar, Clock, User, CheckCircle, ArrowLeft } from 'lucide-react'
-import { webinarsService, formsService, settingsService, DEFAULT_WEBINAR_FORM_FIELDS } from '../firebase/services'
+import { webinarsService, formsService, settingsService, studentsDbService, DEFAULT_WEBINAR_FORM_FIELDS } from '../firebase/services'
 import { sendWebinarConfirmation } from '../firebase/email'
 import { uploadToCloudinary } from '../firebase/cloudinary'
 import Navbar from '../components/Navbar'
@@ -120,9 +120,10 @@ export default function WebinarRegister() {
     try {
       const clean = {}
       Object.keys(values).forEach(k => { if (!k.endsWith('__uploading')) clean[k] = values[k] })
+      const webinarTitle = webinar?.topic || webinar?.title || ''
       await webinarsService.addRegistration({
         webinarId: id,
-        webinarTopic: webinar?.topic || webinar?.title || '',
+        webinarTopic: webinarTitle,
         speaker: webinar?.speaker || '',
         ...clean,
         registeredAt: new Date().toISOString(),
@@ -132,6 +133,10 @@ export default function WebinarRegister() {
       }
       // Auto-email confirmation (silently skips if EmailJS not configured)
       sendWebinarConfirmation({ name: values.name, email: values.email, webinar }).catch(() => {})
+      studentsDbService.upsertFromRegistration({
+        email: values.email, name: values.name, phone: values.whatsapp, degree: values.qualification,
+        webinarId: id, webinarTitle, registeredAt: new Date().toISOString(),
+      }).catch(() => {})
       setStatus('success')
       window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch (err) {

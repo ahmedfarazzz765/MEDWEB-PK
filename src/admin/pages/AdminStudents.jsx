@@ -1,151 +1,165 @@
-import { useState, useEffect } from 'react'
-import { Users, UserCheck, UserX, Award } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
+import * as XLSX from 'xlsx'
+import { Users, GraduationCap, Award, TrendingUp, Download, Eye } from 'lucide-react'
 import StatCard   from '../components/StatCard'
 import DataTable  from '../components/DataTable'
 import Modal      from '../components/Modal'
-import FormField, { inputCls } from '../components/FormField'
 import AdminButton from '../components/AdminButton'
-import ActionButtons from '../components/ActionButtons'
-import { studentsService } from '../../firebase/services'
+import { studentsDbService } from '../../firebase/services'
 
-const COURSES = [
-  'Clinical Pharmacy Masterclass',
-  'Drug Therapy Series',
-  '100 Vital Drugs',
-  'How to Treat Series',
-]
-
-const emptyForm = () => ({
-  name: '', email: '', city: '',
-  course: COURSES[0],
-  enrolled: new Date().toISOString().split('T')[0],
-  status: 'Active',
-  certified: false,
-})
+function formatDate(iso) {
+  if (!iso) return '-'
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return String(iso).split('T')[0] || '-'
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+}
 
 // ── columns defined OUTSIDE component so reference is stable ─────────────────
-function makeColumns(openEdit, handleDelete, deleting) {
+function makeColumns(openProfile) {
   return [
-    { key: 'name',      label: 'Name',      render: v => <span className="font-semibold text-[#1a1a1a]">{v}</span> },
-    { key: 'email',     label: 'Email',     render: v => <span className="text-gray-500 text-xs">{v}</span> },
-    { key: 'city',      label: 'City' },
-    { key: 'course',    label: 'Course',    render: v => <span className="text-xs font-medium text-[#1655c3] bg-blue-50 px-2 py-0.5 rounded-full">{v}</span> },
-    { key: 'enrolled',  label: 'Enrolled' },
-    { key: 'certified', label: 'Certified', render: v => v
-      ? <span className="text-xs font-bold bg-green-50 text-green-600 px-2 py-0.5 rounded-full">Yes</span>
-      : <span className="text-xs font-bold bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full">No</span>
-    },
-    { key: 'status', label: 'Status', render: v =>
-      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${v === 'Active' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'}`}>{v}</span>
-    },
+    { key: 'name',         label: 'Full Name',   render: v => <span className="font-semibold text-[#1a1a1a]">{v || '-'}</span> },
+    { key: 'email',        label: 'Email',       render: v => <span className="text-gray-500 text-xs">{v}</span> },
+    { key: 'phone',        label: 'Phone',       render: v => v || <span className="text-gray-300">-</span> },
+    { key: 'university',   label: 'University',  render: v => v || <span className="text-gray-300">-</span> },
+    { key: 'degree',       label: 'Degree',      render: v => v || <span className="text-gray-300">-</span> },
+    { key: 'regCount',     label: 'Registrations', render: v => <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-blue-50 text-[#1655c3]">{v}</span> },
+    { key: 'certCount',    label: 'Certificates', render: v => <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-green-50 text-[#64ac37]">{v}</span> },
     { key: 'id', label: 'Actions', render: (v, row) => (
-      <ActionButtons onEdit={() => openEdit(row)} onDelete={() => handleDelete(v)} deleteDisabled={deleting === v} />
+      <button onClick={() => openProfile(row)} className="p-1.5 rounded-lg hover:bg-blue-50 text-[#1655c3] transition-colors">
+        <Eye size={15} />
+      </button>
     )},
   ]
 }
 
 export default function AdminStudents() {
-  const [data,     setData]     = useState([])
-  const [loading,  setLoading]  = useState(true)
-  const [modal,    setModal]    = useState(false)   // false | 'add' | 'edit'
-  const [form,     setForm]     = useState(emptyForm)
-  const [editId,   setEditId]   = useState(null)
-  const [saving,   setSaving]   = useState(false)
-  const [deleting, setDeleting] = useState(null)
+  const [data,    setData]    = useState([])
+  const [loading, setLoading] = useState(true)
+  const [profile, setProfile] = useState(null) // the student row currently open in the profile modal
 
   useEffect(() => {
-    const unsub = studentsService.listen(rows => { setData(rows); setLoading(false) })
+    const unsub = studentsDbService.listen(rows => { setData(rows); setLoading(false) })
     return unsub
   }, [])
 
-  const openAdd  = () => { setForm(emptyForm()); setEditId(null); setModal('add') }
-  const openEdit = row => {
-    setForm({ name: row.name, email: row.email, city: row.city, course: row.course, enrolled: row.enrolled, status: row.status, certified: row.certified })
-    setEditId(row.id)
-    setModal('edit')
+  const students = useMemo(() => data.map(s => ({
+    ...s,
+    regCount: (s.registrations || []).length,
+    certCount: (s.certificates || []).length,
+  })), [data])
+
+  const totalRegistrations = students.reduce((a, s) => a + s.regCount, 0)
+  const totalCertificates  = students.reduce((a, s) => a + s.certCount, 0)
+  const avgRegPerStudent   = students.length ? (totalRegistrations / students.length).toFixed(1) : '0'
+
+  const openProfile = row => setProfile(row)
+  const closeProfile = () => setProfile(null)
+
+  const exportExcel = () => {
+    const rows = students.map(s => ({
+      'Full Name': s.name || '',
+      'Email Address': s.email || '',
+      'Phone Number': s.phone || '',
+      'Total Webinar Registrations': s.regCount,
+      'Total Certificates Earned': s.certCount,
+      'University': s.university || '',
+      'Degree': s.degree || '',
+      'Registered Webinars': (s.registrations || []).map(r => r.webinarTitle).filter(Boolean).join(', '),
+      'Certificates Earned (Webinars)': (s.certificates || []).map(c => c.webinarTitle).filter(Boolean).join(', '),
+    }))
+    const ws = XLSX.utils.json_to_sheet(rows)
+    ws['!cols'] = [
+      { wch: 22 }, { wch: 28 }, { wch: 16 }, { wch: 14 }, { wch: 14 },
+      { wch: 22 }, { wch: 20 }, { wch: 40 }, { wch: 40 },
+    ]
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Students')
+    XLSX.writeFile(wb, `MEDWEB_Students_${new Date().toISOString().split('T')[0]}.xlsx`)
   }
-  const closeModal = () => { setModal(false); setEditId(null) }
 
-  const set = field => e => setForm(prev => ({ ...prev, [field]: e.target.value }))
-  const setBool = field => e => setForm(prev => ({ ...prev, [field]: e.target.value === 'Yes' }))
-
-  const handleSave = async () => {
-    if (!form.name.trim() || !form.email.trim()) return
-    setSaving(true)
-    try {
-      if (modal === 'add') await studentsService.add(form)
-      else                 await studentsService.update(editId, form)
-      closeModal()
-    } catch (e) { alert('Error: ' + e.message) }
-    finally { setSaving(false) }
-  }
-
-  const handleDelete = async id => {
-    if (!confirm('Delete this student?')) return
-    setDeleting(id)
-    try { await studentsService.delete(id) } finally { setDeleting(null) }
-  }
-
-  const columns = makeColumns(openEdit, handleDelete, deleting)
-  const active    = data.filter(s => s.status === 'Active').length
-  const inactive  = data.filter(s => s.status === 'Inactive').length
-  const certified = data.filter(s => s.certified).length
+  const columns = makeColumns(openProfile)
 
   return (
     <div className="p-6 space-y-6">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={Users}     label="Total Students" value={loading ? '…' : data.length} color="#1655c3" bg="#eff6ff" />
-        <StatCard icon={UserCheck} label="Active"         value={loading ? '…' : active}      color="#64ac37" bg="#f0fdf4" />
-        <StatCard icon={UserX}     label="Inactive"       value={loading ? '…' : inactive}    color="#ef4444" bg="#fef2f2" />
-        <StatCard icon={Award}     label="Certified"      value={loading ? '…' : certified}   color="#1655c3" bg="#eff6ff" />
+        <StatCard icon={Users}        label="Total Students"        value={loading ? '…' : students.length}       color="#1655c3" bg="#eff6ff" />
+        <StatCard icon={GraduationCap} label="Webinar Registrations" value={loading ? '…' : totalRegistrations}     color="#64ac37" bg="#f0fdf4" />
+        <StatCard icon={Award}        label="Certificates Issued"   value={loading ? '…' : totalCertificates}      color="#1655c3" bg="#eff6ff" />
+        <StatCard icon={TrendingUp}   label="Avg Registrations"     value={loading ? '…' : avgRegPerStudent}       color="#f59e0b" bg="#fffbeb" />
       </div>
 
       <DataTable
-        title="All Students" columns={columns} data={data} searchKey="name" emptyMessage="No students yet — click Add Student to enroll one"
-        actions={<AdminButton size="sm" onClick={openAdd}>+ Add Student</AdminButton>}
+        title="Student Database"
+        columns={columns}
+        data={students}
+        searchKey="name"
+        emptyMessage="No students yet — they'll appear automatically as webinar registrations, feedback, and ambassador applications come in."
+        actions={
+          <AdminButton size="sm" onClick={exportExcel} disabled={!students.length}>
+            <Download size={13} className="mr-1.5" /> Export to Excel
+          </AdminButton>
+        }
       />
 
-      {modal && (
-        <Modal title={modal === 'add' ? 'Add Student' : 'Edit Student'} onClose={closeModal}>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <FormField label="Full Name">
-                <input className={inputCls} value={form.name} onChange={set('name')} placeholder="Fatima Zahra" />
-              </FormField>
-              <FormField label="Email">
-                <input className={inputCls} type="email" value={form.email} onChange={set('email')} placeholder="student@uni.pk" />
-              </FormField>
+      {profile && (
+        <Modal title={profile.name || profile.email} onClose={closeProfile} wide>
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-4 bg-gray-50 rounded-2xl p-4">
+              <div>
+                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Email</div>
+                <div className="text-sm font-semibold text-[#1a1a1a]">{profile.email}</div>
+              </div>
+              <div>
+                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Phone</div>
+                <div className="text-sm font-semibold text-[#1a1a1a]">{profile.phone || '-'}</div>
+              </div>
+              <div>
+                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">University</div>
+                <div className="text-sm font-semibold text-[#1a1a1a]">{profile.university || '-'}</div>
+              </div>
+              <div>
+                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Degree</div>
+                <div className="text-sm font-semibold text-[#1a1a1a]">{profile.degree || '-'}</div>
+              </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <FormField label="City">
-                <input className={inputCls} value={form.city} onChange={set('city')} placeholder="Lahore" />
-              </FormField>
-              <FormField label="Enrolled Date">
-                <input className={inputCls} type="date" value={form.enrolled} onChange={set('enrolled')} />
-              </FormField>
+
+            <div>
+              <h3 className="font-bold text-[#1a1a1a] text-sm mb-3">
+                Webinar Registrations <span className="text-gray-400 font-normal">({(profile.registrations || []).length})</span>
+              </h3>
+              {(profile.registrations || []).length === 0 ? (
+                <p className="text-xs text-gray-400">No webinar registrations on file.</p>
+              ) : (
+                <div className="space-y-2">
+                  {profile.registrations.map((r, i) => (
+                    <div key={i} className="flex items-center justify-between bg-blue-50/50 rounded-xl px-4 py-2.5">
+                      <span className="text-sm font-medium text-[#1a1a1a]">{r.webinarTitle || 'Untitled Webinar'}</span>
+                      <span className="text-xs text-gray-500">{formatDate(r.registeredAt)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-            <FormField label="Course">
-              <select className={inputCls} value={form.course} onChange={set('course')}>
-                {COURSES.map(c => <option key={c}>{c}</option>)}
-              </select>
-            </FormField>
-            <div className="grid grid-cols-2 gap-4">
-              <FormField label="Status">
-                <select className={inputCls} value={form.status} onChange={set('status')}>
-                  <option>Active</option><option>Inactive</option>
-                </select>
-              </FormField>
-              <FormField label="Certified">
-                <select className={inputCls} value={form.certified ? 'Yes' : 'No'} onChange={setBool('certified')}>
-                  <option>No</option><option>Yes</option>
-                </select>
-              </FormField>
-            </div>
-            <div className="flex gap-3 pt-2">
-              <AdminButton variant="ghost" className="flex-1" onClick={closeModal}>Cancel</AdminButton>
-              <AdminButton variant="primary" className="flex-1" onClick={handleSave} disabled={saving}>
-                {saving ? 'Saving…' : modal === 'add' ? 'Add Student' : 'Save Changes'}
-              </AdminButton>
+
+            <div>
+              <h3 className="font-bold text-[#1a1a1a] text-sm mb-3">
+                Certificates Earned <span className="text-gray-400 font-normal">({(profile.certificates || []).length})</span>
+              </h3>
+              {(profile.certificates || []).length === 0 ? (
+                <p className="text-xs text-gray-400">No certificates issued yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {profile.certificates.map((c, i) => (
+                    <div key={i} className="flex items-center justify-between bg-green-50/50 rounded-xl px-4 py-2.5">
+                      <div>
+                        <div className="text-sm font-medium text-[#1a1a1a]">{c.webinarTitle || 'Untitled Webinar'}</div>
+                        {c.certCode && <div className="text-[10px] text-gray-400">{c.certCode}</div>}
+                      </div>
+                      <span className="text-xs text-gray-500">{formatDate(c.issuedAt)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </Modal>

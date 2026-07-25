@@ -8,7 +8,7 @@ import ImageUpload from '../components/ImageUpload'
 import AdminButton from '../components/AdminButton'
 import ActionButtons from '../components/ActionButtons'
 import AmbassadorLetterSettings from '../components/AmbassadorLetterSettings'
-import { ambassadorsService, settingsService, formsService } from '../../firebase/services'
+import { ambassadorsService, settingsService, formsService, studentsDbService } from '../../firebase/services'
 import {
   sendAmbassadorWelcomeEmail, sendAmbassadorPointsUpdateEmail,
   sendAmbassadorRemovedEmail, sendAmbassadorUpdatedEmail,
@@ -195,6 +195,10 @@ export default function AdminAmbassadors() {
           sendAmbassadorWelcomeEmail({
             name: form.name, email: form.email,
             ambCode: form.ambCode, university: form.university, rank: form.rank,
+          }).catch(() => {})
+          studentsDbService.upsertFromAmbassador({
+            email: form.email, name: form.name, phone: form.phone,
+            university: form.university, degree: form.degreeProgram,
           }).catch(() => {})
         }
       } else {

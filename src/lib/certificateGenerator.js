@@ -9,7 +9,7 @@
 // box is centered on its point (canvas textAlign 'center'), the ID box is
 // left-anchored at its point (textAlign 'left'), same as the admin preview.
 
-import { certificatesService, formsService } from '../firebase/services'
+import { certificatesService, formsService, studentsDbService } from '../firebase/services'
 import { uploadToCloudinary } from '../firebase/cloudinary'
 import { sendCertificateEmail } from '../firebase/email'
 
@@ -130,6 +130,11 @@ export async function generateAndIssueCertificate({ submissionId, webinar, rawNa
     })
 
     await markStatus({ certificateStatus: 'issued', certCode })
+
+    studentsDbService.upsertFromCertificate({
+      email, name: studentName, webinarId: webinar.id, webinarTitle, certCode,
+      issuedAt: new Date().toISOString(),
+    }).catch(err => console.error('studentsDbService.upsertFromCertificate failed:', err))
 
     const emailResult = await sendCertificateEmail({ name: studentName, email, certCode, webinarTitle, certificateImageUrl })
     if (emailResult?.skipped) {

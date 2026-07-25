@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Calendar, Clock, Video, X, User, Phone, Mail, BookOpen, CheckCircle } from 'lucide-react'
-import { webinarsService } from '../firebase/services'
+import { webinarsService, studentsDbService } from '../firebase/services'
 
 // ── Static fallback data (shown when Firebase is empty / loading) ─────────────
 const STATIC_WEBINARS = [
@@ -107,6 +107,9 @@ function JoinModal({ webinar, onClose }) {
         joinedAt:     new Date().toISOString(),
       })
       await webinarsService.register(webinar.id).catch(() => {})
+      studentsDbService.upsertFromRegistration({
+        email, name, phone, webinarId: webinar.id, webinarTitle: webinar.topic, registeredAt: new Date().toISOString(),
+      }).catch(() => {})
       setStatus('success')
     } catch (err) {
       console.error(err)

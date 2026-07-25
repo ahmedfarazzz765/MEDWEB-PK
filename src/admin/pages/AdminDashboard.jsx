@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Users, Video, BookOpen, Award, Megaphone, TrendingUp, Star, UserPlus, CalendarClock } from 'lucide-react'
 import StatCard from '../components/StatCard'
-import { getDashboardStats, studentsService, webinarsService, ambassadorsService } from '../../firebase/services'
+import { getDashboardStats, studentsDbService, webinarsService, ambassadorsService } from '../../firebase/services'
 
 const rankColors = { Platinum:'#0369a1', Gold:'#b45309', Silver:'#475569', Bronze:'#9a3412' }
 
@@ -34,7 +34,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     getDashboardStats().then(s => { setStats(s); setLoading(false) }).catch(()=>setLoading(false))
-    const u1 = studentsService.listen(r  => setStudents(r.slice(0,5)))
+    const u1 = studentsDbService.listen(r  => setStudents(r.slice(0,5)))
     const u2 = webinarsService.listen(r  => setWebinars(r))
     const u3 = ambassadorsService.listen(r=> setAmbassadors(r))
     return () => { u1(); u2(); u3() }
@@ -71,16 +71,16 @@ export default function AdminDashboard() {
         {/* Recent students */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-            <h3 className="font-bold text-[#1a1a1a] text-sm">Recent Enrollments</h3>
+            <h3 className="font-bold text-[#1a1a1a] text-sm">Recently Active Students</h3>
             <span className="text-xs text-[#1655c3] font-semibold">Live from Firebase</span>
           </div>
           <div className="divide-y divide-gray-50">
-            {students.length===0 && <EmptyPanel icon={UserPlus} message="No students yet — add via the Students page" />}
+            {students.length===0 && <EmptyPanel icon={UserPlus} message="No students yet — they'll appear from webinar/ambassador activity" />}
             {students.map((s,i)=>(
               <div key={i} className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors">
-                <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-black shrink-0 bg-[#1655c3]">{s.name?.charAt(0)}</div>
-                <div className="flex-1 min-w-0"><div className="text-sm font-semibold text-[#1a1a1a] truncate">{s.name}</div><div className="text-[11px] text-gray-400 truncate">{s.course}</div></div>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${s.status==='Active'?'bg-green-50 text-green-600':'bg-gray-100 text-gray-500'}`}>{s.status}</span>
+                <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-black shrink-0 bg-[#1655c3]">{(s.name || s.email)?.charAt(0)?.toUpperCase()}</div>
+                <div className="flex-1 min-w-0"><div className="text-sm font-semibold text-[#1a1a1a] truncate">{s.name || s.email}</div><div className="text-[11px] text-gray-400 truncate">{s.email}</div></div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-[#1655c3]">{(s.registrations||[]).length} reg</span>
               </div>
             ))}
           </div>
