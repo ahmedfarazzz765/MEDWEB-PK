@@ -1,15 +1,17 @@
-import { useState, useEffect } from 'react'
-import { FileText, Eye, CheckCircle, Edit as EditIcon, Trash2, Edit2 } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
+import { FileText, Eye, CheckCircle, Edit as EditIcon, Trash2, Edit2, Tag } from 'lucide-react'
 import StatCard    from '../components/StatCard'
 import DataTable   from '../components/DataTable'
 import Modal       from '../components/Modal'
 import FormField, { inputCls } from '../components/FormField'
 import ImageUpload from '../components/ImageUpload'
 import AdminButton from '../components/AdminButton'
+import ActionButtons from '../components/ActionButtons'
 import NewsletterSendModal from '../components/NewsletterSendModal'
 import RichTextEditor from '../components/RichTextEditor'
-import { blogService, newsletterService } from '../../firebase/services'
+import { blogService, blogCategoriesService, newsletterService } from '../../firebase/services'
 import { sendNewsletterEmail, getRemainingEmailQuota } from '../../firebase/email'
+import { DEFAULT_BLOG_CATEGORIES } from '../../constants/blogCategories'
 
 // `content` is now rich-text HTML (see RichTextEditor.jsx) — this fallback
 // (used only when the admin left Excerpt blank) strips tags first so a
@@ -19,13 +21,13 @@ function truncateExcerpt(content, max = 200) {
   return text.length > max ? text.slice(0, max).trim() + '…' : text
 }
 
-const CATS = ['Pharmacology','Clinical Practice','Career Guide','Education','Research']
-
 const emptyForm = () => ({
-  title: '', author: '', category: CATS[0],
+  title: '', author: '', category: '',
   excerpt: '', content: '', status: 'Draft',
   views: 0, imageUrl: '', slug: '',
 })
+
+const emptyCatForm = () => ({ name: '' })
 
 function slugify(str) {
   return String(str || '').toLowerCase().trim()
@@ -60,7 +62,9 @@ function makeColumns(openEdit, handlePublish, handleDelete) {
 }
 
 export default function AdminBlog() {
+  const [activeTab, setActiveTab] = useState('posts') // 'posts' | 'categories'
   const [data,    setData]    = useState([])
+  const [dbCategories, setDbCategories] = useState([])
   const [loading, setLoading] = useState(true)
   const [modal,   setModal]   = useState(false)
   const [form,    setForm]    = useState(emptyForm)
@@ -69,10 +73,30 @@ export default function AdminBlog() {
   const [sendModal, setSendModal] = useState(null)
   // { phase: 'confirm-quota'|'confirm'|'sending'|'done', total, remaining, sent, failed, failedEmails, job }
 
+  // Category CRUD modal state
+  const [catModal,  setCatModal]  = useState(false)
+  const [catForm,   setCatForm]   = useState(emptyCatForm)
+  const [catEditId, setCatEditId] = useState(null)
+  const [catSaving, setCatSaving] = useState(false)
+
   useEffect(() => {
     const unsub = blogService.listen(rows => { setData(rows); setLoading(false) })
     return unsub
   }, [])
+
+  useEffect(() => {
+    const unsub = blogCategoriesService.listen(setDbCategories)
+    return unsub
+  }, [])
+
+  // Baseline defaults + admin-created categories, deduped by name — keeps
+  // posts saved before this feature existed pointing at a real category.
+  const categoryNames = useMemo(() => {
+    const set = new Set(DEFAULT_BLOG_CATEGORIES)
+    dbCategories.forEach(c => { if (c.name?.trim()) set.add(c.name.trim()) })
+    data.forEach(p => { if (p.category?.trim()) set.add(p.category.trim()) })
+    return Array.from(set)
+  }, [dbCategories, data])
 
   // Backfill: any post saved before the slug field existed gets one
   // generated automatically the next time this admin list loads. Each pass
@@ -92,7 +116,7 @@ export default function AdminBlog() {
     })()
   }, [data, loading])
 
-  const openAdd  = () => { setForm(emptyForm()); setEditId(null); setModal('add') }
+  const openAdd  = () => { setForm({ ...emptyForm(), category: categoryNames[0] || '' }); setEditId(null); setModal('add') }
   const openEdit = row => {
     setForm({ title: row.title, author: row.author, category: row.category, excerpt: row.excerpt || '', content: row.content || '', status: row.status, views: row.views || 0, imageUrl: row.imageUrl || '', slug: row.slug || '' })
     setEditId(row.id); setModal('edit')
@@ -137,6 +161,27 @@ export default function AdminBlog() {
   const handleDelete = async id => {
     if (!confirm('Delete post?')) return
     try { await blogService.delete(id) } catch (e) { alert('Error: ' + e.message) }
+  }
+
+  // --- Category Handlers ---
+  const openAddCategory = () => { setCatForm(emptyCatForm()); setCatEditId(null); setCatModal('add') }
+  const openEditCategory = cat => { setCatForm({ name: cat.name || '' }); setCatEditId(cat.id); setCatModal('edit') }
+  const closeCatModal = () => { setCatModal(false); setCatEditId(null) }
+
+  const handleSaveCategory = async () => {
+    if (!catForm.name.trim()) return
+    setCatSaving(true)
+    try {
+      if (catModal === 'add') await blogCategoriesService.add({ name: catForm.name.trim() })
+      else                     await blogCategoriesService.update(catEditId, { name: catForm.name.trim() })
+      closeCatModal()
+    } catch (e) { alert('Error: ' + e.message) }
+    finally { setCatSaving(false) }
+  }
+
+  const handleDeleteCategory = async id => {
+    if (!confirm('Delete this category? Posts already assigned to it keep their category text.')) return
+    try { await blogCategoriesService.delete(id) } catch (e) { alert('Error: ' + e.message) }
   }
 
   // Runs entirely in this admin's own open tab — loops through active
@@ -216,9 +261,58 @@ export default function AdminBlog() {
         </div>
       )}
 
-      <DataTable title="All Blog Posts" columns={columns} data={data} searchKey="title" emptyMessage="No blog posts yet — click New Post to write one"
-        actions={<AdminButton size="sm" onClick={openAdd}>+ New Post</AdminButton>}
-      />
+      {/* Posts / Categories Tab Switcher */}
+      <div className="flex items-center bg-white p-2 rounded-2xl border border-gray-100 shadow-sm gap-2 w-fit">
+        <button
+          onClick={() => setActiveTab('posts')}
+          className={`px-5 py-2 rounded-xl text-xs font-bold transition-all ${
+            activeTab === 'posts' ? 'bg-[#1655c3] text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          Posts ({data.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('categories')}
+          className={`px-5 py-2 rounded-xl text-xs font-bold transition-all ${
+            activeTab === 'categories' ? 'bg-[#1655c3] text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          Categories ({categoryNames.length})
+        </button>
+      </div>
+
+      {activeTab === 'posts' ? (
+        <DataTable title="All Blog Posts" columns={columns} data={data} searchKey="title" emptyMessage="No blog posts yet — click New Post to write one"
+          actions={<AdminButton size="sm" onClick={openAdd}>+ New Post</AdminButton>}
+        />
+      ) : (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-[#1a1a1a] text-sm">Blog Categories</h3>
+            <AdminButton size="sm" onClick={openAddCategory}>+ Add Category</AdminButton>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {categoryNames.map(name => {
+              const dbCat = dbCategories.find(c => c.name === name)
+              const count = data.filter(p => p.category === name).length
+              return (
+                <div key={name} className="flex items-center justify-between gap-3 bg-gray-50 rounded-xl px-4 py-3 border border-gray-100">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Tag size={14} className="text-[#1655c3] shrink-0" />
+                    <span className="text-sm font-semibold text-[#1a1a1a] truncate">{name}</span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-[#1655c3] shrink-0">{count}</span>
+                  </div>
+                  {dbCat ? (
+                    <ActionButtons onEdit={() => openEditCategory(dbCat)} onDelete={() => handleDeleteCategory(dbCat.id)} />
+                  ) : (
+                    <span className="text-[10px] text-gray-400 shrink-0">Default</span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {modal && (
         <Modal title={modal === 'add' ? 'New Blog Post' : 'Edit Post'} onClose={closeModal} wide>
@@ -237,7 +331,7 @@ export default function AdminBlog() {
               </FormField>
               <FormField label="Category">
                 <select className={inputCls} value={form.category} onChange={set('category')}>
-                  {CATS.map(c => <option key={c}>{c}</option>)}
+                  {categoryNames.map(c => <option key={c}>{c}</option>)}
                 </select>
               </FormField>
             </div>
@@ -256,6 +350,27 @@ export default function AdminBlog() {
               <AdminButton variant="ghost" className="flex-1" onClick={closeModal}>Cancel</AdminButton>
               <AdminButton variant="primary" className="flex-1" onClick={handleSave} disabled={saving}>
                 {saving ? 'Saving…' : modal === 'add' ? 'Create Post' : 'Save Changes'}
+              </AdminButton>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {catModal && (
+        <Modal title={catModal === 'add' ? 'Add Category' : 'Edit Category'} onClose={closeCatModal}>
+          <div className="space-y-4">
+            <FormField label="Category Name">
+              <input
+                className={inputCls}
+                value={catForm.name}
+                onChange={e => setCatForm({ name: e.target.value })}
+                placeholder="e.g. Clinical Pharmacy, Career Advice, Research"
+              />
+            </FormField>
+            <div className="flex gap-3 pt-2">
+              <AdminButton variant="ghost" className="flex-1" onClick={closeCatModal}>Cancel</AdminButton>
+              <AdminButton variant="primary" className="flex-1" onClick={handleSaveCategory} disabled={catSaving}>
+                {catSaving ? 'Saving…' : catModal === 'add' ? 'Add Category' : 'Save Changes'}
               </AdminButton>
             </div>
           </div>

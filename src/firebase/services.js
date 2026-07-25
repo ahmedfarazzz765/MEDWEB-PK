@@ -207,6 +207,18 @@ export const blogService = {
   ),
 }
 
+export const blogCategoriesService = {
+  getAll: () => getAll('blogCategories', orderBy('createdAt', 'desc')),
+  add: data => add('blogCategories', data),
+  update: (id, data) => update('blogCategories', id, data),
+  delete: id => remove('blogCategories', id),
+  listen: cb => onSnapshot(
+    query(collection(db, 'blogCategories'), orderBy('createdAt', 'desc')),
+    snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+    err => console.error("Firebase blogCategories listen error:", err)
+  ),
+}
+
 // ─── TEAM ────────────────────────────────────────────────────────────────────
 export const teamService = {
   getAll: () => getAll(COLS.team, orderBy('createdAt', 'desc')),

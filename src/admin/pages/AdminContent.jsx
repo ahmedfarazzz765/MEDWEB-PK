@@ -31,6 +31,7 @@ Through modern digital learning tools and a growing library of educational resou
 const DEFAULT_NAV_LINKS = [
   { label: 'Home', href: '#home' }, { label: 'Courses', href: '#courses' },
   { label: 'Webinars', href: '#webinars' }, { label: 'Ambassador Program', href: '#ambassadors' },
+  { label: 'Team', href: '/team' },
   { label: 'Certificates', href: '#certificates' }, { label: 'Blog', href: '#blog' }, { label: 'Contact', href: '#contact' },
 ]
 const DEFAULT_PARTNERS = [
