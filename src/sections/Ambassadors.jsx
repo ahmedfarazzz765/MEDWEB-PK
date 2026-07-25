@@ -5,13 +5,9 @@ import { ambassadorsService, settingsService } from '../firebase/services'
 import SectionHeading from '../components/SectionHeading'
 import InfiniteMarquee from '../components/InfiniteMarquee'
 import CardRowSkeleton from '../components/CardRowSkeleton'
-import SectionEmptyState from '../components/SectionEmptyState'
 import BrandWatermark from '../components/BrandWatermark'
 import Skeleton from '../components/Skeleton'
 
-// Points → 1-5 star rating. Thresholds are a simple, reasonable ladder:
-// 5★ needs a genuinely top-tier contributor, 1★ is the floor for anyone
-// active enough to have a real points total.
 function pointsToStars(points) {
   const p = Number(points) || 0
   if (p >= 15000) return 5
@@ -64,7 +60,7 @@ export function AmbassadorCard({ a }) {
 
 export default function Ambassadors() {
   const navigate = useNavigate()
-  const [ambassadors, setAmbassadors] = useState(null) // null = still loading; [] = confirmed empty
+  const [ambassadors, setAmbassadors] = useState(null)
   const [applyEnabled, setApplyEnabled] = useState(true)
   const [applyFormId, setApplyFormId] = useState('')
   const [applyLink, setApplyLink] = useState('')
@@ -73,7 +69,6 @@ export default function Ambassadors() {
   const [subtitle, setSubtitle] = useState('Join our growing network of student leaders representing MEDWEB across Pakistan.')
 
   useEffect(() => {
-    // Real-time listener
     const unsub = ambassadorsService.listen(rows => {
       const active = rows.filter(r => r.status === 'Active')
       setAmbassadors(active)
@@ -98,6 +93,10 @@ export default function Ambassadors() {
 
   const loading = ambassadors === null
   const empty = ambassadors !== null && ambassadors.length === 0
+
+  // Hide section entirely when confirmed empty
+  if (empty) return null
+
   const cities = !loading && !empty ? new Set(ambassadors.map(a => a.city).filter(Boolean)).size : 0
   const universities = !loading && !empty ? new Set(ambassadors.map(a => a.university).filter(Boolean)).size : 0
 
@@ -121,11 +120,8 @@ export default function Ambassadors() {
             </div>
             <CardRowSkeleton count={4} cardWidth={260} cardHeight={300} />
           </>
-        ) : empty ? (
-          <SectionEmptyState message="Ambassadors will appear here once added in the admin panel." />
         ) : (
           <>
-            {/* Stats — computed from real ambassador records only */}
             <div className="grid grid-cols-3 gap-3 sm:gap-4 mb-6 sm:mb-8">
               {[
                 { icon:Users,  label:'Active Ambassadors',  value: `${ambassadors.length}+`, color:'#1655c3', bg:'#eff6ff' },
@@ -140,7 +136,6 @@ export default function Ambassadors() {
               ))}
             </div>
 
-            {/* Photo-card carousel — continuous auto-scroll, pauses on hover */}
             <InfiniteMarquee
               items={ambassadors}
               pauseOnHover

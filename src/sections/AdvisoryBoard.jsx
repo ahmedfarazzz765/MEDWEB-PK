@@ -6,7 +6,6 @@ import { useSiteSettings } from '../hooks/useSiteSettings'
 import SectionHeading from '../components/SectionHeading'
 import InfiniteMarquee from '../components/InfiniteMarquee'
 import CardRowSkeleton from '../components/CardRowSkeleton'
-import SectionEmptyState from '../components/SectionEmptyState'
 import BrandWatermark from '../components/BrandWatermark'
 
 const HEADING_DEFAULTS = {
@@ -51,19 +50,19 @@ export function AdvisorCard({ member }) {
 }
 
 export default function AdvisoryBoard() {
-  const [board, setBoard] = useState(null) // null = still loading; [] = confirmed empty
+  const [board, setBoard] = useState(null) // null = loading
   const h = useSiteSettings(HEADING_DEFAULTS)
 
   useEffect(() => {
     const unsub = advisoryService.listen(rows => {
-      // Match Team's convention: the admin form has an Active/Inactive status
-      // field for advisors, but this was never actually filtered on here —
-      // meaning setting an advisor to Inactive had no visible effect.
       const active = rows.filter(r => r.status !== 'Inactive')
       setBoard(active)
     })
     return () => unsub()
   }, [])
+
+  // If section confirmed empty, hide the entire section (heading, watermark, container)
+  if (board !== null && board.length === 0) return null
 
   return (
     <section id="advisory" className="py-10 sm:py-12 px-4 bg-[#f7f9fc] relative overflow-hidden">
@@ -80,8 +79,6 @@ export default function AdvisoryBoard() {
 
         {board === null ? (
           <CardRowSkeleton count={4} cardWidth={260} cardHeight={340} />
-        ) : board.length === 0 ? (
-          <SectionEmptyState message="Advisory board members will appear here once added in the admin panel." />
         ) : (
           <InfiniteMarquee
             items={board}

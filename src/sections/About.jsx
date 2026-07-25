@@ -1,12 +1,11 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight, Linkedin } from 'lucide-react'
 import { teamService } from '../firebase/services'
 import { useSiteSettings } from '../hooks/useSiteSettings'
 import SectionHeading from '../components/SectionHeading'
 import InfiniteMarquee from '../components/InfiniteMarquee'
 import CardRowSkeleton from '../components/CardRowSkeleton'
-import SectionEmptyState from '../components/SectionEmptyState'
 import BrandWatermark from '../components/BrandWatermark'
 
 const HEADING_DEFAULTS = {
@@ -103,6 +102,7 @@ export default function Team() {
   const [team, setTeam] = useState(null) // null = loading
   const [activeCategory, setActiveCategory] = useState('All')
   const h = useSiteSettings(HEADING_DEFAULTS)
+  const navigate = useNavigate()
 
   useEffect(() => {
     // Real-time listener — updates instantly when admin adds/edits team members
@@ -130,6 +130,9 @@ export default function Team() {
     return team.filter(m => (m.category || 'Executive') === activeCategory)
   }, [team, activeCategory])
 
+  // If section confirmed empty, hide the entire section (heading, watermark, container)
+  if (team !== null && team.length === 0) return null
+
   return (
     <section id="team" className="py-10 sm:py-14 px-4 bg-white relative overflow-hidden">
       <BrandWatermark seed={6} />
@@ -141,14 +144,14 @@ export default function Team() {
           className="mb-4"
         />
 
-        {/* Category Filter Tabs */}
+        {/* Category Tabs */}
         {team && team.length > 0 && categories.length > 0 && (
           <div className="flex flex-wrap items-center justify-center gap-2 mb-8">
             <button
               onClick={() => setActiveCategory('All')}
               className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all duration-300 shadow-sm ${
                 activeCategory === 'All'
-                  ? 'bg-[#64ac37] text-white shadow-green-200'
+                  ? 'bg-[#64ac37] text-white shadow-green-200 scale-105'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
@@ -162,7 +165,7 @@ export default function Team() {
                   onClick={() => setActiveCategory(cat)}
                   className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all duration-300 shadow-sm ${
                     activeCategory === cat
-                      ? 'bg-[#64ac37] text-white shadow-green-200'
+                      ? 'bg-[#64ac37] text-white shadow-green-200 scale-105'
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
                 >
@@ -174,20 +177,16 @@ export default function Team() {
         )}
 
         <div className="text-center mb-6 sm:mb-8">
-          <Link
-            to="/team"
+          <button
+            onClick={() => navigate(activeCategory === 'All' ? '/team' : `/team?category=${encodeURIComponent(activeCategory)}`)}
             className="inline-flex items-center gap-2 text-[#1655c3] font-semibold text-sm hover:gap-3 transition-all duration-200"
           >
             See All Members <ArrowRight size={15} />
-          </Link>
+          </button>
         </div>
 
         {team === null ? (
           <CardRowSkeleton count={4} cardWidth={280} cardHeight={360} />
-        ) : team.length === 0 ? (
-          <SectionEmptyState message="Team members will appear here once added in the admin panel." />
-        ) : filteredMembers.length === 0 ? (
-          <SectionEmptyState message={`No team members found under '${activeCategory}'.`} />
         ) : activeCategory === 'All' && team.length > 4 ? (
           <InfiniteMarquee
             items={team}

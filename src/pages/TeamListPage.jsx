@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
-import { Link } from 'react-router-dom'
-import { ArrowLeft, Users } from 'lucide-react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { ArrowLeft } from 'lucide-react'
 import { teamService } from '../firebase/services'
 import { MemberCard } from '../sections/About'
 import Navbar from '../components/Navbar'
@@ -13,7 +13,9 @@ const PAGE_SIZE = 16
 
 export default function TeamListPage() {
   const [team, setTeam] = useState(null)
-  const [activeCategory, setActiveCategory] = useState('All')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const initialCat = searchParams.get('category') || 'All'
+  const [activeCategory, setActiveCategory] = useState(initialCat)
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
 
   useEffect(() => {
@@ -23,6 +25,12 @@ export default function TeamListPage() {
     })
     return () => unsub()
   }, [])
+
+  // Synchronize category state when searchParams change
+  useEffect(() => {
+    const cat = searchParams.get('category') || 'All'
+    setActiveCategory(cat)
+  }, [searchParams])
 
   // Extract unique categories from active team members
   const categories = useMemo(() => {
@@ -44,6 +52,11 @@ export default function TeamListPage() {
   const handleCategoryChange = cat => {
     setActiveCategory(cat)
     setVisibleCount(PAGE_SIZE)
+    if (cat === 'All') {
+      setSearchParams({})
+    } else {
+      setSearchParams({ category: cat })
+    }
   }
 
   return (
@@ -53,7 +66,7 @@ export default function TeamListPage() {
         <div className="max-w-7xl mx-auto px-4 pt-10 pb-16">
           <Link
             to="/"
-            className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-[#1655c3] mb-6 transition-colors"
+            className="inline-flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-[#1655c3] mb-6 transition-colors"
           >
             <ArrowLeft size={16} /> Back to Home
           </Link>
@@ -66,13 +79,13 @@ export default function TeamListPage() {
           />
 
           {/* Category Filter Tabs */}
-          {team && team.length > 0 && categories.length > 0 && (
+          {team && team.length > 0 && (
             <div className="flex flex-wrap items-center justify-center gap-2 mb-10">
               <button
                 onClick={() => handleCategoryChange('All')}
                 className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all duration-300 shadow-sm ${
                   activeCategory === 'All'
-                    ? 'bg-[#1655c3] text-white shadow-blue-200 scale-105'
+                    ? 'bg-[#64ac37] text-white shadow-green-200 scale-105'
                     : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
                 }`}
               >
@@ -86,7 +99,7 @@ export default function TeamListPage() {
                     onClick={() => handleCategoryChange(cat)}
                     className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all duration-300 shadow-sm ${
                       activeCategory === cat
-                        ? 'bg-[#1655c3] text-white shadow-blue-200 scale-105'
+                        ? 'bg-[#64ac37] text-white shadow-green-200 scale-105'
                         : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
                     }`}
                   >
@@ -105,7 +118,7 @@ export default function TeamListPage() {
             <SectionEmptyState message={`No team members found under category '${activeCategory}'.`} />
           ) : (
             <>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 max-w-6xl mx-auto">
                 {filteredTeam.slice(0, visibleCount).map((member, i) => (
                   <MemberCard key={member.id || i} member={member} />
                 ))}

@@ -7,35 +7,53 @@ import logo from '../assets/medweb.png'
 
 const DEFAULTS = {
   footerAbout: "Pakistan's premier medical education platform for pharmacy, biotech, psychology, and allied health sciences students.",
-  footerEmail: 'info@medweb.pk', footerPhone: '03291692899',
-  footerFacebook: 'https://facebook.com', footerInstagram: 'https://instagram.com',
-  footerLinkedin: 'https://linkedin.com', footerWhatsapp: 'https://wa.me/923291692899',
+  footerEmail: 'info@medweb.pk',
+  footerPhone: '03291692899',
+  footerFacebook: 'https://facebook.com',
+  footerInstagram: 'https://instagram.com',
+  footerLinkedin: 'https://linkedin.com',
+  footerWhatsapp: 'https://wa.me/923291692899',
   footerAddress: 'Islamabad, Pakistan',
   quickLinks: [
-    { label: 'Home', url: '#home' }, { label: 'About Us', url: '/about' },
-    { label: 'Courses', url: '#courses-highlight' }, { label: 'Webinars', url: '#webinars' },
-    { label: 'Blog', url: '#blog' }, { label: 'Contact', url: '#contact' },
+    { label: 'Home', url: '#home' },
+    { label: 'Courses', url: '#courses-highlight' },
+    { label: 'Webinars', url: '#webinars' },
+    { label: 'Ambassador Program', url: '#ambassadors' },
+    { label: 'Our Team', url: '/team' },
+    { label: 'Advisory Board', url: '#advisory' },
+    { label: 'Certificates', url: '#certificates' },
+    { label: 'Blog', url: '#blog' },
+    { label: 'Contact', url: '#contact' },
   ],
-  footerPrograms: ['Clinical Pharmacy Masterclass', 'Drug Therapy Series', '100 Vital Drugs', 'How to Treat Series', 'Ambassador Program', 'Certificate Verification'],
+  footerPrograms: [
+    'Clinical Pharmacy Masterclass',
+    'Drug Therapy Series',
+    'Ambassador Program',
+    'Certificate Verification',
+    'Our Team'
+  ],
 }
 
-// A handful of program labels are actually their own homepage sections, not
-// courses — everything else falls back to the Courses section anchor.
 const PROGRAM_LINK_OVERRIDES = {
   'Ambassador Program': '#ambassadors',
   'Certificate Verification': '#certificates',
+  'Our Team': '/team',
 }
 
 function NewsletterForm() {
   const [email, setEmail] = useState('')
-  const [state, setState] = useState('idle') // idle | loading | success | error
+  const [state, setState] = useState('idle')
   const [errorMsg, setErrorMsg] = useState('')
 
   const isValidEmail = v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim())
 
   const handleSubmit = async e => {
     e.preventDefault()
-    if (!isValidEmail(email)) { setState('error'); setErrorMsg('Enter a valid email address.'); return }
+    if (!isValidEmail(email)) {
+      setState('error')
+      setErrorMsg('Enter a valid email address.')
+      return
+    }
     setState('loading')
     try {
       await newsletterService.subscribe(email)
@@ -49,7 +67,7 @@ function NewsletterForm() {
 
   if (state === 'success') {
     return (
-      <div className="flex items-center gap-2 text-[#95d348] text-sm font-semibold">
+      <div className="flex items-center gap-2 text-[#64ac37] text-sm font-semibold">
         <Check size={16} /> Subscribed! Thanks for joining.
       </div>
     )
@@ -58,11 +76,18 @@ function NewsletterForm() {
   return (
     <form onSubmit={handleSubmit}>
       <div className="flex gap-2">
-        <input type="email" placeholder="Your email" value={email}
+        <input
+          type="email"
+          placeholder="Your email"
+          value={email}
           onChange={e => { setEmail(e.target.value); if (state === 'error') setState('idle') }}
-          className="flex-1 bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm text-white placeholder-white/40 outline-none focus:border-[#95d348] transition-colors" />
-        <button type="submit" disabled={state === 'loading'}
-          className="px-3 py-2 rounded-lg bg-[#95d348] hover:bg-[#64ac37] transition-colors disabled:opacity-60 flex-shrink-0">
+          className="flex-1 bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm text-white placeholder-white/40 outline-none focus:border-[#64ac37] transition-colors"
+        />
+        <button
+          type="submit"
+          disabled={state === 'loading'}
+          className="px-3 py-2 rounded-lg bg-[#64ac37] hover:bg-[#1655c3] transition-colors disabled:opacity-60 flex-shrink-0 text-white font-bold"
+        >
           {state === 'loading' ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
         </button>
       </div>
@@ -76,15 +101,17 @@ export default function Footer() {
   const navigate = useNavigate()
   const location = useLocation()
 
-  // Same cross-page fix as Navbar.jsx: these hrefs are homepage-section
-  // anchors, but Footer renders on every page (blog posts, course detail,
-  // forms, the new list pages, etc.) — a plain same-page anchor silently
-  // does nothing when that id isn't on the current page.
-  const handleHashLink = (e, href) => {
-    if (!href.startsWith('#')) return
+  const handleLinkClick = (e, url) => {
+    if (url.startsWith('/')) {
+      e.preventDefault()
+      navigate(url)
+      return
+    }
+
+    if (!url.startsWith('#')) return
     if (location.pathname === '/') return
     e.preventDefault()
-    navigate('/' + href)
+    navigate('/' + url)
   }
 
   const socials = [
@@ -95,7 +122,15 @@ export default function Footer() {
   ].filter(s => s.href)
 
   return (
-    <footer id="contact" className="text-white bg-[#0B1220]">
+    <footer id="contact" className="text-white bg-[#0B1220] relative">
+      {/* Top Tilted Dual Color Accent (Green #64ac37 + Blue #1655c3) */}
+      <div className="w-full h-1.5 relative overflow-hidden bg-[#64ac37]">
+        <div
+          className="absolute inset-0 bg-[#1655c3]"
+          style={{ clipPath: 'polygon(45% 0, 100% 0, 100% 100%, 55% 100%)' }}
+        />
+      </div>
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-8">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10 mb-12">
           {/* About */}
@@ -104,14 +139,19 @@ export default function Footer() {
               <img src={logo} alt="MEDWEB Logo" className="w-11 h-11 object-contain" />
               <div>
                 <span className="font-black text-white text-xl tracking-tight">MED</span>
-                <span className="font-black text-[#95d348] text-xl tracking-tight">WEB</span>
+                <span className="font-black text-[#64ac37] text-xl tracking-tight">WEB</span>
               </div>
             </div>
             <p className="text-white/70 text-sm leading-relaxed mb-5">{f.footerAbout}</p>
             <div className="flex gap-3">
               {socials.map(({ Icon, href }, i) => (
-                <a key={i} href={href} target="_blank" rel="noreferrer"
-                  className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center hover:bg-[#95d348] transition-all duration-200 hover:scale-110">
+                <a
+                  key={i}
+                  href={href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center hover:bg-[#64ac37] transition-all duration-200 hover:scale-110"
+                >
                   <Icon size={14} />
                 </a>
               ))}
@@ -121,12 +161,16 @@ export default function Footer() {
           {/* Quick Links */}
           <div>
             <h4 className="font-bold text-base mb-5 flex items-center gap-2">
-              <span className="w-6 h-0.5 bg-[#95d348]" /> Quick Links
+              <span className="w-6 h-0.5 bg-[#64ac37]" /> Quick Links
             </h4>
             <ul className="space-y-2.5">
-              {f.quickLinks.map((link, i) => (
+              {(f.quickLinks || DEFAULTS.quickLinks).map((link, i) => (
                 <li key={i}>
-                  <a href={link.url || '/'} onClick={e => handleHashLink(e, link.url || '/')} className="text-white/70 text-sm hover:text-[#95d348] transition-colors flex items-center gap-2 group">
+                  <a
+                    href={link.url || '/'}
+                    onClick={e => handleLinkClick(e, link.url || '/')}
+                    className="text-white/70 text-sm hover:text-[#64ac37] transition-colors flex items-center gap-2 group"
+                  >
                     <ArrowRight size={12} className="opacity-0 group-hover:opacity-100 transition-opacity -ml-1" />
                     {link.label}
                   </a>
@@ -138,14 +182,18 @@ export default function Footer() {
           {/* Programs */}
           <div>
             <h4 className="font-bold text-base mb-5 flex items-center gap-2">
-              <span className="w-6 h-0.5 bg-[#95d348]" /> Programs & Courses
+              <span className="w-6 h-0.5 bg-[#64ac37]" /> Programs & Community
             </h4>
             <ul className="space-y-2.5">
-              {f.footerPrograms.map((p) => {
+              {(f.footerPrograms || DEFAULTS.footerPrograms).map((p) => {
                 const href = PROGRAM_LINK_OVERRIDES[p] || '#courses-highlight'
                 return (
                   <li key={p}>
-                    <a href={href} onClick={e => handleHashLink(e, href)} className="text-white/70 text-sm hover:text-[#95d348] transition-colors flex items-center gap-2 group">
+                    <a
+                      href={href}
+                      onClick={e => handleLinkClick(e, href)}
+                      className="text-white/70 text-sm hover:text-[#64ac37] transition-colors flex items-center gap-2 group"
+                    >
                       <ArrowRight size={12} className="opacity-0 group-hover:opacity-100 transition-opacity -ml-1" />
                       {p}
                     </a>
@@ -158,28 +206,28 @@ export default function Footer() {
           {/* Contact */}
           <div>
             <h4 className="font-bold text-base mb-5 flex items-center gap-2">
-              <span className="w-6 h-0.5 bg-[#95d348]" /> Contact Us
+              <span className="w-6 h-0.5 bg-[#64ac37]" /> Contact Us
             </h4>
             <ul className="space-y-4">
               <li className="flex items-start gap-3">
-                <MapPin size={15} className="text-[#95d348] flex-shrink-0 mt-0.5" />
+                <MapPin size={15} className="text-[#64ac37] flex-shrink-0 mt-0.5" />
                 <span className="text-white/70 text-sm">{f.footerAddress}</span>
               </li>
               <li className="flex items-start gap-3">
-                <Mail size={15} className="text-[#95d348] flex-shrink-0 mt-0.5" />
-                <a href={`mailto:${f.footerEmail}`} className="text-white/70 text-sm hover:text-[#95d348] transition-colors">
+                <Mail size={15} className="text-[#64ac37] flex-shrink-0 mt-0.5" />
+                <a href={`mailto:${f.footerEmail}`} className="text-white/70 text-sm hover:text-[#64ac37] transition-colors">
                   {f.footerEmail}
                 </a>
               </li>
               <li className="flex items-start gap-3">
-                <Phone size={15} className="text-[#95d348] flex-shrink-0 mt-0.5" />
-                <a href={`tel:${f.footerPhone}`} className="text-white/70 text-sm hover:text-[#95d348] transition-colors">
+                <Phone size={15} className="text-[#64ac37] flex-shrink-0 mt-0.5" />
+                <a href={`tel:${f.footerPhone}`} className="text-white/70 text-sm hover:text-[#64ac37] transition-colors">
                   {f.footerPhone}
                 </a>
               </li>
               <li className="flex items-start gap-3">
-                <MessageCircle size={15} className="text-[#95d348] flex-shrink-0 mt-0.5" />
-                <a href={f.footerWhatsapp} target="_blank" rel="noreferrer" className="text-white/70 text-sm hover:text-[#95d348] transition-colors">
+                <MessageCircle size={15} className="text-[#64ac37] flex-shrink-0 mt-0.5" />
+                <a href={f.footerWhatsapp} target="_blank" rel="noreferrer" className="text-white/70 text-sm hover:text-[#64ac37] transition-colors">
                   WhatsApp Support
                 </a>
               </li>
