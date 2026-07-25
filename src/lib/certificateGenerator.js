@@ -12,9 +12,26 @@
 import { certificatesService, formsService, studentsDbService } from '../firebase/services'
 import { uploadToCloudinary } from '../firebase/cloudinary'
 import { sendCertificateEmail } from '../firebase/email'
+import { CERTIFICATE_FONTS, DEFAULT_CERT_FONT } from '../constants/certificateFonts'
 
-const DEFAULT_NAME_POS = { xPct: 50, yPct: 28, fontSize: 48, color: '#1a1a1a' }
+const DEFAULT_NAME_POS = { xPct: 50, yPct: 28, fontSize: 48, color: '#1a1a1a', fontFamily: DEFAULT_CERT_FONT }
 const DEFAULT_ID_POS   = { xPct: 10, yPct: 90, fontSize: 26, color: '#1a1a1a' }
+
+// The Google Fonts <link> in index.html only guarantees the stylesheet is
+// requested, not that the font file has finished downloading by the time
+// canvas.fillText runs — without waiting on this, the very first certificate
+// generated after a fresh page load can silently draw in the fallback font.
+async function ensureFontLoaded(fontFamily, fontSize) {
+  const entry = CERTIFICATE_FONTS.find(f => f.css === fontFamily)
+  if (!entry?.google || typeof document === 'undefined' || !document.fonts) return
+  try {
+    await document.fonts.load(`${entry.bold ? 'bold ' : ''}${fontSize}px "${entry.google}"`)
+    await document.fonts.ready
+  } catch {
+    // Font failed to load — fillText will just fall back to the next family
+    // in the stack rather than throwing, so this is safe to swallow.
+  }
+}
 
 function toTitleCase(str) {
   return String(str).trim().toLowerCase().replace(/\b\w/g, c => c.toUpperCase())
@@ -40,10 +57,13 @@ async function compositeCertificateCanvas({ templateUrl, studentName, certCode, 
 
   const name = { ...DEFAULT_NAME_POS, ...(namePos || {}) }
   const id = { ...DEFAULT_ID_POS, ...(idPos || {}) }
+  const nameFont = CERTIFICATE_FONTS.find(f => f.css === name.fontFamily) || CERTIFICATE_FONTS[0]
+
+  await ensureFontLoaded(name.fontFamily, name.fontSize)
 
   ctx.textBaseline = 'alphabetic'
   ctx.fillStyle = name.color
-  ctx.font = `bold ${name.fontSize}px Helvetica, Arial, sans-serif`
+  ctx.font = `${nameFont.bold ? 'bold ' : ''}${name.fontSize}px ${name.fontFamily || DEFAULT_CERT_FONT}`
   ctx.textAlign = 'center'
   ctx.fillText(studentName, (name.xPct / 100) * canvas.width, (name.yPct / 100) * canvas.height)
 

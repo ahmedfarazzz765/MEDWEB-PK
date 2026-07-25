@@ -4,6 +4,7 @@ import { X, CheckCircle, Mail } from 'lucide-react'
 import { formsService, webinarsService, studentsDbService } from '../firebase/services'
 import { uploadToCloudinary } from '../firebase/cloudinary'
 import { generateAndIssueCertificate } from '../lib/certificateGenerator'
+import { applyNameTitleCase } from '../lib/formFieldResolve'
 
 const inputCls =
   'w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#1655c3]/30 focus:border-[#1655c3] transition-all placeholder:text-gray-400 bg-gray-50'
@@ -50,8 +51,9 @@ export default function WebinarRegisterModal({ formId, webinarTopic, webinar: we
     if (missing.length) { setError(`Please fill: ${missing.map(m => m.label).join(', ')}`); return }
     setError(''); setStatus('loading')
     try {
-      const clean = {}
+      let clean = {}
       Object.keys(values).forEach(k => { if (!k.endsWith('__uploading')) clean[k] = values[k] })
+      clean = applyNameTitleCase(form.fields, clean)
       const submissionId = await formsService.addSubmission({
         formId,
         formTitle: form.title,

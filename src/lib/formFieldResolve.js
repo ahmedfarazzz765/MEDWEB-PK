@@ -15,3 +15,23 @@ export function resolveFormField(fields, clean, { type, labelRegex, keyRegex, fl
   for (const k of flatKeys) if (clean[k]) return String(clean[k])
   return ''
 }
+
+export function toTitleCase(str) {
+  return String(str || '').trim().toLowerCase().replace(/\b\w/g, c => c.toUpperCase())
+}
+
+// Finds whichever field represents "name" in a form submission (same
+// heuristic used throughout this app to resolve name/email) and returns a
+// new values object with that field's value Title-Cased — so a name typed
+// in ALL CAPS or all lowercase is never the value actually stored in
+// Firestore, regardless of which form/page collected it.
+export function applyNameTitleCase(fields, clean) {
+  const list = fields || []
+  const nameField =
+    list.find(f => f.type !== 'email' && /name/i.test(f.label || '')) ||
+    list.find(f => f.type !== 'email' && /name/i.test(f.key || '')) ||
+    list.find(f => f.type === 'text' && /full|student|participant/i.test(f.label || ''))
+  const key = nameField?.key || (clean.name !== undefined ? 'name' : clean.fullName !== undefined ? 'fullName' : null)
+  if (!key || !clean[key]) return clean
+  return { ...clean, [key]: toTitleCase(clean[key]) }
+}

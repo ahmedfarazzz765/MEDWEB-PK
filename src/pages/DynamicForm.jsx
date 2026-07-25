@@ -5,7 +5,7 @@ import { CheckCircle, ArrowLeft } from 'lucide-react'
 import { formsService, webinarsService, settingsService, studentsDbService } from '../firebase/services'
 import { uploadToCloudinary } from '../firebase/cloudinary'
 import { generateAndIssueCertificate } from '../lib/certificateGenerator'
-import { resolveFormField } from '../lib/formFieldResolve'
+import { resolveFormField, applyNameTitleCase } from '../lib/formFieldResolve'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
 
@@ -46,8 +46,13 @@ export default function DynamicForm() {
     if (missing.length) { setError(`Please fill: ${missing.map(m => m.label).join(', ')}`); return }
     setError(''); setStatus('loading')
     try {
-      const clean = {}
+      let clean = {}
       Object.keys(values).forEach(k => { if (!k.endsWith('__uploading')) clean[k] = values[k] })
+      // Normalize casing on whichever field is the name field before it's
+      // ever stored — so "SHAHROZ ABBAS" / "shahroz abbas" are both saved
+      // as "Shahroz Abbas" everywhere downstream (submission doc, Students
+      // database, certificates), not just at certificate-render time.
+      clean = applyNameTitleCase(form.fields, clean)
       const submissionId = await formsService.addSubmission({
         formId: id,
         formTitle: form.title,

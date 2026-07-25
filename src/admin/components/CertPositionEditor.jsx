@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react'
+import { CERTIFICATE_FONTS, DEFAULT_CERT_FONT } from '../../constants/certificateFonts'
 
 // Must match DEFAULT_NAME_POS / DEFAULT_ID_POS in functions/index.js exactly —
 // these are the fallbacks used if a webinar's certTemplate has no saved
 // position yet, on both the preview (here) and the generated image (there).
-const DEFAULT_NAME_POS = { xPct: 50, yPct: 28, fontSize: 48, color: '#1a1a1a' }
+const DEFAULT_NAME_POS = { xPct: 50, yPct: 28, fontSize: 48, color: '#1a1a1a', fontFamily: DEFAULT_CERT_FONT }
 const DEFAULT_ID_POS   = { xPct: 10, yPct: 90, fontSize: 26, color: '#1a1a1a' }
 
 // Draggable-box editor: shows the certificate template image with two
@@ -78,7 +79,8 @@ export default function CertPositionEditor({ imageUrl, namePos, idPos, onChange 
             left: `${name.xPct}%`,
             top: `${name.yPct}%`,
             transform: 'translate(-50%, -50%)',
-            fontWeight: 'bold',
+            fontWeight: (CERTIFICATE_FONTS.find(f => f.css === name.fontFamily) || CERTIFICATE_FONTS[0]).bold ? 'bold' : 'normal',
+            fontFamily: name.fontFamily || DEFAULT_CERT_FONT,
             fontSize: Math.max(8, name.fontSize * previewScale),
             color: name.color,
             whiteSpace: 'nowrap',
@@ -110,7 +112,7 @@ export default function CertPositionEditor({ imageUrl, namePos, idPos, onChange 
       <div className="grid sm:grid-cols-2 gap-4 mt-3">
         <div className="rounded-xl border border-gray-100 p-3">
           <p className="text-xs font-bold text-[#1655c3] mb-2">Name text style</p>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <label className="text-[11px] text-gray-500 flex items-center gap-1.5">
               Size
               <input type="number" min="10" max="120" value={name.fontSize}
@@ -122,6 +124,19 @@ export default function CertPositionEditor({ imageUrl, namePos, idPos, onChange 
               <input type="color" value={name.color} onChange={e => setName({ color: e.target.value })} className="w-8 h-7 rounded cursor-pointer" />
             </label>
           </div>
+          <label className="text-[11px] text-gray-500 flex items-center gap-1.5 mt-2.5">
+            Font
+            <select
+              value={name.fontFamily || DEFAULT_CERT_FONT}
+              onChange={e => setName({ fontFamily: e.target.value })}
+              className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-xs"
+              style={{ fontFamily: name.fontFamily || DEFAULT_CERT_FONT }}
+            >
+              {CERTIFICATE_FONTS.map(f => (
+                <option key={f.css} value={f.css} style={{ fontFamily: f.css }}>{f.label}</option>
+              ))}
+            </select>
+          </label>
         </div>
         <div className="rounded-xl border border-gray-100 p-3">
           <p className="text-xs font-bold text-[#64ac37] mb-2">ID text style</p>

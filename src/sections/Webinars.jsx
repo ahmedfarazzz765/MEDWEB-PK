@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Calendar, Clock, Video, X, User, Phone, Mail, BookOpen, CheckCircle } from 'lucide-react'
 import { webinarsService, studentsDbService } from '../firebase/services'
+import { toTitleCase } from '../lib/formFieldResolve'
 
 // ── Static fallback data (shown when Firebase is empty / loading) ─────────────
 const STATIC_WEBINARS = [
@@ -87,7 +88,8 @@ function JoinModal({ webinar, onClose }) {
   const set = field => e => setForm(prev => ({ ...prev, [field]: e.target.value }))
 
   const handleSubmit = async () => {
-    const { name, email, phone, profession } = form
+    const { email, phone, profession } = form
+    const name = toTitleCase(form.name)
     if (!name.trim() || !email.trim() || !phone.trim() || !profession.trim()) {
       setError('Please fill in all fields.')
       return

@@ -5,6 +5,7 @@ import { Calendar, Clock, User, CheckCircle, ArrowLeft } from 'lucide-react'
 import { webinarsService, formsService, settingsService, studentsDbService, DEFAULT_WEBINAR_FORM_FIELDS } from '../firebase/services'
 import { sendWebinarConfirmation } from '../firebase/email'
 import { uploadToCloudinary } from '../firebase/cloudinary'
+import { applyNameTitleCase } from '../lib/formFieldResolve'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
 
@@ -118,8 +119,9 @@ export default function WebinarRegister() {
     setError('')
     setStatus('loading')
     try {
-      const clean = {}
+      let clean = {}
       Object.keys(values).forEach(k => { if (!k.endsWith('__uploading')) clean[k] = values[k] })
+      clean = applyNameTitleCase(fields, clean)
       const webinarTitle = webinar?.topic || webinar?.title || ''
       await webinarsService.addRegistration({
         webinarId: id,
@@ -132,9 +134,9 @@ export default function WebinarRegister() {
         await webinarsService.register(id).catch(() => {})
       }
       // Auto-email confirmation (silently skips if EmailJS not configured)
-      sendWebinarConfirmation({ name: values.name, email: values.email, webinar }).catch(() => {})
+      sendWebinarConfirmation({ name: clean.name || values.name, email: clean.email || values.email, webinar }).catch(() => {})
       studentsDbService.upsertFromRegistration({
-        email: values.email, name: values.name, phone: values.whatsapp, degree: values.qualification,
+        email: clean.email || values.email, name: clean.name || values.name, phone: clean.whatsapp, degree: clean.qualification,
         webinarId: id, webinarTitle, registeredAt: new Date().toISOString(),
       }).catch(() => {})
       setStatus('success')

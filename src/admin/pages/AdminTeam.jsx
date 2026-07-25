@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { UserCheck, Layers, Plus, Image as ImageIcon, Sparkles } from 'lucide-react'
 import StatCard    from '../components/StatCard'
 import DataTable   from '../components/DataTable'
@@ -8,6 +8,7 @@ import ImageUpload from '../components/ImageUpload'
 import AdminButton from '../components/AdminButton'
 import ActionButtons from '../components/ActionButtons'
 import { teamService, teamCategoriesService } from '../../firebase/services'
+import { DEFAULT_TEAM_CATEGORIES } from '../../constants/teamCategories'
 
 export const PRESET_CATEGORIES = [
   'Chief Executive',
@@ -16,33 +17,6 @@ export const PRESET_CATEGORIES = [
   'Medical Advisory',
   'Operations',
   'Marketing & PR',
-]
-
-const DEFAULT_CATEGORY_TEMPLATES = [
-  {
-    name: 'Chief Executive',
-    desc: 'Founders, CEOs, and executive leaders driving MEDWEB strategy and growth.',
-    imageUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=600&q=80',
-    accent: 'green'
-  },
-  {
-    name: 'Graphic Designer',
-    desc: 'Creative visual designers crafting UI/UX, branding, and educational media.',
-    imageUrl: 'https://images.unsplash.com/photo-1581291518857-4e27b48ff24e?w=600&q=80',
-    accent: 'blue'
-  },
-  {
-    name: 'Development Team',
-    desc: 'Software engineers and platform developers building state-of-the-art tech.',
-    imageUrl: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=600&q=80',
-    accent: 'green'
-  },
-  {
-    name: 'Medical Advisory',
-    desc: 'Licensed physicians, pharmacists, and medical educators overseeing curriculum.',
-    imageUrl: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=600&q=80',
-    accent: 'blue'
-  },
 ]
 
 const emptyMemberForm = () => ({
@@ -143,6 +117,8 @@ export default function AdminTeam() {
 
   const [saving, setSaving] = useState(false)
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('All')
+  const [catsLoaded, setCatsLoaded] = useState(false)
+  const seedAttempted = useRef(false)
 
   useEffect(() => {
     const unsubTeam = teamService.listen(rows => {
@@ -151,12 +127,28 @@ export default function AdminTeam() {
     })
     const unsubCats = teamCategoriesService.listen(cats => {
       setDbCategories(cats)
+      setCatsLoaded(true)
     })
     return () => {
       unsubTeam()
       unsubCats()
     }
   }, [])
+
+  // One-time seed: turns the hardcoded default category cards (previously
+  // shown as a frozen fallback with no Firestore id, hence no Edit/Delete)
+  // into real editable/deletable docs the first time this page loads with
+  // an empty/partial teamCategories collection.
+  useEffect(() => {
+    if (!catsLoaded || seedAttempted.current) return
+    seedAttempted.current = true
+    const existingNames = new Set(dbCategories.map(c => c.name?.trim().toLowerCase()))
+    const missing = DEFAULT_TEAM_CATEGORIES.filter(tpl => !existingNames.has(tpl.name.toLowerCase()))
+    missing.forEach(tpl => {
+      const { label1, label2, icon, ...catData } = tpl
+      teamCategoriesService.add(catData).catch(() => {})
+    })
+  }, [catsLoaded, dbCategories])
 
   // All unique category names from DB + Presets
   const categoryNames = useMemo(() => {
@@ -422,7 +414,7 @@ export default function AdminTeam() {
           </div>
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {(dbCategories.length > 0 ? dbCategories : DEFAULT_CATEGORY_TEMPLATES).map((cat, i) => {
+            {(dbCategories.length > 0 ? dbCategories : DEFAULT_TEAM_CATEGORIES).map((cat, i) => {
               const count = data.filter(m => (m.category || 'Chief Executive') === cat.name).length
               return (
                 <div key={cat.id || i} className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col justify-between">
