@@ -221,6 +221,19 @@ export const teamService = {
   ),
 }
 
+export const teamCategoriesService = {
+  getAll: () => getAll('teamCategories', orderBy('createdAt', 'desc')),
+  add: data => add('teamCategories', data),
+  update: (id, data) => update('teamCategories', id, data),
+  delete: id => remove('teamCategories', id),
+  listen: cb => onSnapshot(
+    query(collection(db, 'teamCategories'), orderBy('createdAt', 'desc')),
+    snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+    err => console.error("Firebase teamCategories listen error:", err)
+  ),
+}
+
+
 // ─── ADVISORY BOARD ──────────────────────────────────────────────────────────
 export const advisoryService = {
   getAll: () => getAll(COLS.advisory, orderBy('createdAt', 'desc')),

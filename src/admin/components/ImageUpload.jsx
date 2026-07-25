@@ -1,8 +1,8 @@
 import { useState, useRef } from 'react'
 import { Upload, X, Image } from 'lucide-react'
-import { uploadToCloudinary } from '../../firebase/cloudinary'
+import { uploadToCloudinary, toCircleAvatarUrl } from '../../firebase/cloudinary'
 
-export default function ImageUpload({ value, onChange, folder = 'medweb', label = 'Photo' }) {
+export default function ImageUpload({ value, onChange, folder = 'medweb', label = 'Photo', circle = false }) {
   const [uploading, setUploading] = useState(false)
   const [error, setError]         = useState('')
   const inputRef = useRef()
@@ -15,7 +15,7 @@ export default function ImageUpload({ value, onChange, folder = 'medweb', label 
     setUploading(true)
     try {
       const url = await uploadToCloudinary(file, folder)
-      onChange(url)
+      onChange(circle ? toCircleAvatarUrl(url) : url)
     } catch (err) {
       setError('Upload failed: ' + err.message)
     } finally {
@@ -29,15 +29,27 @@ export default function ImageUpload({ value, onChange, folder = 'medweb', label 
       <div className="flex items-center gap-3">
         {/* Preview */}
         {value ? (
-          <div className="relative w-20 h-20 rounded-xl overflow-hidden border border-gray-200 shrink-0">
-            <img src={value} alt="preview" className="w-full h-full object-cover" />
-            <button onClick={() => onChange('')}
-              className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center">
-              <X size={10} />
-            </button>
-          </div>
+          circle ? (
+            <div className="relative shrink-0 p-[3px] bg-gradient-to-tr from-[#64ac37] via-[#1655c3] to-[#64ac37] rounded-full">
+              <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-white">
+                <img src={value} alt="preview" className="w-full h-full object-cover" />
+              </div>
+              <button onClick={() => onChange('')}
+                className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center">
+                <X size={10} />
+              </button>
+            </div>
+          ) : (
+            <div className="relative w-20 h-20 rounded-xl overflow-hidden border border-gray-200 shrink-0">
+              <img src={value} alt="preview" className="w-full h-full object-cover" />
+              <button onClick={() => onChange('')}
+                className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center">
+                <X size={10} />
+              </button>
+            </div>
+          )
         ) : (
-          <div className="w-20 h-20 rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center bg-gray-50 shrink-0">
+          <div className={`w-20 h-20 ${circle ? 'rounded-full' : 'rounded-xl'} border-2 border-dashed border-gray-200 flex items-center justify-center bg-gray-50 shrink-0`}>
             <Image size={22} className="text-gray-300" />
           </div>
         )}

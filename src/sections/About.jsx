@@ -1,17 +1,65 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight, Users, Linkedin, ShieldCheck, Award, Star } from 'lucide-react'
-import { teamService } from '../firebase/services'
+import { ArrowRight, Users, Linkedin, Star, Award, ShieldCheck, UserCheck, Radio, BookOpen } from 'lucide-react'
+import { teamService, teamCategoriesService } from '../firebase/services'
 import { useSiteSettings } from '../hooks/useSiteSettings'
 import SectionHeading from '../components/SectionHeading'
 import InfiniteMarquee from '../components/InfiniteMarquee'
 import CardRowSkeleton from '../components/CardRowSkeleton'
 import BrandWatermark from '../components/BrandWatermark'
+import logo from '../assets/medweb.png'
 
 const HEADING_DEFAULTS = {
   teamHeading1: 'Our',
   teamHeading2: 'Team',
   teamSubtitle: 'Meet the experts behind the MEDWEB platform',
+}
+
+const DEFAULT_CATEGORY_TEMPLATES = [
+  {
+    name: 'Chief Executive',
+    label1: 'Chief',
+    label2: 'Executive',
+    desc: 'Founders, CEOs, and executive leaders driving MEDWEB strategy and growth.',
+    imageUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=600&q=80',
+    accent: 'green',
+    icon: 'Award'
+  },
+  {
+    name: 'Graphic Designer',
+    label1: 'Graphic',
+    label2: 'Designers',
+    desc: 'Creative visual designers crafting UI/UX, branding, and educational media.',
+    imageUrl: 'https://images.unsplash.com/photo-1581291518857-4e27b48ff24e?w=600&q=80',
+    accent: 'blue',
+    icon: 'Star'
+  },
+  {
+    name: 'Development Team',
+    label1: 'Development',
+    label2: 'Team',
+    desc: 'Software engineers and platform developers building state-of-the-art tech.',
+    imageUrl: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=600&q=80',
+    accent: 'green',
+    icon: 'ShieldCheck'
+  },
+  {
+    name: 'Medical Advisory',
+    label1: 'Medical',
+    label2: 'Advisory',
+    desc: 'Licensed physicians, pharmacists, and medical educators overseeing curriculum.',
+    imageUrl: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=600&q=80',
+    accent: 'blue',
+    icon: 'UserCheck'
+  },
+]
+
+const ICONS = { Award, Star, ShieldCheck, UserCheck, Radio, BookOpen, Users }
+
+function splitLabel(title) {
+  const words = (title || '').trim().split(' ')
+  if (words.length <= 1) return [title || '', '']
+  return [words.slice(0, -1).join(' '), words.slice(-1).join(' ')]
 }
 
 function Initials({ name }) {
@@ -23,36 +71,49 @@ function Initials({ name }) {
   )
 }
 
-// ─── MEMBER CARD (Used on the dedicated /team page) ────────────────────────
+// ─── MEMBER PROFILE CARD (Used on the dedicated /team page) ────────────────
 export function MemberCard({ member }) {
   const [imgError, setImgError] = useState(false)
   const showImage = member.imageUrl && !imgError
   const linkedin = member.linkedinUrl || member.linkedin
 
   return (
-    <div className="bg-white rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col items-center text-center group h-full relative w-full">
+    <div className="bg-white rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col items-center text-center group h-full relative w-full p-6">
+      
+      {/* Background Diagonal MEDWEB Logo Watermark from Start Corner to End Corner */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden flex items-center justify-center opacity-[0.06] select-none z-0">
+        <img
+          src={logo}
+          alt="MEDWEB Watermark"
+          className="w-72 h-72 object-contain -rotate-45 scale-125"
+        />
+      </div>
+
       {/* Top Tilted Dual Color Accent (Green #64ac37 + Blue #1655c3) */}
-      <div className="w-full h-2.5 relative overflow-hidden bg-[#64ac37]">
+      <div className="absolute top-0 left-0 right-0 h-2.5 overflow-hidden bg-[#64ac37] z-10">
         <div
           className="absolute inset-0 bg-[#1655c3]"
           style={{ clipPath: 'polygon(45% 0, 100% 0, 100% 100%, 55% 100%)' }}
         />
       </div>
 
-      <div className="p-6 w-full flex flex-col items-center flex-1 justify-between">
+      <div className="w-full flex flex-col items-center flex-1 justify-between pt-2 relative z-10">
         <div className="w-full flex flex-col items-center">
-          {/* Circular Profile Image */}
-          <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full overflow-hidden border-4 border-white shadow-md mx-auto mb-4 relative bg-gray-50 shrink-0">
-            {showImage ? (
-              <img
-                src={member.imageUrl}
-                alt={member.name}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                onError={() => setImgError(true)}
-              />
-            ) : (
-              <Initials name={member.name} />
-            )}
+          
+          {/* Circular Profile Image Frame with Green & Blue Dual Gradient Ring */}
+          <div className="p-[3px] bg-gradient-to-tr from-[#64ac37] via-[#1655c3] to-[#64ac37] rounded-full shadow-md mb-4 shrink-0 relative">
+            <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full overflow-hidden border-2 border-white bg-gray-50 flex items-center justify-center">
+              {showImage ? (
+                <img
+                  src={member.imageUrl}
+                  alt={member.name}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  onError={() => setImgError(true)}
+                />
+              ) : (
+                <Initials name={member.name} />
+              )}
+            </div>
           </div>
 
           {/* Name */}
@@ -76,7 +137,7 @@ export function MemberCard({ member }) {
         </div>
 
         {/* LinkedIn Link at Bottom */}
-        <div className="mt-5 pt-3 border-t border-gray-50 w-full flex justify-center">
+        <div className="mt-5 pt-3 border-t border-gray-100 w-full flex justify-center">
           {linkedin ? (
             <a
               href={linkedin.startsWith('http') ? linkedin : `https://${linkedin}`}
@@ -99,49 +160,70 @@ export function MemberCard({ member }) {
   )
 }
 
-// ─── CATEGORY CARD (Displayed on Homepage Slider) ───────────────────────────
-export function CategoryCard({ category, count, onSelect }) {
-  const isEven = category.length % 2 === 0
-  const textColor = isEven ? '#64ac37' : '#1655c3'
-  const bgColor = isEven ? '#f0fdf4' : '#eff6ff'
+// ─── WHY MEDWEB STYLE CATEGORY CARD (Displayed on Homepage Slider) ───────────
+export function WhyMedwebCategoryCard({ category, memberCount, onSelect }) {
+  const [line1, line2] = category.label1 && category.label2
+    ? [category.label1, category.label2]
+    : splitLabel(category.name)
+
+  const isGreen = category.accent === 'green' || (category.name?.length % 2 === 0)
+  const accent = isGreen
+    ? { text: '#64ac37', bg: '#f0fdf4' }
+    : { text: '#1655c3', bg: '#eff6ff' }
+
+  const Icon = ICONS[category.icon] || Users
 
   return (
     <div
-      onClick={() => onSelect(category)}
-      className="bg-white rounded-3xl border border-gray-100 shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col justify-between cursor-pointer group h-full p-6 relative text-left w-[270px] sm:w-[310px]"
+      onClick={() => onSelect(category.name)}
+      className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col justify-between cursor-pointer group h-full w-[260px] sm:w-[300px] text-left border border-gray-100"
     >
-      {/* Top Tilted Accent Line */}
-      <div className="absolute top-0 left-0 right-0 h-2 bg-[#64ac37]">
-        <div
-          className="absolute inset-0 bg-[#1655c3]"
-          style={{ clipPath: 'polygon(45% 0, 100% 0, 100% 100%, 55% 100%)' }}
-        />
+      {/* Thumbnail Aspect-Video Header */}
+      <div className="relative aspect-video" style={{ background: accent.bg }}>
+        {category.imageUrl ? (
+          <img
+            src={category.imageUrl}
+            alt={category.name}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <Icon size={36} style={{ color: accent.text }} className="opacity-30" />
+          </div>
+        )}
       </div>
 
-      <div>
-        <div
-          className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4 transition-transform group-hover:scale-110 shadow-sm"
-          style={{ background: bgColor }}
-        >
-          <Users size={22} style={{ color: textColor }} />
+      <div className="px-5 pb-5 flex-1 flex flex-col justify-between">
+        <div>
+          {/* Overlapping Icon Badge */}
+          <div
+            className="w-10 h-10 rounded-full flex items-center justify-center -mt-5 mb-2 shadow-md border-2 border-white"
+            style={{ background: accent.bg }}
+          >
+            <Icon size={18} style={{ color: accent.text }} />
+          </div>
+
+          {/* Dual-Color Title */}
+          <h3 className="font-black text-base leading-tight mb-1.5">
+            <span className="text-[#0f172a]">{line1} </span>
+            <span style={{ color: accent.text }}>{line2}</span>
+          </h3>
+
+          {/* Member Count Pill */}
+          <span className="inline-block text-[11px] font-extrabold px-2.5 py-0.5 rounded-full mb-2" style={{ background: accent.bg, color: accent.text }}>
+            {memberCount} {memberCount === 1 ? 'Member' : 'Members'}
+          </span>
+
+          <p className="text-gray-500 text-xs leading-relaxed line-clamp-2">
+            {category.desc || `Explore dedicated team members under ${category.name}.`}
+          </p>
         </div>
 
-        <h3 className="text-lg font-black text-[#0f172a] group-hover:text-[#1655c3] transition-colors mb-1.5">
-          {category}
-        </h3>
-
-        <span className="inline-block text-xs font-bold px-3 py-1 rounded-full mb-3" style={{ background: bgColor, color: textColor }}>
-          {count} {count === 1 ? 'Member' : 'Members'}
-        </span>
-
-        <p className="text-xs text-gray-400 leading-relaxed line-clamp-2">
-          Click to view all dedicated {category} team members behind MEDWEB.
-        </p>
-      </div>
-
-      <div className="mt-6 pt-4 border-t border-gray-50 flex items-center justify-between text-xs font-bold" style={{ color: textColor }}>
-        <span>Explore Category</span>
-        <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+        {/* Bottom Button Action */}
+        <div className="mt-4 pt-3 border-t border-gray-50 flex items-center justify-between text-xs font-bold" style={{ color: accent.text }}>
+          <span>See Members</span>
+          <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+        </div>
       </div>
     </div>
   )
@@ -150,41 +232,49 @@ export function CategoryCard({ category, count, onSelect }) {
 // ─── HOMEPAGE "OUR TEAM" SECTION ───────────────────────────────────────────
 export default function Team() {
   const [team, setTeam] = useState(null) // null = loading
+  const [dbCategories, setDbCategories] = useState([])
   const h = useSiteSettings(HEADING_DEFAULTS)
   const navigate = useNavigate()
 
   useEffect(() => {
-    // Real-time listener — updates instantly when admin adds/edits team members
-    const unsub = teamService.listen(rows => {
+    const unsubTeam = teamService.listen(rows => {
       const active = rows.filter(r => r.status !== 'Inactive')
       setTeam(active)
     })
-    return () => unsub()
+    const unsubCats = teamCategoriesService.listen(cats => {
+      setDbCategories(cats)
+    })
+    return () => {
+      unsubTeam()
+      unsubCats()
+    }
   }, [])
 
-  // Derive unique categories with member counts from active team members
-  const categoryStats = useMemo(() => {
-    if (!team) return []
-    const map = new Map()
-    team.forEach(m => {
-      const cat = m.category?.trim() || 'Chief Executive'
-      map.set(cat, (map.get(cat) || 0) + 1)
+  // Combine DB categories with default templates so there's always rich WhyMedweb cards
+  const categoryCards = useMemo(() => {
+    const list = [...dbCategories]
+    // Add default templates if not present in DB
+    DEFAULT_CATEGORY_TEMPLATES.forEach(tpl => {
+      if (!list.some(c => c.name.toLowerCase() === tpl.name.toLowerCase())) {
+        list.push(tpl)
+      }
     })
-    return Array.from(map.entries()).map(([name, count]) => ({ name, count }))
-  }, [team])
+    return list
+  }, [dbCategories])
 
   const handleCategorySelect = catName => {
     navigate(`/team?category=${encodeURIComponent(catName)}`)
   }
 
-  // If section confirmed empty, hide the entire section (heading, watermark, container)
+  // If section confirmed empty, hide the entire section
   if (team !== null && team.length === 0) return null
 
   return (
     <section id="team" className="py-12 sm:py-16 px-4 bg-white relative overflow-hidden">
       <BrandWatermark seed={6} />
       <div className="max-w-7xl mx-auto relative z-10">
-        {/* Original Heading Treatment restored */}
+        
+        {/* Large Prominent Section Heading */}
         <SectionHeading
           word1={h.teamHeading1}
           word2={h.teamHeading2}
@@ -192,37 +282,37 @@ export default function Team() {
           className="mb-4"
         />
 
+        {/* See All Categories Link */}
         <div className="text-center mb-8 sm:mb-10">
           <Link
             to="/team"
             className="inline-flex items-center gap-2 text-[#1655c3] font-semibold text-sm hover:gap-3 transition-all duration-200"
           >
-            See All Members <ArrowRight size={15} />
+            See All Categories <ArrowRight size={15} />
           </Link>
         </div>
 
         {team === null ? (
-          <CardRowSkeleton count={4} cardWidth={280} cardHeight={260} />
-        ) : categoryStats.length === 0 ? (
-          <div className="text-center text-gray-400 text-sm py-8">
-            Team categories will appear here once added in the admin panel.
-          </div>
+          <CardRowSkeleton count={4} cardWidth={280} cardHeight={280} />
         ) : (
-          /* Smooth Marquee Slider of Category Cards */
+          /* Continuous Moving Marquee Slider of Why Medweb Style Category Cards */
           <InfiniteMarquee
-            items={categoryStats}
+            items={categoryCards}
             pauseOnHover
             showNav
             gap={24}
-            itemClassName="w-[270px] sm:w-[310px]"
-            keyFn={(item, i) => item.name || i}
-            renderItem={item => (
-              <CategoryCard
-                category={item.name}
-                count={item.count}
-                onSelect={handleCategorySelect}
-              />
-            )}
+            itemClassName="w-[260px] sm:w-[300px]"
+            keyFn={(cat, i) => cat.id || cat.name || i}
+            renderItem={cat => {
+              const count = team.filter(m => (m.category || 'Chief Executive').toLowerCase() === cat.name.toLowerCase()).length
+              return (
+                <WhyMedwebCategoryCard
+                  category={cat}
+                  memberCount={count}
+                  onSelect={handleCategorySelect}
+                />
+              )
+            }}
           />
         )}
       </div>
