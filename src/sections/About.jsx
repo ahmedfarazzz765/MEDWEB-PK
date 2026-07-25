@@ -15,7 +15,7 @@ const HEADING_DEFAULTS = {
   teamSubtitle: 'Meet the experts behind the MEDWEB platform',
 }
 
-const DEFAULT_CATEGORY_TEMPLATES = [
+export const DEFAULT_CATEGORY_TEMPLATES = [
   {
     name: 'Chief Executive',
     label1: 'Chief',
@@ -80,12 +80,17 @@ export function MemberCard({ member }) {
   return (
     <div className="bg-white rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col items-center text-center group h-full relative w-full p-6">
       
-      {/* Background Diagonal MEDWEB Logo Watermark from Start Corner to End Corner */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden flex items-center justify-center opacity-[0.06] select-none z-0">
-        <img
-          src={logo}
-          alt="MEDWEB Watermark"
-          className="w-72 h-72 object-contain -rotate-45 scale-125"
+      {/* Tiled Diagonal MEDWEB Logo Watermark: small repeated logos from top-left corner to bottom-right corner */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden select-none z-0">
+        <div
+          className="absolute opacity-[0.07]"
+          style={{
+            inset: '-60%',
+            backgroundImage: `url(${logo})`,
+            backgroundRepeat: 'repeat',
+            backgroundSize: '44px 44px',
+            transform: 'rotate(-45deg)',
+          }}
         />
       </div>
 
