@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { Menu, X, Search, ChevronDown } from 'lucide-react'
+import { Menu, X, ChevronDown, MessageCircle } from 'lucide-react'
 import { useSiteSettings } from '../hooks/useSiteSettings'
 import { blogCategoriesService } from '../firebase/services'
 import { DEFAULT_BLOG_CATEGORIES } from '../constants/blogCategories'
@@ -8,6 +8,7 @@ import logo from '../assets/medweb.png'
 
 const DEFAULTS = {
   navTagline: 'Connecting Medical Minds',
+  communityLink: '',
   navLinks: [
     { label: 'Home', href: '#home' },
     { label: 'Courses', href: '#courses-highlight' },
@@ -24,7 +25,7 @@ export default function Navbar() {
   const [scrolled, setScrolled] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [blogDbCategories, setBlogDbCategories] = useState([])
-  const { navTagline: tagline, navLinks: rawNavLinks } = useSiteSettings(DEFAULTS)
+  const { navTagline: tagline, navLinks: rawNavLinks, communityLink } = useSiteSettings(DEFAULTS)
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -150,16 +151,19 @@ export default function Navbar() {
             ))}
           </div>
 
-          {/* Search Box */}
-          <div className="hidden xl:flex items-center gap-2 bg-gray-100 rounded-full px-4 py-2 w-44 xl:w-52 flex-shrink-0">
-            <Search size={15} className="text-gray-400 flex-shrink-0" />
-            <input
-              type="text"
-              placeholder="Search anything..."
-              readOnly
-              className="bg-transparent text-[13px] text-gray-500 placeholder-gray-400 outline-none w-full cursor-default"
-            />
-          </div>
+          {/* Join MEDWEB Community — replaces the old search box */}
+          {communityLink && (
+            <a
+              href={communityLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden xl:inline-flex items-center gap-2 whitespace-nowrap text-xs font-bold px-4 py-2.5 rounded-full text-white shadow-sm hover:shadow-md transition-all duration-200 flex-shrink-0"
+              style={{ background: 'linear-gradient(135deg, #25D366, #1655c3)' }}
+            >
+              <MessageCircle size={15} />
+              Join MEDWEB Community
+            </a>
+          )}
 
           {/* Admin Login Button */}
           <a
@@ -224,6 +228,19 @@ export default function Navbar() {
                 </a>
               )
             ))}
+
+            {communityLink && (
+              <a
+                href={communityLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setMenuOpen(false)}
+                className="flex items-center justify-center gap-2 mt-3 text-center py-2.5 rounded-lg text-xs font-bold text-white"
+                style={{ background: 'linear-gradient(135deg, #25D366, #1655c3)' }}
+              >
+                <MessageCircle size={14} /> Join MEDWEB Community
+              </a>
+            )}
 
             <a
               href="/admin/login"

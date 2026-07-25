@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { FileText, Trash2, Edit2, Plus, Link2, Eye, Download, X } from 'lucide-react'
+import { FileText, Trash2, Edit2, Plus, Link2, Eye, Download, X, Star } from 'lucide-react'
 import StatCard from '../components/StatCard'
 import DataTable from '../components/DataTable'
 import Modal from '../components/Modal'
@@ -7,6 +7,7 @@ import FormField, { inputCls } from '../components/FormField'
 import AdminButton from '../components/AdminButton'
 import ResponsesModal from '../components/ResponsesModal'
 import { formsService } from '../../firebase/services'
+import { LINK_ICON_OPTIONS } from '../../constants/linkIcons'
 
 const FIELD_TYPES = [
   { type: 'text',          label: 'Text Input' },
@@ -22,7 +23,7 @@ const FIELD_TYPES = [
 ]
 
 const uid = () => Math.random().toString(36).slice(2, 8)
-const emptyForm = () => ({ title: '', description: '', status: 'Active', fields: [] })
+const emptyForm = () => ({ title: '', description: '', status: 'Active', fields: [], successConfig: { message: '', links: [] } })
 
 export default function AdminForms() {
   const [data, setData]       = useState([])
@@ -57,6 +58,24 @@ export default function AdminForms() {
     ;[arr[idx], arr[j]] = [arr[j], arr[idx]]
     return { ...p, fields: arr }
   })
+
+  // Success-screen extras (message + link buttons) — shown after a visitor
+  // submits this form (see DynamicForm.jsx / WebinarRegisterModal.jsx).
+  const addLink = () => setForm(p => ({
+    ...p,
+    successConfig: {
+      ...p.successConfig,
+      links: [...(p.successConfig?.links || []), { id: uid(), label: '', url: '', icon: 'link', prominent: false }],
+    },
+  }))
+  const updLink = (idx, patch) => setForm(p => ({
+    ...p,
+    successConfig: { ...p.successConfig, links: p.successConfig.links.map((l, i) => i === idx ? { ...l, ...patch } : l) },
+  }))
+  const delLink = (idx) => setForm(p => ({
+    ...p,
+    successConfig: { ...p.successConfig, links: p.successConfig.links.filter((_, i) => i !== idx) },
+  }))
 
   const handleSave = async () => {
     if (!form.title.trim()) { alert('Form title is required'); return }
@@ -173,6 +192,53 @@ export default function AdminForms() {
                   )}
                 </div>
               ))}
+            </div>
+
+            {/* Success Screen — shown to the visitor right after they submit
+                this form. Common to every form built here (registration,
+                feedback, ambassador application, etc). */}
+            <div className="rounded-xl border border-gray-200 p-3 bg-gray-50/60">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Success Screen (shown after submit)</p>
+              <FormField label="Custom thank-you message (optional — leave blank to use the default)">
+                <textarea
+                  className={`${inputCls} resize-none`}
+                  rows={2}
+                  value={form.successConfig?.message || ''}
+                  onChange={e => setForm(p => ({ ...p, successConfig: { ...p.successConfig, message: e.target.value } }))}
+                  placeholder="Thank you — your response has been recorded."
+                />
+              </FormField>
+
+              <div className="flex items-center justify-between mt-3 mb-2">
+                <span className="text-xs font-semibold text-gray-600">Link Buttons (socials, WhatsApp group, etc.)</span>
+                <button onClick={addLink} className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-dashed border-[#1655c3]/40 text-[#1655c3] hover:bg-blue-50">
+                  <Plus size={13} /> Add Link
+                </button>
+              </div>
+              <div className="space-y-2">
+                {(form.successConfig?.links || []).length === 0 && (
+                  <p className="text-xs text-gray-400 text-center py-3">No link buttons yet — e.g. "Join our Groups", Facebook, Instagram…</p>
+                )}
+                {(form.successConfig?.links || []).map((l, idx) => (
+                  <div key={l.id} className="flex flex-wrap gap-2 items-center bg-white rounded-lg border border-gray-200 p-2">
+                    <select
+                      value={l.icon}
+                      onChange={e => updLink(idx, { icon: e.target.value })}
+                      className={`${inputCls} py-1.5 w-auto`}
+                    >
+                      {LINK_ICON_OPTIONS.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+                    </select>
+                    <input className={`${inputCls} flex-1 py-1.5 min-w-[110px]`} value={l.label} onChange={e => updLink(idx, { label: e.target.value })} placeholder="Button text, e.g. Join our Groups" />
+                    <input className={`${inputCls} flex-[2] py-1.5 min-w-[160px]`} value={l.url} onChange={e => updLink(idx, { url: e.target.value })} placeholder="https://..." />
+                    <label className="flex items-center gap-1 text-[11px] font-semibold text-gray-500 whitespace-nowrap">
+                      <input type="checkbox" checked={!!l.prominent} onChange={e => updLink(idx, { prominent: e.target.checked })} className="accent-[#1655c3]" />
+                      <Star size={11} className={l.prominent ? 'text-amber-400 fill-amber-400' : 'text-gray-300'} /> Prominent
+                    </label>
+                    <button onClick={() => delLink(idx)} className="p-1 rounded hover:bg-red-50 text-red-400"><X size={14} /></button>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[11px] text-gray-400 mt-2">Mark one link "Prominent" to render it as the big highlighted button (e.g. "Join our Groups") — the rest show as small icon buttons.</p>
             </div>
 
             <div className="flex gap-3 pt-2">

@@ -88,6 +88,7 @@ const DEFAULTS = {
   // Navbar
   navTagline: 'Connecting Medical Minds',
   navLinks:   DEFAULT_NAV_LINKS,
+  communityLink: '', // WhatsApp channel/group link behind the Navbar's "Join MEDWEB Community" button
   // Welcome bar
   welcomeMessage: "🎓 Welcome to MEDWEB — Pakistan's Fastest Growing Medical Education Platform",
   // Trusted partners
@@ -271,6 +272,10 @@ export default function AdminContent({ initialTab }) {
             <FormField label="Navbar Tagline (under the logo)"><input className={inputCls} value={s.navTagline} onChange={e => set('navTagline', e.target.value)} /></FormField>
             <FormField label="Welcome Bar Message (top strip)"><input className={inputCls} value={s.welcomeMessage} onChange={e => set('welcomeMessage', e.target.value)} /></FormField>
             <p className="text-[11px] text-gray-400">Social icons in the Welcome Bar reuse the Facebook / WhatsApp / Instagram / LinkedIn links from the Footer page — no need to set them twice.</p>
+            <FormField label="Join MEDWEB Community — button link (replaces the Navbar search box)">
+              <input className={inputCls} value={s.communityLink} onChange={e => set('communityLink', e.target.value)} placeholder="https://chat.whatsapp.com/... or https://whatsapp.com/channel/..." />
+              <p className="text-[11px] text-gray-400 mt-1">Paste your WhatsApp channel or group invite link. Leave blank to hide the button.</p>
+            </FormField>
 
             <div>
               <div className="flex items-center justify-between mb-2">

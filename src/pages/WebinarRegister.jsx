@@ -6,6 +6,7 @@ import { webinarsService, formsService, settingsService, studentsDbService, DEFA
 import { sendWebinarConfirmation } from '../firebase/email'
 import { uploadToCloudinary } from '../firebase/cloudinary'
 import { applyNameTitleCase } from '../lib/formFieldResolve'
+import FormSuccessLinks from '../components/FormSuccessLinks'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
 
@@ -17,6 +18,7 @@ export default function WebinarRegister() {
   const navigate = useNavigate()
   const [webinar, setWebinar] = useState(null)
   const [fields, setFields] = useState(DEFAULT_WEBINAR_FORM_FIELDS)
+  const [successConfig, setSuccessConfig] = useState({ message: '', links: [] })
   const [loading, setLoading] = useState(true)
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState('')
@@ -38,6 +40,7 @@ export default function WebinarRegister() {
       if (formId) {
         const f = await formsService.getOne(formId).catch(() => null)
         if (mounted && f?.fields?.length) setFields(f.fields)
+        if (mounted && f?.successConfig) setSuccessConfig(f.successConfig)
       }
       if (mounted) setLoading(false)
     }
@@ -171,17 +174,22 @@ export default function WebinarRegister() {
               <CheckCircle size={44} className="text-[#64ac37]" />
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-[#1a1a1a] mb-2">You're Registered! 🎉</h1>
-            <p className="text-gray-500 mb-1">
-              Thank you{values.name ? <>, <span className="font-semibold text-[#1655c3]">{values.name}</span></> : ''}.
-            </p>
+            {successConfig.message?.trim() ? (
+              <p className="text-gray-500 mb-1">{successConfig.message}</p>
+            ) : (
+              <p className="text-gray-500 mb-1">
+                Thank you{values.name ? <>, <span className="font-semibold text-[#1655c3]">{values.name}</span></> : ''}.
+              </p>
+            )}
             {values.email && (
-              <p className="text-gray-400 text-sm mb-8">
+              <p className="text-gray-400 text-sm mb-1">
                 A confirmation has been sent to <span className="font-medium">{values.email}</span>.
               </p>
             )}
+            <FormSuccessLinks links={successConfig.links} />
             <button
               onClick={() => navigate('/')}
-              className="px-8 py-3 rounded-xl text-sm font-semibold text-white"
+              className="mt-6 px-8 py-3 rounded-xl text-sm font-semibold text-white"
               style={{ background: 'linear-gradient(135deg, #1655c3, #64ac37)' }}
             >
               Back to Home

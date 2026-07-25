@@ -6,6 +6,7 @@ import { formsService, webinarsService, settingsService, studentsDbService } fro
 import { uploadToCloudinary } from '../firebase/cloudinary'
 import { generateAndIssueCertificate } from '../lib/certificateGenerator'
 import { resolveFormField, applyNameTitleCase } from '../lib/formFieldResolve'
+import FormSuccessLinks from '../components/FormSuccessLinks'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
 
@@ -69,12 +70,15 @@ export default function DynamicForm() {
       // never block or fail this screen.
       const webinar = await webinarsService.getByFeedbackFormId(id).catch(() => null)
       const hasCertTemplate = !!webinar?.certTemplate?.imageUrl
+      const customMessage = form.successConfig?.message?.trim()
       setSuccessMessage(
-        !webinar
-          ? 'Thank you — your response has been recorded.'
-          : hasCertTemplate
-          ? 'Thank you for giving your feedback! Please check your email — your certificate is on its way to your inbox.'
-          : 'Thank you for your feedback.'
+        customMessage || (
+          !webinar
+            ? 'Thank you — your response has been recorded.'
+            : hasCertTemplate
+            ? 'Thank you for giving your feedback! Please check your email — your certificate is on its way to your inbox.'
+            : 'Thank you for your feedback.'
+        )
       )
       setStatus('success')
       window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -197,8 +201,9 @@ export default function DynamicForm() {
               <CheckCircle size={44} className="text-[#64ac37]" />
             </div>
             <h1 className="text-2xl font-black text-[#1a1a1a] mb-2">Submitted! 🎉</h1>
-            <p className="text-gray-500 mb-8">{successMessage}</p>
-            <button onClick={() => navigate('/')} className="px-8 py-3 rounded-xl text-sm font-semibold text-white"
+            <p className="text-gray-500 mb-2">{successMessage}</p>
+            <FormSuccessLinks links={form.successConfig?.links} />
+            <button onClick={() => navigate('/')} className="mt-6 px-8 py-3 rounded-xl text-sm font-semibold text-white"
               style={{ background: 'linear-gradient(135deg, #1655c3, #64ac37)' }}>Back to Home</button>
           </motion.div>
         ) : (

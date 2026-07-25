@@ -5,6 +5,7 @@ import { formsService, webinarsService, studentsDbService } from '../firebase/se
 import { uploadToCloudinary } from '../firebase/cloudinary'
 import { generateAndIssueCertificate } from '../lib/certificateGenerator'
 import { applyNameTitleCase } from '../lib/formFieldResolve'
+import FormSuccessLinks from './FormSuccessLinks'
 
 const inputCls =
   'w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#1655c3]/30 focus:border-[#1655c3] transition-all placeholder:text-gray-400 bg-gray-50'
@@ -178,18 +179,21 @@ export default function WebinarRegisterModal({ formId, webinarTopic, webinar: we
                   <CheckCircle size={32} className="text-[#64ac37]" />
                 </div>
                 <h3 className="text-lg font-black text-[#1a1a1a] mb-1">Submitted! 🎉</h3>
-                {certIssued ? (
+                {form.successConfig?.message?.trim() ? (
+                  <p className="text-gray-500 text-sm mb-1">{form.successConfig.message}</p>
+                ) : certIssued ? (
                   <>
                     <p className="text-gray-500 text-sm mb-1">Thank you for your feedback!</p>
-                    <div className="flex items-center justify-center gap-1.5 text-[#1655c3] text-xs font-semibold mb-6">
+                    <div className="flex items-center justify-center gap-1.5 text-[#1655c3] text-xs font-semibold mb-1">
                       <Mail size={13} />
                       Your certificate is on its way to your inbox.
                     </div>
                   </>
                 ) : (
-                  <p className="text-gray-500 text-sm mb-6">Thank you — your response has been recorded.</p>
+                  <p className="text-gray-500 text-sm mb-1">Thank you — your response has been recorded.</p>
                 )}
-                <button onClick={onClose} className="px-6 py-2.5 rounded-xl text-sm font-semibold text-white"
+                <FormSuccessLinks links={form.successConfig?.links} />
+                <button onClick={onClose} className="mt-6 px-6 py-2.5 rounded-xl text-sm font-semibold text-white"
                   style={{ background: 'linear-gradient(135deg, #1655c3, #64ac37)' }}>
                   Close
                 </button>

@@ -150,13 +150,28 @@ export async function sendWebinarConfirmation({ name, email, webinar }) {
 // Certificate email after feedback submission
 export async function sendCertificateEmail({ name, email, certCode, webinarTitle, certificateImageUrl }) {
   const verifyUrl = `${window.location.origin}/certificate/${encodeURIComponent(certCode)}`
+  const homeUrl = window.location.origin
+  const settings = await settingsService.get().catch(() => null)
+  const communityLink = settings?.communityLink
+  const socials = [
+    { url: settings?.footerWhatsapp,  label: 'WhatsApp' },
+    { url: settings?.footerFacebook,  label: 'Facebook' },
+    { url: settings?.footerInstagram, label: 'Instagram' },
+    { url: settings?.footerLinkedin,  label: 'LinkedIn' },
+  ].filter(s => s.url)
+
   return sendEmail({
     to_name: name,
     to_email: email,
-    subject: `Your Certificate — ${webinarTitle || 'MEDWEB Webinar'}`,
+    subject: `🏆 You Did It, ${name}! Your Certificate Is Ready`,
     htmlContent: wrapHtml(`
-      <h2 style="margin:0 0 6px;color:#1a1a1a;font-size:20px;">Congratulations, ${name}! 🏆</h2>
-      <p style="color:#555;margin:0 0 24px;">You've successfully completed <strong>"${webinarTitle || 'the webinar'}"</strong>. Your certificate is ready.</p>
+      <h2 style="margin:0 0 6px;color:#1a1a1a;font-size:22px;">Congratulations, ${name}! 🏆</h2>
+      <p style="color:#555;margin:0 0 20px;line-height:1.7;">
+        That's one more step forward in your medical career! You've successfully completed
+        <strong>"${webinarTitle || 'the webinar'}"</strong> with MEDWEB-PK, and your official certificate
+        is attached below — proof of the time and dedication you're putting into becoming an
+        outstanding healthcare professional.
+      </p>
 
       ${certificateImageUrl ? `
       <div style="text-align:center;margin-bottom:24px;">
@@ -168,17 +183,42 @@ export async function sendCertificateEmail({ name, email, certCode, webinarTitle
         <p style="margin:0;color:#1655c3;font-size:20px;font-weight:900;font-family:monospace;">${certCode}</p>
       </div>
 
-      <div style="text-align:center;margin-bottom:24px;">
+      <div style="text-align:center;margin-bottom:8px;">
         <a href="${verifyUrl}"
            style="display:inline-block;background:linear-gradient(135deg,#1655c3,#64ac37);color:#fff;text-decoration:none;padding:14px 32px;border-radius:10px;font-weight:700;font-size:14px;">
           Verify Certificate →
         </a>
       </div>
-
-      <p style="color:#aaa;font-size:12px;margin:0;text-align:center;">
+      <p style="color:#aaa;font-size:12px;margin:0 0 28px;text-align:center;">
         Share your certificate link: <a href="${verifyUrl}" style="color:#1655c3;">${verifyUrl}</a>
       </p>
-      <br><p style="color:#888;font-size:13px;margin:0;">— MEDWEB Team</p>
+
+      <div style="border-top:1px solid #eee;padding-top:22px;margin-bottom:8px;">
+        <p style="margin:0 0 4px;color:#1a1a1a;font-size:15px;font-weight:800;">💡 Don't stop here!</p>
+        <p style="color:#666;font-size:13px;line-height:1.7;margin:0 0 16px;">
+          Add this certificate to your CV or LinkedIn profile, and keep the momentum going — MEDWEB-PK
+          runs new expert-led webinars and courses every week to help you stay ahead in your field.
+        </p>
+      </div>
+
+      ${communityLink ? `
+      <div style="text-align:center;margin-bottom:20px;">
+        <a href="${communityLink}"
+           style="display:inline-block;background:linear-gradient(135deg,#25D366,#1655c3);color:#fff;text-decoration:none;padding:13px 28px;border-radius:10px;font-weight:700;font-size:13px;">
+          📲 Join the MEDWEB Community
+        </a>
+      </div>` : ''}
+
+      <div style="text-align:center;margin-bottom:8px;">
+        <a href="${homeUrl}" style="color:#1655c3;font-size:13px;font-weight:700;text-decoration:none;">Explore More Webinars & Courses →</a>
+      </div>
+
+      ${socials.length ? `
+      <div style="text-align:center;margin-top:20px;">
+        ${socials.map(s => `<a href="${s.url}" style="display:inline-block;margin:0 8px;color:#1655c3;font-size:12px;font-weight:600;text-decoration:none;">${s.label}</a>`).join('')}
+      </div>` : ''}
+
+      <br><p style="color:#888;font-size:13px;margin:0;text-align:center;">Proud of you — keep going! 🌱<br>— The MEDWEB-PK Team</p>
     `),
   })
 }
