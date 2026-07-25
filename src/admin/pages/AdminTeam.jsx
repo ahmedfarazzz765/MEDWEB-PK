@@ -24,6 +24,8 @@ const emptyForm = () => ({
   category: 'Chief Executive',
   customCategory: '',
   email: '',
+  bio: '',
+  linkedinUrl: '',
   status: 'Active',
   imageUrl: ''
 })
@@ -57,9 +59,18 @@ function makeColumns(openEdit, handleDelete) {
       )
     },
     {
-      key: 'email',
-      label: 'Email',
-      render: v => v ? <a href={`mailto:${v}`} className="text-[#1655c3] hover:underline text-xs">{v}</a> : <span className="text-gray-300">-</span>
+      key: 'linkedinUrl',
+      label: 'LinkedIn',
+      render: (v, row) => {
+        const link = v || row.linkedin
+        return link ? (
+          <a href={link.startsWith('http') ? link : `https://${link}`} target="_blank" rel="noreferrer" className="text-[#0a66c2] text-xs hover:underline">
+            Profile
+          </a>
+        ) : (
+          <span className="text-gray-300">-</span>
+        )
+      }
     },
     {
       key: 'status',
@@ -126,6 +137,8 @@ export default function AdminTeam() {
       category: isCustom ? 'Other' : cat,
       customCategory: isCustom ? cat : '',
       email: row.email || '',
+      bio: row.bio || '',
+      linkedinUrl: row.linkedinUrl || row.linkedin || '',
       status: row.status || 'Active',
       imageUrl: row.imageUrl || ''
     })
@@ -153,6 +166,8 @@ export default function AdminTeam() {
       role: form.role.trim(),
       category: finalCategory,
       email: form.email.trim(),
+      bio: form.bio.trim(),
+      linkedinUrl: form.linkedinUrl.trim(),
       status: form.status,
       imageUrl: form.imageUrl
     }
@@ -240,7 +255,8 @@ export default function AdminTeam() {
               <div className="flex-1 min-w-0">
                 <div className="font-bold text-[#1a1a1a] text-sm truncate">{m.name}</div>
                 <div className="text-xs text-gray-500 font-medium truncate">{m.role || 'Team Member'}</div>
-                <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                {m.bio && <div className="text-[11px] text-gray-400 truncate mt-0.5">{m.bio}</div>}
+                <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-[#1655c3]">
                     {m.category || 'Chief Executive'}
                   </span>
@@ -275,7 +291,7 @@ export default function AdminTeam() {
             </FormField>
 
             <FormField label="Designation / Post">
-              <input className={inputCls} value={form.role} onChange={set('role')} placeholder="Chief Executive Officer / Lead Designer" />
+              <input className={inputCls} value={form.role} onChange={set('role')} placeholder="Founder & CEO / Lead Designer" />
             </FormField>
 
             <FormField label="Category">
@@ -297,6 +313,24 @@ export default function AdminTeam() {
                 />
               </FormField>
             )}
+
+            <FormField label="Short Bio / Details / Qualifications">
+              <textarea
+                className={`${inputCls} h-20 resize-none`}
+                value={form.bio}
+                onChange={set('bio')}
+                placeholder="e.g. Pharm-D, Medical Content Writer, Researcher"
+              />
+            </FormField>
+
+            <FormField label="LinkedIn Profile URL">
+              <input
+                className={inputCls}
+                value={form.linkedinUrl}
+                onChange={set('linkedinUrl')}
+                placeholder="https://linkedin.com/in/username"
+              />
+            </FormField>
 
             <FormField label="Email">
               <input className={inputCls} type="email" value={form.email} onChange={set('email')} placeholder="name@medweb.pk" />
