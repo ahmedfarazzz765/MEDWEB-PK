@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
+import LaunchIntro from '../components/LaunchIntro'
 import WelcomeBar from '../sections/WelcomeBar'
 import Navbar from '../components/Navbar'
 import Hero from '../sections/Hero'
@@ -16,7 +17,7 @@ import LatestBlog from '../sections/LatestBlog'
 import Footer from '../sections/Footer'
 import Team from '../sections/About'
 import AdvisoryBoard from '../sections/AdvisoryBoard'
-import { sectionVisibilityService } from '../firebase/services'
+import { sectionVisibilityService, settingsService } from '../firebase/services'
 
 // Missing doc/field = visible. Only an explicit `false` hides a section —
 // see services.js for the full rationale.
@@ -29,6 +30,7 @@ const DEFAULT_VISIBILITY = {
 
 export default function HomePage() {
   const [v, setV] = useState(DEFAULT_VISIBILITY)
+  const [showIntro, setShowIntro] = useState(false)
   const location = useLocation()
 
   useEffect(() => {
@@ -37,6 +39,15 @@ export default function HomePage() {
       setV(prev => ({ ...prev, ...s }))
     })
     return () => unsub && unsub()
+  }, [])
+
+  // One-shot check on load — the intro only plays while the site owner has
+  // it switched on (Admin Panel → Homepage Sections → Launch Intro
+  // Animation), a single boolean on the shared settings/site doc.
+  useEffect(() => {
+    settingsService.get().then(s => {
+      if (s?.launchIntroEnabled) setShowIntro(true)
+    }).catch(() => {})
   }, [])
 
   // Reached via a Navbar/Footer link clicked from a DIFFERENT page (e.g.
@@ -56,6 +67,7 @@ export default function HomePage() {
 
   return (
     <div className="font-poppins">
+      {showIntro && <LaunchIntro onDone={() => setShowIntro(false)} />}
       {v.welcomeBar && <WelcomeBar />}
       <Navbar />
       {v.hero && <Hero />}

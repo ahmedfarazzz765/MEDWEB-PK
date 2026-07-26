@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff, Sparkles } from 'lucide-react'
 import AdminButton from '../components/AdminButton'
-import { sectionVisibilityService } from '../../firebase/services'
+import { sectionVisibilityService, settingsService } from '../../firebase/services'
 
 const SECTIONS = [
   { key: 'welcomeBar',               label: 'Welcome Bar',              hint: 'Thin announcement strip at the very top' },
@@ -26,6 +26,13 @@ export default function AdminSections() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
+  // Launch Intro toggle — a single boolean on the shared settings/site doc
+  // (not sectionVisibility), read/written independently and instantly so
+  // the site owner can flip it right before launch without touching code.
+  const [introOn, setIntroOn] = useState(false)
+  const [introLoaded, setIntroLoaded] = useState(false)
+  const [introSaving, setIntroSaving] = useState(false)
+
   useEffect(() => {
     sectionVisibilityService.get().then(d => {
       const init = {}
@@ -37,6 +44,22 @@ export default function AdminSections() {
       setV(init)
     })
   }, [])
+
+  useEffect(() => {
+    settingsService.get().then(s => {
+      setIntroOn(!!s?.launchIntroEnabled)
+      setIntroLoaded(true)
+    }).catch(() => setIntroLoaded(true))
+  }, [])
+
+  const toggleIntro = async () => {
+    const next = !introOn
+    setIntroOn(next) // optimistic
+    setIntroSaving(true)
+    try { await settingsService.update({ launchIntroEnabled: next }) }
+    catch (e) { setIntroOn(!next); alert(e.message) }
+    finally { setIntroSaving(false) }
+  }
 
   if (!v) return <div className="p-6 text-gray-400">Loading…</div>
 
@@ -52,6 +75,34 @@ export default function AdminSections() {
 
   return (
     <div className="p-4 sm:p-6 space-y-6">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${introOn ? 'bg-blue-50 text-[#1655c3]' : 'bg-gray-100 text-gray-400'}`}>
+              <Sparkles size={18} />
+            </div>
+            <div className="min-w-0">
+              <div className="font-black text-[#1a1a1a]">Launch Intro Animation</div>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Plays a full-screen cinematic intro (ribbon → door → logo reveal → confetti → welcome) once per homepage load. Turn ON right before launch, refresh to check it, then turn OFF — saves instantly, no code changes needed.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={toggleIntro}
+            disabled={!introLoaded || introSaving}
+            className="relative w-11 h-6 rounded-full flex-shrink-0 transition-colors duration-200 disabled:opacity-50"
+            style={{ background: introOn ? '#1655c3' : '#d1d5db' }}
+            aria-label="Toggle Launch Intro Animation"
+          >
+            <span
+              className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all duration-200"
+              style={{ left: introOn ? '22px' : '2px' }}
+            />
+          </button>
+        </div>
+      </div>
+
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6">
         <div className="flex items-center justify-between mb-1">
           <div>
