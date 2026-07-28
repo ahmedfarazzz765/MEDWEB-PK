@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { teamService, teamCategoriesService } from '../firebase/services'
-import { MemberCard, WhyMedwebCategoryCard, DEFAULT_CATEGORY_TEMPLATES } from '../sections/About'
+import { MemberCard, WhyMedwebCategoryCard } from '../sections/About'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
 import SectionHeading from '../components/SectionHeading'
@@ -39,16 +39,10 @@ export default function TeamListPage() {
     setActiveCategory(cat)
   }, [searchParams])
 
-  // Combine DB categories with default templates, same as the homepage cards
-  const categoryCards = useMemo(() => {
-    const list = [...dbCategories]
-    DEFAULT_CATEGORY_TEMPLATES.forEach(tpl => {
-      if (!list.some(c => c.name.toLowerCase() === tpl.name.toLowerCase())) {
-        list.push(tpl)
-      }
-    })
-    return list
-  }, [dbCategories])
+  // Renders exactly what's in Firestore — no default-template fallback
+  // (see About.jsx's categoryCards for why: merging in defaults here made
+  // Admin-deleted category cards keep reappearing regardless of Firestore state).
+  const categoryCards = dbCategories
 
   // Filter team members based on selected category
   const filteredTeam = useMemo(() => {

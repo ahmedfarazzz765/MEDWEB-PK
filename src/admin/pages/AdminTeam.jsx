@@ -9,8 +9,7 @@ import AdminButton from '../components/AdminButton'
 import ActionButtons from '../components/ActionButtons'
 import CoverImage from '../../components/CoverImage'
 import SortableGrid, { SortableItem } from '../components/SortableGrid'
-import { teamService, teamCategoriesService } from '../../firebase/services'
-import { DEFAULT_TEAM_CATEGORIES } from '../../constants/teamCategories'
+import { teamService, teamCategoriesService, settingsService } from '../../firebase/services'
 
 export const PRESET_CATEGORIES = [
   'Chief Executive',
@@ -137,25 +136,27 @@ export default function AdminTeam() {
     }
   }, [])
 
-  // One-time seed: turns the hardcoded default category cards (previously
-  // shown as a frozen fallback with no Firestore id, hence no Edit/Delete)
-  // into real editable/deletable docs the first time this page loads with
-  // an empty/partial teamCategories collection.
+  // One-time-EVER seed, gated by a persistent settings/site flag
+  // (`teamCategoriesSeeded`) instead of "collection is currently empty" —
+  // an empty collection is ambiguous (never seeded yet vs. an admin
+  // deliberately deleted every category card) and the old empty-check
+  // version reseeded the hardcoded defaults right back on every refresh
+  // after a delete, making deletion look broken.
+  //
+  // Deploying this fix must NOT retroactively reseed anything on a site
+  // where categories already exist (or were already intentionally emptied)
+  // — so the very first time the flag is missing, this only ever WRITES
+  // the flag (marking seeding as "done"), never adds documents. From then
+  // on an admin who wants the defaults back adds them via "+ Add Category
+  // Card" like any other category.
   useEffect(() => {
     if (!catsLoaded || seedAttempted.current) return
     seedAttempted.current = true
-    const existingNames = new Set(dbCategories.map(c => c.name?.trim().toLowerCase()))
-    const missing = DEFAULT_TEAM_CATEGORIES.filter(tpl => !existingNames.has(tpl.name.toLowerCase()))
-    missing.forEach(tpl => {
-      const { label1, label2, icon, ...catData } = tpl
-      // Was a silent .catch(() => {}) — a Firestore permission-denied error
-      // here (missing rule for teamCategories) failed dead silently, so the
-      // seed never visibly landed and this ran again every reload with no
-      // way to tell why. Logged now so a rules problem shows up in the
-      // console instead of just... nothing happening.
-      teamCategoriesService.add(catData).catch(e => console.error('teamCategories seed failed — likely a Firestore rules issue:', e))
-    })
-  }, [catsLoaded, dbCategories])
+    settingsService.get().then(s => {
+      if (s?.teamCategoriesSeeded) return // already handled — never touch again
+      settingsService.update({ teamCategoriesSeeded: true }).catch(e => console.error('Failed to set teamCategoriesSeeded flag:', e))
+    }).catch(e => console.error('Failed to read teamCategoriesSeeded flag:', e))
+  }, [catsLoaded])
 
   // Backfill: any member saved before drag-reorder existed gets an `order`
   // matching its current position (already createdAt-desc, so nothing's
@@ -477,8 +478,12 @@ export default function AdminTeam() {
             💡 <strong>Why MEDWEB Style Category Cards:</strong> These Category Cards appear in the continuous Marquee Slider on the homepage. Adding or editing a Category Card here lets you upload a custom thumbnail image, set description, and control the card design shown to visitors.
           </div>
 
+          {dbCategories.length === 0 && (
+            <p className="text-sm text-gray-400 text-center py-10">No category cards yet — click "+ Add Category Card" to create one.</p>
+          )}
+
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {(dbCategories.length > 0 ? dbCategories : DEFAULT_TEAM_CATEGORIES).map((cat, i) => {
+            {dbCategories.map((cat, i) => {
               const count = data.filter(m => (m.category || 'Chief Executive') === cat.name).length
               return (
                 <div key={cat.id || i} className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col justify-between">
@@ -508,12 +513,10 @@ export default function AdminTeam() {
 
                     <div className="pt-3 border-t border-gray-50 flex items-center justify-between">
                       <span className="text-[11px] font-semibold text-[#1655c3]">Why MEDWEB Style</span>
-                      {cat.id && (
-                        <ActionButtons
-                          onEdit={() => openEditCategory(cat)}
-                          onDelete={() => handleDeleteCategory(cat.id)}
-                        />
-                      )}
+                      <ActionButtons
+                        onEdit={() => openEditCategory(cat)}
+                        onDelete={() => handleDeleteCategory(cat.id)}
+                      />
                     </div>
                   </div>
                 </div>

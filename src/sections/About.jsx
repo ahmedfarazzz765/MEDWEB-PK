@@ -1,9 +1,8 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight, Users, Linkedin, Star, Award, ShieldCheck, UserCheck, Radio, BookOpen } from 'lucide-react'
 import { teamService, teamCategoriesService } from '../firebase/services'
 import { useSiteSettings } from '../hooks/useSiteSettings'
-import { DEFAULT_TEAM_CATEGORIES } from '../constants/teamCategories'
 import SectionHeading from '../components/SectionHeading'
 import InfiniteMarquee from '../components/InfiniteMarquee'
 import CardRowSkeleton from '../components/CardRowSkeleton'
@@ -16,8 +15,6 @@ const HEADING_DEFAULTS = {
   teamHeading2: 'Team',
   teamSubtitle: 'Meet the experts behind the MEDWEB platform',
 }
-
-export const DEFAULT_CATEGORY_TEMPLATES = DEFAULT_TEAM_CATEGORIES
 
 const ICONS = { Award, Star, ShieldCheck, UserCheck, Radio, BookOpen, Users }
 
@@ -222,17 +219,12 @@ export default function Team() {
     }
   }, [])
 
-  // Combine DB categories with default templates so there's always rich WhyMedweb cards
-  const categoryCards = useMemo(() => {
-    const list = [...dbCategories]
-    // Add default templates if not present in DB
-    DEFAULT_CATEGORY_TEMPLATES.forEach(tpl => {
-      if (!list.some(c => c.name.toLowerCase() === tpl.name.toLowerCase())) {
-        list.push(tpl)
-      }
-    })
-    return list
-  }, [dbCategories])
+  // Renders exactly what's in Firestore — no default-template fallback here.
+  // (Previously merged in DEFAULT_CATEGORY_TEMPLATES for any name not
+  // present, which meant deleting every category card in Admin never
+  // actually emptied the homepage: the "deleted" defaults just kept
+  // reappearing on every render regardless of Firestore state.)
+  const categoryCards = dbCategories
 
   const handleCategorySelect = catName => {
     navigate(`/team?category=${encodeURIComponent(catName)}`)
