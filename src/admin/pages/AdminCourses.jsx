@@ -9,6 +9,7 @@ import ImageUpload from '../components/ImageUpload'
 import AdminButton from '../components/AdminButton'
 import ActionButtons from '../components/ActionButtons'
 import CoverImage from '../../components/CoverImage'
+import SortableGrid, { SortableItem } from '../components/SortableGrid'
 import { coursesService } from '../../firebase/services'
 
 const emptyForm = () => ({
@@ -49,6 +50,24 @@ export default function AdminCourses() {
     const unsub = coursesService.listen(rows => { setData(rows); setLoading(false) })
     return unsub
   }, [])
+
+  // Backfill: any course saved before drag-reorder existed gets an `order`
+  // matching its current position (already createdAt-desc, so nothing's
+  // visual order changes) the next time this admin list loads.
+  useEffect(() => {
+    if (loading) return
+    const missing = data.filter(c => c.order === undefined || c.order === null)
+    if (missing.length === 0) return
+    missing.forEach(c => {
+      const idx = data.findIndex(x => x.id === c.id)
+      coursesService.update(c.id, { order: idx }).catch(() => {})
+    })
+  }, [data, loading])
+
+  const handleReorder = reordered => {
+    setData(reordered) // optimistic
+    coursesService.reorder(reordered).catch(e => alert('Error saving order: ' + e.message))
+  }
 
   const openAdd  = () => { setForm(emptyForm()); setEditId(null); setModal('add') }
   const openEdit = row => {
@@ -108,17 +127,18 @@ export default function AdminCourses() {
         <StatCard icon={Star}     label="Avg Rating"     value={loading ? '…' : avgRating}                    color="#64ac37" bg="#f0fdf4" />
       </div>
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <p className="text-xs text-gray-400 -mb-2">Drag the <span className="font-semibold text-gray-500">⠿</span> handle on a card to reorder — this is the order shown on the public Courses section.</p>
+      <SortableGrid items={data} onReorder={handleReorder} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {data.map((c, i) => {
           const col = colors[i % colors.length]
           return (
-            <div key={c.id || i} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow">
+            <SortableItem key={c.id || i} id={c.id || i} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow">
               <div className="flex items-start gap-3 mb-3">
                 {c.imageUrl
                   ? <CoverImage src={c.imageUrl} className="w-12 h-12 rounded-xl shrink-0" />
                   : <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-black text-base shrink-0" style={{ background: col }}>{c.title?.charAt(0)}</div>
                 }
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 pr-6">
                   <div className="font-bold text-[#1a1a1a] text-sm truncate">{c.title}</div>
                   <div className="text-xs text-gray-400 mt-0.5">{c.instructor}</div>
                 </div>
@@ -131,10 +151,10 @@ export default function AdminCourses() {
                 <span><span className="font-bold text-[#1655c3]">{(c.students || 0).toLocaleString()}</span> students</span>
                 {c.rating > 0 && <span className="font-bold text-amber-500">⭐ {c.rating}</span>}
               </div>
-            </div>
+            </SortableItem>
           )
         })}
-      </div>
+      </SortableGrid>
 
       <DataTable title="All Courses" columns={columns} data={data} searchKey="title" emptyMessage="No courses yet — click Add Course to create one"
         actions={<AdminButton size="sm" onClick={openAdd}>+ Add Course</AdminButton>}

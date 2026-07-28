@@ -8,6 +8,7 @@ import ImageUpload from '../components/ImageUpload'
 import AdminButton from '../components/AdminButton'
 import ActionButtons from '../components/ActionButtons'
 import CoverImage from '../../components/CoverImage'
+import SortableGrid, { SortableItem } from '../components/SortableGrid'
 import { teamService, teamCategoriesService } from '../../firebase/services'
 import { DEFAULT_TEAM_CATEGORIES } from '../../constants/teamCategories'
 
@@ -155,6 +156,28 @@ export default function AdminTeam() {
       teamCategoriesService.add(catData).catch(e => console.error('teamCategories seed failed — likely a Firestore rules issue:', e))
     })
   }, [catsLoaded, dbCategories])
+
+  // Backfill: any member saved before drag-reorder existed gets an `order`
+  // matching its current position (already createdAt-desc, so nothing's
+  // visual order changes) the next time this admin list loads.
+  useEffect(() => {
+    if (loading) return
+    const missing = data.filter(m => m.order === undefined || m.order === null)
+    if (missing.length === 0) return
+    missing.forEach(m => {
+      const idx = data.findIndex(x => x.id === m.id)
+      teamService.update(m.id, { order: idx }).catch(() => {})
+    })
+  }, [data, loading])
+
+  // Reordering is only offered on the unfiltered "All" view — reordering a
+  // single category's subset can't safely renumber 0..n without corrupting
+  // the relative order of members in every OTHER category sharing the same
+  // global `order` field.
+  const handleReorderMembers = reordered => {
+    setData(reordered) // optimistic
+    teamService.reorder(reordered).catch(e => alert('Error saving order: ' + e.message))
+  }
 
   // All unique category names from DB + Presets
   const categoryNames = useMemo(() => {
@@ -371,35 +394,70 @@ export default function AdminTeam() {
           </div>
 
           {/* Member Cards */}
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredMembers.map((m, i) => {
-              const col = colors[i % colors.length]
-              return (
-                <div key={m.id || i} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex items-center gap-4 hover:shadow-md transition-shadow relative overflow-hidden">
-                  {m.imageUrl ? (
-                    <CoverImage src={m.imageUrl} bias="center 25%" className="w-12 h-12 rounded-2xl shrink-0" />
-                  ) : (
-                    <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-black text-base shrink-0" style={{ background: col }}>
-                      {m.name?.split(' ').map(n => n[0]).slice(0, 2).join('')}
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="font-bold text-[#1a1a1a] text-sm truncate">{m.name}</div>
-                    <div className="text-xs text-gray-500 font-medium truncate">{m.role || 'Team Member'}</div>
-                    {m.bio && <div className="text-[11px] text-gray-400 truncate mt-0.5">{m.bio}</div>}
-                    <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-[#1655c3]">
-                        {m.category || 'Chief Executive'}
-                      </span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${m.status === 'Active' ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-500'}`}>
-                        {m.status}
-                      </span>
+          {selectedCategoryFilter === 'All' ? (
+            <>
+              <p className="text-xs text-gray-400">Drag the <span className="font-semibold text-gray-500">⠿</span> handle on a card to reorder — this is the order shown on the public Team section. (Switch to "All" to reorder — a single category's subset can't be safely reordered on its own.)</p>
+              <SortableGrid items={data} onReorder={handleReorderMembers} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {data.map((m, i) => {
+                  const col = colors[i % colors.length]
+                  return (
+                    <SortableItem key={m.id || i} id={m.id || i} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex items-center gap-4 hover:shadow-md transition-shadow overflow-hidden">
+                      {m.imageUrl ? (
+                        <CoverImage src={m.imageUrl} bias="center 25%" className="w-12 h-12 rounded-2xl shrink-0" />
+                      ) : (
+                        <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-black text-base shrink-0" style={{ background: col }}>
+                          {m.name?.split(' ').map(n => n[0]).slice(0, 2).join('')}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0 pr-6">
+                        <div className="font-bold text-[#1a1a1a] text-sm truncate">{m.name}</div>
+                        <div className="text-xs text-gray-500 font-medium truncate">{m.role || 'Team Member'}</div>
+                        {m.bio && <div className="text-[11px] text-gray-400 truncate mt-0.5">{m.bio}</div>}
+                        <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-[#1655c3]">
+                            {m.category || 'Chief Executive'}
+                          </span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${m.status === 'Active' ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-500'}`}>
+                            {m.status}
+                          </span>
+                        </div>
+                      </div>
+                    </SortableItem>
+                  )
+                })}
+              </SortableGrid>
+            </>
+          ) : (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredMembers.map((m, i) => {
+                const col = colors[i % colors.length]
+                return (
+                  <div key={m.id || i} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex items-center gap-4 hover:shadow-md transition-shadow relative overflow-hidden">
+                    {m.imageUrl ? (
+                      <CoverImage src={m.imageUrl} bias="center 25%" className="w-12 h-12 rounded-2xl shrink-0" />
+                    ) : (
+                      <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-black text-base shrink-0" style={{ background: col }}>
+                        {m.name?.split(' ').map(n => n[0]).slice(0, 2).join('')}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-[#1a1a1a] text-sm truncate">{m.name}</div>
+                      <div className="text-xs text-gray-500 font-medium truncate">{m.role || 'Team Member'}</div>
+                      {m.bio && <div className="text-[11px] text-gray-400 truncate mt-0.5">{m.bio}</div>}
+                      <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-[#1655c3]">
+                          {m.category || 'Chief Executive'}
+                        </span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${m.status === 'Active' ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-500'}`}>
+                          {m.status}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )
-            })}
-          </div>
+                )
+              })}
+            </div>
+          )}
 
           {/* Data Table */}
           <DataTable

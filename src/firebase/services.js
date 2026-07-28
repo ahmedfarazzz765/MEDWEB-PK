@@ -53,6 +53,26 @@ async function remove(colName, id) {
   await deleteDoc(ref(colName, id))
 }
 
+// ─── MANUAL DRAG-REORDER (Courses, Team, Ambassadors) ────────────────────────
+// Sorts by the numeric `order` field ascending. Any doc missing it (created
+// before drag-reorder existed) falls back to its position in the array as
+// already fetched (createdAt desc) — same visual order as before this
+// feature ever existed, until an admin actually drags it somewhere else.
+function applyManualOrder(rows) {
+  return rows
+    .map((r, i) => ({ r, fallback: i }))
+    .sort((a, b) => (a.r.order ?? a.fallback) - (b.r.order ?? b.fallback))
+    .map(x => x.r)
+}
+
+// Persists a full drag-and-drop reorder: writes sequential 0,1,2… `order`
+// values for every item in its new position. `items` is the reordered array
+// (each needs an `id`); doubles as the self-heal backfill call for any doc
+// still missing `order` (see the admin pages' backfill effects).
+function reorderCollection(colName, items) {
+  return Promise.all(items.map((item, i) => update(colName, item.id, { order: i })))
+}
+
 // ─── WEBINARS ────────────────────────────────────────────────────────────────
 export const webinarsService = {
   getAll: () => getAll(COLS.webinars, orderBy('createdAt', 'desc')),
@@ -83,15 +103,16 @@ export const webinarsService = {
 
 // ─── COURSES ─────────────────────────────────────────────────────────────────
 export const coursesService = {
-  getAll: () => getAll(COLS.courses, orderBy('createdAt', 'desc')),
-  getActive: () => getAll(COLS.courses, where('status', '==', 'Active')),
+  getAll: () => getAll(COLS.courses, orderBy('createdAt', 'desc')).then(applyManualOrder),
+  getActive: () => getAll(COLS.courses, where('status', '==', 'Active')).then(applyManualOrder),
   getOne: id => getOne(COLS.courses, id),
   add: data => add(COLS.courses, { ...data, students: 0, rating: 0 }),
   update: (id, data) => update(COLS.courses, id, data),
   delete: id => remove(COLS.courses, id),
+  reorder: items => reorderCollection(COLS.courses, items),
   listen: cb => onSnapshot(
     query(col(COLS.courses), orderBy('createdAt', 'desc')),
-    snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+    snap => cb(applyManualOrder(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
     err => console.error("Firebase listen error:", err)
   ),
 }
@@ -153,15 +174,16 @@ export const certificatesService = {
 
 // ─── AMBASSADORS ─────────────────────────────────────────────────────────────
 export const ambassadorsService = {
-  getAll: () => getAll(COLS.ambassadors, orderBy('createdAt', 'desc')),
-  getActive: () => getAll(COLS.ambassadors, where('status', '==', 'Active')),
+  getAll: () => getAll(COLS.ambassadors, orderBy('createdAt', 'desc')).then(applyManualOrder),
+  getActive: () => getAll(COLS.ambassadors, where('status', '==', 'Active')).then(applyManualOrder),
   getOne: id => getOne(COLS.ambassadors, id),
   add: data => add(COLS.ambassadors, { ...data, students: 0 }),
   update: (id, data) => update(COLS.ambassadors, id, data),
   delete: id => remove(COLS.ambassadors, id),
+  reorder: items => reorderCollection(COLS.ambassadors, items),
   listen: cb => onSnapshot(
     query(col(COLS.ambassadors), orderBy('createdAt', 'desc')),
-    snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+    snap => cb(applyManualOrder(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
     err => console.error("Firebase listen error:", err)
   ),
 }
@@ -289,14 +311,15 @@ export const blogCategoriesService = {
 
 // ─── TEAM ────────────────────────────────────────────────────────────────────
 export const teamService = {
-  getAll: () => getAll(COLS.team, orderBy('createdAt', 'desc')),
+  getAll: () => getAll(COLS.team, orderBy('createdAt', 'desc')).then(applyManualOrder),
   getOne: id => getOne(COLS.team, id),
   add: data => add(COLS.team, data),
   update: (id, data) => update(COLS.team, id, data),
   delete: id => remove(COLS.team, id),
+  reorder: items => reorderCollection(COLS.team, items),
   listen: cb => onSnapshot(
     query(col(COLS.team), orderBy('createdAt', 'desc')),
-    snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+    snap => cb(applyManualOrder(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
     err => console.error("Firebase listen error:", err)
   ),
 }

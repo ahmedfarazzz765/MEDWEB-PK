@@ -9,6 +9,7 @@ import AdminButton from '../components/AdminButton'
 import ActionButtons from '../components/ActionButtons'
 import AmbassadorLetterSettings from '../components/AmbassadorLetterSettings'
 import CoverImage from '../../components/CoverImage'
+import SortableGrid, { SortableItem } from '../components/SortableGrid'
 import { ambassadorsService, settingsService, formsService, studentsDbService } from '../../firebase/services'
 import {
   sendAmbassadorWelcomeEmail, sendAmbassadorPointsUpdateEmail,
@@ -160,6 +161,24 @@ export default function AdminAmbassadors() {
     return unsub
   }, [])
 
+  // Backfill: any ambassador saved before drag-reorder existed gets an
+  // `order` matching its current position (already createdAt-desc, so
+  // nothing's visual order changes) the next time this admin list loads.
+  useEffect(() => {
+    if (loading) return
+    const missing = data.filter(a => a.order === undefined || a.order === null)
+    if (missing.length === 0) return
+    missing.forEach(a => {
+      const idx = data.findIndex(x => x.id === a.id)
+      ambassadorsService.update(a.id, { order: idx }).catch(() => {})
+    })
+  }, [data, loading])
+
+  const handleReorderAmbassadors = reordered => {
+    setData(reordered) // optimistic
+    ambassadorsService.reorder(reordered).catch(e => alert('Error saving order: ' + e.message))
+  }
+
   const openAdd  = () => { setForm(emptyForm()); setEditId(null); setModal('add') }
   const openEdit = row => {
     setForm({
@@ -294,6 +313,28 @@ export default function AdminAmbassadors() {
           })}
         </div>
       </div>
+
+      {data.length > 1 && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+          <h3 className="font-bold text-[#1a1a1a] text-sm mb-1">Reorder Ambassadors</h3>
+          <p className="text-xs text-gray-400 mb-4">Drag the <span className="font-semibold text-gray-500">⠿</span> handle to set the order shown on the public Ambassadors section.</p>
+          <SortableGrid items={data} onReorder={handleReorderAmbassadors} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {data.map(a => (
+              <SortableItem key={a.id} id={a.id} className="flex items-center gap-3 bg-gray-50 rounded-xl border border-gray-100 p-3 pr-9">
+                {a.imageUrl ? (
+                  <CoverImage src={a.imageUrl} bias="center 25%" className="w-9 h-9 rounded-full shrink-0" />
+                ) : (
+                  <div className="w-9 h-9 rounded-full bg-[#1655c3] flex items-center justify-center text-white font-bold text-xs shrink-0">{a.name?.charAt(0)}</div>
+                )}
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-[#1a1a1a] truncate">{a.name}</div>
+                  <div className="text-[11px] text-gray-400 truncate">{a.university}</div>
+                </div>
+              </SortableItem>
+            ))}
+          </SortableGrid>
+        </div>
+      )}
 
       <DataTable title="All Ambassadors" columns={columns} data={data} searchKey="name" emptyMessage="No ambassadors yet — click Add Ambassador to create one"
         actions={<AdminButton size="sm" onClick={openAdd}>+ Add Ambassador</AdminButton>}
