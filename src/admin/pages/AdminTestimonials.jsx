@@ -7,6 +7,7 @@ import FormField, { inputCls } from '../components/FormField'
 import ImageUpload from '../components/ImageUpload'
 import AdminButton from '../components/AdminButton'
 import ActionButtons from '../components/ActionButtons'
+import CoverImage from '../../components/CoverImage'
 import { testimonialsService } from '../../firebase/services'
 
 const emptyForm = () => ({ name: '', uni: '', role: '', text: '', img: '', stars: 5, status: 'Approved', category: '' })
@@ -51,7 +52,7 @@ export default function AdminTestimonials() {
 
   const columns = [
     { key: 'img', label: '', render: (v, row) => (
-      v ? <img src={v} alt="" className="w-9 h-9 rounded-full object-cover" />
+      v ? <CoverImage src={v} alt="" bias="center 25%" className="w-9 h-9 rounded-full" />
         : <div className="w-9 h-9 rounded-full bg-blue-50 text-[#1655c3] flex items-center justify-center text-xs font-bold">{(row.name || '?')[0]}</div>
     )},
     { key: 'name', label: 'Name', render: v => <span className="font-semibold text-[#1a1a1a] text-xs">{v}</span> },

@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import { Upload, X, Image } from 'lucide-react'
 import { uploadToCloudinary, toCircleAvatarUrl } from '../../firebase/cloudinary'
+import CoverImage from '../../components/CoverImage'
 
 export default function ImageUpload({ value, onChange, folder = 'medweb', label = 'Photo', circle = false }) {
   const [uploading, setUploading] = useState(false)
@@ -32,7 +33,7 @@ export default function ImageUpload({ value, onChange, folder = 'medweb', label 
           circle ? (
             <div className="relative shrink-0 p-[3px] bg-gradient-to-tr from-[#64ac37] via-[#1655c3] to-[#64ac37] rounded-full">
               <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-white">
-                <img src={value} alt="preview" className="w-full h-full object-cover" />
+                <CoverImage src={value} alt="preview" bias="center 25%" className="w-full h-full" />
               </div>
               <button onClick={() => onChange('')}
                 className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center">
@@ -41,7 +42,7 @@ export default function ImageUpload({ value, onChange, folder = 'medweb', label 
             </div>
           ) : (
             <div className="relative w-20 h-20 rounded-xl overflow-hidden border border-gray-200 shrink-0">
-              <img src={value} alt="preview" className="w-full h-full object-cover" />
+              <CoverImage src={value} alt="preview" className="w-full h-full" />
               <button onClick={() => onChange('')}
                 className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center">
                 <X size={10} />

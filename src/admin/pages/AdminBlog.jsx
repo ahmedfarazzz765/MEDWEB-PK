@@ -12,6 +12,7 @@ import RichTextEditor from '../components/RichTextEditor'
 import { blogService, blogCategoriesService, newsletterService } from '../../firebase/services'
 import { sendNewsletterEmail, getRemainingEmailQuota } from '../../firebase/email'
 import { DEFAULT_BLOG_CATEGORIES } from '../../constants/blogCategories'
+import CoverImage from '../../components/CoverImage'
 
 // `content` is now rich-text HTML (see RichTextEditor.jsx) — this fallback
 // (used only when the admin left Excerpt blank) strips tags first so a
@@ -44,7 +45,7 @@ function uniqueSlug(base, existingSlugs) {
 
 function makeColumns(openEdit, handlePublish, handleDelete) {
   return [
-    { key: 'imageUrl', label: '',          render: v => v ? <img src={v} className="w-8 h-8 rounded-lg object-cover" /> : <div className="w-8 h-8 rounded-lg bg-blue-50" /> },
+    { key: 'imageUrl', label: '',          render: v => v ? <CoverImage src={v} className="w-8 h-8 rounded-lg" /> : <div className="w-8 h-8 rounded-lg bg-blue-50" /> },
     { key: 'title',    label: 'Title',     render: v => <span className="font-semibold text-[#1a1a1a]">{v}</span> },
     { key: 'author',   label: 'Author',    render: v => <span className="text-gray-500 text-xs">{v}</span> },
     { key: 'category', label: 'Category',  render: v => <span className="text-xs font-medium text-[#1655c3] bg-blue-50 px-2 py-0.5 rounded-full">{v}</span> },

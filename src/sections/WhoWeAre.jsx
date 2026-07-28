@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { CheckCircle, ArrowRight } from 'lucide-react'
 import { settingsService } from '../firebase/services'
+import CoverImage from '../components/CoverImage'
 
 const points = [
   "Pakistan's leading medical education platform for allied health sciences",
@@ -67,7 +68,7 @@ export default function WhoWeAre() {
           <motion.div className="relative"
             initial={{ opacity: 0, x: 40 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.7 }}>
             <div className="relative h-[440px] rounded-3xl overflow-hidden shadow-2xl">
-              <img src={imgSrc} alt="Medical professionals" className="w-full h-full object-cover"
+              <CoverImage src={imgSrc} alt="Medical professionals" className="w-full h-full"
                 onError={e => { e.target.style.display = 'none' }} />
               <div className="absolute inset-0 bg-[#1655c3]/10" />
             </div>

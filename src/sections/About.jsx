@@ -8,6 +8,7 @@ import SectionHeading from '../components/SectionHeading'
 import InfiniteMarquee from '../components/InfiniteMarquee'
 import CardRowSkeleton from '../components/CardRowSkeleton'
 import BrandWatermark from '../components/BrandWatermark'
+import CoverImage from '../components/CoverImage'
 import logo from '../assets/medweb.png'
 
 const HEADING_DEFAULTS = {
@@ -73,10 +74,11 @@ export function MemberCard({ member }) {
           <div className="p-[3px] bg-gradient-to-tr from-[#64ac37] via-[#1655c3] to-[#64ac37] rounded-full shadow-md mb-4 shrink-0 relative">
             <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full overflow-hidden border-2 border-white bg-gray-50 flex items-center justify-center">
               {showImage ? (
-                <img
+                <CoverImage
                   src={member.imageUrl}
                   alt={member.name}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  bias="center 25%"
+                  className="w-full h-full group-hover:scale-105 transition-transform duration-300"
                   onError={() => setImgError(true)}
                 />
               ) : (
@@ -151,10 +153,10 @@ export function WhyMedwebCategoryCard({ category, memberCount, onSelect }) {
           card's thumbnail is identically sized no matter the source image */}
       <div className="relative h-[146px] sm:h-[169px] shrink-0 overflow-hidden" style={{ background: accent.bg }}>
         {category.imageUrl ? (
-          <img
+          <CoverImage
             src={category.imageUrl}
             alt={category.name}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            className="w-full h-full group-hover:scale-105 transition-transform duration-300"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">

@@ -5,6 +5,7 @@ import { ArrowLeft, CheckCircle } from 'lucide-react'
 import { settingsService } from '../firebase/services'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
+import CoverImage from '../components/CoverImage'
 
 export default function AboutPage() {
   const navigate = useNavigate()
@@ -47,7 +48,7 @@ export default function AboutPage() {
           initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }}>
           {imgSrc && (
             <div className="w-full h-56 sm:h-72 overflow-hidden">
-              <img src={imgSrc} alt={d.wwaTitle} className="w-full h-full object-cover" onError={e => { e.target.style.display = 'none' }} />
+              <CoverImage src={imgSrc} alt={d.wwaTitle} className="w-full h-full" onError={e => { e.target.style.display = 'none' }} />
             </div>
           )}
           <div className="p-6 sm:p-10 space-y-4">

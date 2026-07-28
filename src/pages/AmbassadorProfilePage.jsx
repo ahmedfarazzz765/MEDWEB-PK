@@ -6,6 +6,7 @@ import { ambassadorsService, settingsService } from '../firebase/services'
 import { downloadAmbassadorLetter } from '../lib/ambassadorLetterGenerator'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
+import CoverImage from '../components/CoverImage'
 
 function normalizeCnic(v) {
   return String(v || '').replace(/[^0-9]/g, '')
@@ -150,7 +151,7 @@ export default function AmbassadorProfilePage() {
             {/* 1. Photo, Name, Ambassador Code */}
             <div className="flex items-center gap-4">
               {ambassador.imageUrl
-                ? <img src={ambassador.imageUrl} alt={ambassador.name} className="w-20 h-20 rounded-full object-cover ring-4 ring-white shadow-md" />
+                ? <CoverImage src={ambassador.imageUrl} alt={ambassador.name} bias="center 25%" className="w-20 h-20 rounded-full ring-4 ring-white shadow-md" />
                 : <div className="w-20 h-20 rounded-full bg-[#1655c3] flex items-center justify-center text-white font-bold text-2xl ring-4 ring-white shadow-md">{ambassador.name?.charAt(0)}</div>}
               <div className="min-w-0">
                 <div className="font-bold text-[#1a1a1a] text-lg truncate">{ambassador.name}</div>

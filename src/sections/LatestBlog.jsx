@@ -8,6 +8,7 @@ import InfiniteMarquee from '../components/InfiniteMarquee'
 import CardRowSkeleton from '../components/CardRowSkeleton'
 import SectionEmptyState from '../components/SectionEmptyState'
 import BrandWatermark from '../components/BrandWatermark'
+import CoverImage from '../components/CoverImage'
 
 const HEADING_DEFAULTS = { blogHeading1: 'Latest', blogHeading2: 'Articles' }
 const COLORS = ['#1655c3','#64ac37','#2563eb']
@@ -17,7 +18,7 @@ export function BlogCard({ post, i }) {
     <article className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-100 group h-full">
       <div className="aspect-video overflow-hidden relative" style={{ background:`linear-gradient(135deg, ${COLORS[i%COLORS.length]}12, ${COLORS[i%COLORS.length]}06)` }}>
         {post.imageUrl
-          ? <img src={post.imageUrl} alt={post.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+          ? <CoverImage src={post.imageUrl} alt={post.title} className="w-full h-full group-hover:scale-105 transition-transform duration-500" />
           : <div className="w-full h-full flex items-center justify-center">
               <span className="text-6xl font-black opacity-10" style={{ color:COLORS[i%COLORS.length] }}>{post.category?.charAt(0)||'M'}</span>
             </div>

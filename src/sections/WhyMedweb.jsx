@@ -7,6 +7,7 @@ import {
 import { settingsService } from '../firebase/services'
 import { STATS } from '../data/statsConfig'
 import SectionHeading from '../components/SectionHeading'
+import CoverImage from '../components/CoverImage'
 import webinarsImg from '../assets/hero_doctors.jpeg'
 import coursesImg from '../assets/doctors.png'
 
@@ -95,7 +96,7 @@ export default function WhyMedweb() {
                 className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden">
                 <div className="relative aspect-video" style={{ background: accent.bg }}>
                   {c.image
-                    ? <img src={c.image} alt={`${line1} ${line2}`} className="w-full h-full object-cover"
+                    ? <CoverImage src={c.image} alt={`${line1} ${line2}`} className="w-full h-full"
                         onError={e => { e.target.style.display = 'none' }} />
                     : <div className="w-full h-full flex items-center justify-center">
                         <Icon size={32} style={{ color: accent.text }} className="opacity-40" />

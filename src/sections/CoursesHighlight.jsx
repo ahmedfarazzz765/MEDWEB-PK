@@ -8,6 +8,7 @@ import InfiniteMarquee from '../components/InfiniteMarquee'
 import CardRowSkeleton from '../components/CardRowSkeleton'
 import SectionEmptyState from '../components/SectionEmptyState'
 import BrandWatermark from '../components/BrandWatermark'
+import CoverImage from '../components/CoverImage'
 
 const HEADING_DEFAULTS = {
   coursesHeading1: 'Featured',
@@ -26,7 +27,7 @@ export function CourseCard({ c, i }) {
     <div className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 flex flex-col group relative overflow-hidden h-full">
       <div className="relative aspect-video w-full">
         {poster
-          ? <img src={poster} className="w-full h-full object-cover" alt={c.title} />
+          ? <CoverImage src={poster} className="w-full h-full" alt={c.title} />
           : <div className="w-full h-full flex items-center justify-center" style={{ background: bg }}>
               <BookOpen size={32} style={{ color }} className="opacity-50" />
             </div>

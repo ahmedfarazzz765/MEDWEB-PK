@@ -6,6 +6,7 @@ import { ArrowLeft, User, Calendar } from 'lucide-react'
 import { blogService } from '../firebase/services'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
+import CoverImage from '../components/CoverImage'
 
 export default function BlogPostPage() {
   const { slug } = useParams()
@@ -77,7 +78,7 @@ export default function BlogPostPage() {
         >
           {post.imageUrl && (
             <div className="w-full h-56 sm:h-80 overflow-hidden">
-              <img src={post.imageUrl} alt={post.title} className="w-full h-full object-cover" onError={e => { e.target.style.display = 'none' }} />
+              <CoverImage src={post.imageUrl} alt={post.title} className="w-full h-full" onError={e => { e.target.style.display = 'none' }} />
             </div>
           )}
 

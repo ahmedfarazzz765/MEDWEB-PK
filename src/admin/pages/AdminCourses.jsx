@@ -8,6 +8,7 @@ import FormField, { inputCls } from '../components/FormField'
 import ImageUpload from '../components/ImageUpload'
 import AdminButton from '../components/AdminButton'
 import ActionButtons from '../components/ActionButtons'
+import CoverImage from '../../components/CoverImage'
 import { coursesService } from '../../firebase/services'
 
 const emptyForm = () => ({
@@ -20,7 +21,7 @@ const emptyForm = () => ({
 
 function makeColumns(openEdit, handleDelete) {
   return [
-    { key: 'imageUrl',   label: '',          render: v => v ? <img src={v} className="w-8 h-8 rounded-lg object-cover" /> : <div className="w-8 h-8 rounded-lg bg-blue-50" /> },
+    { key: 'imageUrl',   label: '',          render: v => v ? <CoverImage src={v} className="w-8 h-8 rounded-lg" /> : <div className="w-8 h-8 rounded-lg bg-blue-50" /> },
     { key: 'title',      label: 'Title',     render: v => <span className="font-semibold text-[#1a1a1a]">{v}</span> },
     { key: 'instructor', label: 'Instructor',render: v => <span className="text-gray-500 text-xs">{v}</span> },
     { key: 'type',       label: 'Type',      render: v => <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: v === 'Free' ? '#dcfce7' : '#dbeafe', color: v === 'Free' ? '#16a34a' : '#1655c3' }}>{v}</span> },
@@ -114,7 +115,7 @@ export default function AdminCourses() {
             <div key={c.id || i} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow">
               <div className="flex items-start gap-3 mb-3">
                 {c.imageUrl
-                  ? <img src={c.imageUrl} className="w-12 h-12 rounded-xl object-cover shrink-0" />
+                  ? <CoverImage src={c.imageUrl} className="w-12 h-12 rounded-xl shrink-0" />
                   : <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-black text-base shrink-0" style={{ background: col }}>{c.title?.charAt(0)}</div>
                 }
                 <div className="flex-1 min-w-0">

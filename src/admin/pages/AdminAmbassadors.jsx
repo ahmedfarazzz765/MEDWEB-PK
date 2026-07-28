@@ -8,6 +8,7 @@ import ImageUpload from '../components/ImageUpload'
 import AdminButton from '../components/AdminButton'
 import ActionButtons from '../components/ActionButtons'
 import AmbassadorLetterSettings from '../components/AmbassadorLetterSettings'
+import CoverImage from '../../components/CoverImage'
 import { ambassadorsService, settingsService, formsService, studentsDbService } from '../../firebase/services'
 import {
   sendAmbassadorWelcomeEmail, sendAmbassadorPointsUpdateEmail,
@@ -96,7 +97,7 @@ function StarPicker({ value, onChange }) {
 
 function makeColumns(openEdit, handleDelete) {
   return [
-    { key: 'imageUrl',   label: '',           render: v => v ? <img src={v} className="w-8 h-8 rounded-full object-cover" /> : <div className="w-8 h-8 rounded-full bg-blue-50" /> },
+    { key: 'imageUrl',   label: '',           render: v => v ? <CoverImage src={v} bias="center 25%" className="w-8 h-8 rounded-full" /> : <div className="w-8 h-8 rounded-full bg-blue-50" /> },
     { key: 'name',       label: 'Name',        render: v => <span className="font-semibold text-[#1a1a1a]">{v}</span> },
     { key: 'university', label: 'University',  render: v => <span className="text-gray-500 text-xs">{v}</span> },
     { key: 'city',       label: 'City' },

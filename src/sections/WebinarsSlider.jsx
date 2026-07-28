@@ -8,6 +8,7 @@ import InfiniteMarquee from '../components/InfiniteMarquee'
 import CardRowSkeleton from '../components/CardRowSkeleton'
 import SectionEmptyState from '../components/SectionEmptyState'
 import BrandWatermark from '../components/BrandWatermark'
+import CoverImage from '../components/CoverImage'
 
 const HEADING_DEFAULTS = {
   webinarsHeading1: 'Upcoming',
@@ -68,7 +69,7 @@ export function WebinarCard({ webinar, onRegister }) {
       {/* WEBINAR POSTER (top) — fixed height keeps every card identical */}
       <div className="relative w-full aspect-video bg-gray-100 overflow-hidden">
         {poster ? (
-          <img src={poster} alt={webinar.topic || webinar.title} className={`w-full h-full object-cover ${isCompleted ? 'grayscale-[30%]' : ''}`}
+          <CoverImage src={poster} alt={webinar.topic || webinar.title} className={`w-full h-full ${isCompleted ? 'grayscale-[30%]' : ''}`}
             onError={e => { e.target.style.display = 'none' }} />
         ) : (
           <div className="w-full h-full flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${color}22, ${color}11)` }}>
@@ -105,7 +106,7 @@ export function WebinarCard({ webinar, onRegister }) {
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-white shadow-sm" style={{ background: '#eef2f7' }}>
             {webinar.speakerImage
-              ? <img src={webinar.speakerImage} alt={webinar.speaker} className="w-full h-full object-cover" onError={e => { e.target.replaceWith(Object.assign(document.createElement('div'),{className:'w-full h-full'})); }} />
+              ? <CoverImage src={webinar.speakerImage} alt={webinar.speaker} bias="center 25%" className="w-full h-full" onError={e => { e.target.replaceWith(Object.assign(document.createElement('div'),{className:'w-full h-full'})); }} />
               : <Initials name={webinar.speaker} />}
           </div>
           <div className="flex-1 min-w-0">

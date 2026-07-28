@@ -5,6 +5,7 @@ import { ArrowLeft, ExternalLink, Star, Users, PlayCircle, Clock, ListChecks } f
 import { coursesService } from '../firebase/services'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
+import CoverImage from '../components/CoverImage'
 
 export default function CourseDetailPage() {
   const { id } = useParams()
@@ -87,7 +88,7 @@ export default function CourseDetailPage() {
         >
           {poster && (
             <div className="w-full h-56 sm:h-72 overflow-hidden">
-              <img src={poster} alt={course.title} className="w-full h-full object-cover" onError={e => { e.target.style.display = 'none' }} />
+              <CoverImage src={poster} alt={course.title} className="w-full h-full" onError={e => { e.target.style.display = 'none' }} />
             </div>
           )}
 
@@ -96,7 +97,7 @@ export default function CourseDetailPage() {
               <div className="flex items-center gap-4 p-4 rounded-2xl border border-gray-100 bg-gray-50">
                 <div className="w-14 h-14 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-white shadow-sm bg-[#1655c3]">
                   {course.instructorImage
-                    ? <img src={course.instructorImage} alt={course.instructor} className="w-full h-full object-cover" />
+                    ? <CoverImage src={course.instructorImage} alt={course.instructor} bias="center 25%" className="w-full h-full" />
                     : <div className="w-full h-full flex items-center justify-center text-white font-bold text-base">{instructorInitials}</div>}
                 </div>
                 <div className="min-w-0">

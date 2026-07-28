@@ -7,6 +7,7 @@ import FormField, { inputCls } from '../components/FormField'
 import ImageUpload from '../components/ImageUpload'
 import AdminButton from '../components/AdminButton'
 import ActionButtons from '../components/ActionButtons'
+import CoverImage from '../../components/CoverImage'
 import { advisoryService } from '../../firebase/services'
 
 const emptyForm = () => ({ name: '', role: '', qualification: '', status: 'Active', imageUrl: '' })
@@ -14,7 +15,7 @@ const colors    = ['#1655c3','#64ac37','#2563eb','#16a34a','#0ea5e9','#7c3aed']
 
 function makeColumns(openEdit, handleDelete) {
   return [
-    { key: 'imageUrl',      label: '',              render: v => v ? <img src={v} className="w-9 h-9 rounded-xl object-cover" /> : <div className="w-9 h-9 rounded-xl bg-blue-50" /> },
+    { key: 'imageUrl',      label: '',              render: v => v ? <CoverImage src={v} bias="center 25%" className="w-9 h-9 rounded-xl" /> : <div className="w-9 h-9 rounded-xl bg-blue-50" /> },
     { key: 'name',          label: 'Name',           render: v => <span className="font-semibold text-[#1a1a1a]">{v}</span> },
     { key: 'role',          label: 'Role',           render: v => <span className="text-gray-500 text-xs">{v}</span> },
     { key: 'qualification', label: 'Qualification',  render: v => <span className="text-[#1655c3] text-xs">{v}</span> },
@@ -79,7 +80,7 @@ export default function AdminAdvisoryBoard() {
           return (
             <div key={m.id || i} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex items-center gap-4 hover:shadow-md transition-shadow">
               {m.imageUrl
-                ? <img src={m.imageUrl} className="w-12 h-12 rounded-2xl object-cover shrink-0" />
+                ? <CoverImage src={m.imageUrl} bias="center 25%" className="w-12 h-12 rounded-2xl shrink-0" />
                 : <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-black text-base shrink-0" style={{ background: col }}>
                     {m.name?.split(' ').map(n => n[0]).slice(0, 2).join('')}
                   </div>

@@ -8,6 +8,7 @@ import ImageUpload from '../components/ImageUpload'
 import AdminButton from '../components/AdminButton'
 import ActionButtons from '../components/ActionButtons'
 import CertPositionEditor from '../components/CertPositionEditor'
+import CoverImage from '../../components/CoverImage'
 import { webinarsService, formsService, settingsService, ensureDefaultWebinarForm } from '../../firebase/services'
 
 const emptyForm = () => ({
@@ -23,7 +24,7 @@ const emptyForm = () => ({
 function makeColumns(openEdit, handleDelete) {
   return [
     { key: 'webinarImage', label: '', render: (v, row) => (
-      v ? <img src={v} alt="" className="w-10 h-10 rounded-lg object-cover" />
+      v ? <CoverImage src={v} alt="" className="w-10 h-10 rounded-lg" />
         : <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center"><Video size={14} className="text-gray-300" /></div>
     )},
     { key: 'topic',      label: 'Topic',      render: v => <span className="font-semibold text-[#1a1a1a] text-xs max-w-[180px] block truncate">{v}</span> },

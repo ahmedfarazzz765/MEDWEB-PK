@@ -7,6 +7,7 @@ import FormField, { inputCls } from '../components/FormField'
 import ImageUpload from '../components/ImageUpload'
 import AdminButton from '../components/AdminButton'
 import ActionButtons from '../components/ActionButtons'
+import CoverImage from '../../components/CoverImage'
 import { teamService, teamCategoriesService } from '../../firebase/services'
 import { DEFAULT_TEAM_CATEGORIES } from '../../constants/teamCategories'
 
@@ -45,7 +46,7 @@ function makeMemberColumns(openEdit, handleDelete) {
     {
       key: 'imageUrl',
       label: '',
-      render: v => v ? <img src={v} className="w-9 h-9 rounded-xl object-cover" /> : <div className="w-9 h-9 rounded-xl bg-blue-50" />
+      render: v => v ? <CoverImage src={v} bias="center 25%" className="w-9 h-9 rounded-xl" /> : <div className="w-9 h-9 rounded-xl bg-blue-50" />
     },
     {
       key: 'name',
@@ -146,7 +147,12 @@ export default function AdminTeam() {
     const missing = DEFAULT_TEAM_CATEGORIES.filter(tpl => !existingNames.has(tpl.name.toLowerCase()))
     missing.forEach(tpl => {
       const { label1, label2, icon, ...catData } = tpl
-      teamCategoriesService.add(catData).catch(() => {})
+      // Was a silent .catch(() => {}) — a Firestore permission-denied error
+      // here (missing rule for teamCategories) failed dead silently, so the
+      // seed never visibly landed and this ran again every reload with no
+      // way to tell why. Logged now so a rules problem shows up in the
+      // console instead of just... nothing happening.
+      teamCategoriesService.add(catData).catch(e => console.error('teamCategories seed failed — likely a Firestore rules issue:', e))
     })
   }, [catsLoaded, dbCategories])
 
@@ -371,7 +377,7 @@ export default function AdminTeam() {
               return (
                 <div key={m.id || i} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex items-center gap-4 hover:shadow-md transition-shadow relative overflow-hidden">
                   {m.imageUrl ? (
-                    <img src={m.imageUrl} className="w-12 h-12 rounded-2xl object-cover shrink-0" />
+                    <CoverImage src={m.imageUrl} bias="center 25%" className="w-12 h-12 rounded-2xl shrink-0" />
                   ) : (
                     <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-black text-base shrink-0" style={{ background: col }}>
                       {m.name?.split(' ').map(n => n[0]).slice(0, 2).join('')}
@@ -421,7 +427,7 @@ export default function AdminTeam() {
                   {/* Thumbnail Image Header */}
                   <div className="relative aspect-video bg-gray-100">
                     {cat.imageUrl ? (
-                      <img src={cat.imageUrl} alt={cat.name} className="w-full h-full object-cover" />
+                      <CoverImage src={cat.imageUrl} alt={cat.name} className="w-full h-full" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-gray-300">
                         <ImageIcon size={32} />

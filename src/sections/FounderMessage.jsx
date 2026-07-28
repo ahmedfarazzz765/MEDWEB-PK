@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { Quote, ArrowRight } from 'lucide-react'
 import { settingsService } from '../firebase/services'
 import BrandWatermark from '../components/BrandWatermark'
+import CoverImage from '../components/CoverImage'
 import founderFallback from '../assets/founder_pic.png'
 
 const DEFAULTS = {
@@ -120,10 +121,11 @@ export default function FounderMessage() {
           </div>
 
           <div className="relative overflow-hidden">
-            <img
+            <CoverImage
               src={img}
               alt={d.founderName}
-              className="absolute inset-0 w-full h-full object-cover object-top photo-fade-bottom"
+              bias="top"
+              className="absolute inset-0 w-full h-full photo-fade-bottom"
               onError={e => { e.target.src = founderFallback }}
             />
             {/* Blends the photo's left edge into the panel — no visible seam */}

@@ -7,6 +7,7 @@ import InfiniteMarquee from '../components/InfiniteMarquee'
 import CardRowSkeleton from '../components/CardRowSkeleton'
 import BrandWatermark from '../components/BrandWatermark'
 import Skeleton from '../components/Skeleton'
+import CoverImage from '../components/CoverImage'
 
 function pointsToStars(points) {
   const p = Number(points) || 0
@@ -35,7 +36,7 @@ export function AmbassadorCard({ a }) {
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-lg transition-all duration-300 p-6 pb-8 flex flex-col items-center text-center h-full">
       {showImage
-        ? <img src={a.imageUrl} className="w-20 h-20 rounded-full object-cover ring-4 ring-white shadow-md" alt={a.name} onError={() => setImgError(true)} />
+        ? <CoverImage src={a.imageUrl} bias="center 25%" className="w-20 h-20 rounded-full ring-4 ring-white shadow-md" alt={a.name} onError={() => setImgError(true)} />
         : <div className="w-20 h-20 rounded-full bg-[#1655c3] flex items-center justify-center text-white font-bold text-2xl ring-4 ring-white shadow-md">{a.name?.charAt(0)}</div>
       }
       <h3 className="mt-4 text-sm font-bold text-[#1a1a1a]">{a.name}</h3>

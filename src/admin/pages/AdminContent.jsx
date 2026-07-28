@@ -6,6 +6,7 @@ import {
 import FormField, { inputCls } from '../components/FormField'
 import ImageUpload from '../components/ImageUpload'
 import AdminButton from '../components/AdminButton'
+import CoverImage from '../../components/CoverImage'
 import { settingsService } from '../../firebase/services'
 
 // Matches what's actually live on the homepage today (verified against the
@@ -419,7 +420,7 @@ export default function AdminContent({ initialTab }) {
                         homepage card falls back to. */}
                     <div className="w-14 h-14 rounded-lg overflow-hidden flex items-center justify-center shrink-0 border border-gray-200 bg-white">
                       {c.image
-                        ? <img src={c.image} alt="" className="w-full h-full object-cover" />
+                        ? <CoverImage src={c.image} alt="" className="w-full h-full" />
                         : <CardIcon size={22} className="text-gray-300" />}
                     </div>
                     <div className="flex-1">

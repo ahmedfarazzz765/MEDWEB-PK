@@ -7,6 +7,7 @@ import SectionHeading from '../components/SectionHeading'
 import InfiniteMarquee from '../components/InfiniteMarquee'
 import CardRowSkeleton from '../components/CardRowSkeleton'
 import BrandWatermark from '../components/BrandWatermark'
+import CoverImage from '../components/CoverImage'
 
 const HEADING_DEFAULTS = {
   advisoryHeading1: 'Advisory',
@@ -30,10 +31,11 @@ export function AdvisorCard({ member }) {
     <div className="flex flex-col items-center text-center bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden">
       <div className="w-full aspect-square overflow-hidden">
         {showImage
-          ? <img
+          ? <CoverImage
               src={member.imageUrl}
               alt={member.name}
-              className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+              bias="center 25%"
+              className="w-full h-full hover:scale-105 transition-transform duration-300"
               onError={() => setImgError(true)}
             />
           : <Initials name={member.name} />}

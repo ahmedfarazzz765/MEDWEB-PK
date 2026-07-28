@@ -7,6 +7,7 @@ import InfiniteMarquee from '../components/InfiniteMarquee'
 import BrandWatermark from '../components/BrandWatermark'
 import Skeleton from '../components/Skeleton'
 import SectionEmptyState from '../components/SectionEmptyState'
+import CoverImage from '../components/CoverImage'
 
 const HEADING_DEFAULTS = {
   testimonialsHeading1: 'What Our Students',
@@ -48,7 +49,7 @@ function ReviewCard({ t }) {
       <p className="text-gray-600 text-sm leading-relaxed mb-5 italic">"{t.text}"</p>
       <div className="flex items-center gap-3 pt-4 border-t border-gray-100">
         {t.img || t.imageUrl
-          ? <img src={t.img || t.imageUrl} alt={t.name} className="w-10 h-10 rounded-full object-cover ring-2 ring-blue-100 flex-shrink-0" />
+          ? <CoverImage src={t.img || t.imageUrl} alt={t.name} bias="center 25%" className="w-10 h-10 rounded-full ring-2 ring-blue-100 flex-shrink-0" />
           : <div className="w-10 h-10 rounded-full bg-[#1655c3] flex items-center justify-center text-white font-bold text-sm flex-shrink-0">{t.name?.charAt(0)}</div>
         }
         <div className="min-w-0 flex-1">

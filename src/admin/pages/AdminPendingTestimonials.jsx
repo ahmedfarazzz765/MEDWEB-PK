@@ -5,6 +5,7 @@ import AdminButton from '../components/AdminButton'
 import FormField, { inputCls } from '../components/FormField'
 import { pendingTestimonialsService, testimonialsService } from '../../firebase/services'
 import { fetchYouTubeReviews } from '../lib/reviewFetchers'
+import CoverImage from '../../components/CoverImage'
 
 function StarPicker({ value, onChange }) {
   return (
@@ -98,7 +99,7 @@ function PendingCard({ item, onApprove, onReject, busy }) {
 
       <div className="flex items-center gap-3">
         {item.img ? (
-          <img src={item.img} alt="" className={isGoogle ? 'w-11 h-11 rounded-full object-cover shrink-0' : 'w-16 h-11 rounded-lg object-cover shrink-0'} />
+          <CoverImage src={item.img} alt="" bias={isGoogle ? 'center 25%' : 'center'} className={isGoogle ? 'w-11 h-11 rounded-full shrink-0' : 'w-16 h-11 rounded-lg shrink-0'} />
         ) : (
           <div className="w-11 h-11 rounded-full bg-blue-50 text-[#1655c3] flex items-center justify-center text-sm font-bold shrink-0">{(item.name || '?')[0]}</div>
         )}
