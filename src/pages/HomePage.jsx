@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom'
 import LaunchIntro from '../components/LaunchIntro'
 import WelcomeBar from '../sections/WelcomeBar'
 import Navbar from '../components/Navbar'
+import AnnouncementBanner from '../sections/AnnouncementBanner'
 import Hero from '../sections/Hero'
 import TrustedPartners from '../sections/TrustedPartners'
 import Stats from '../sections/Stats'
@@ -70,6 +71,7 @@ export default function HomePage() {
       {showIntro && <LaunchIntro onDone={() => setShowIntro(false)} />}
       {v.welcomeBar && <WelcomeBar />}
       <Navbar />
+      <AnnouncementBanner />
       {v.hero && <Hero />}
       {v.trustedPartners && <TrustedPartners />}
       {v.stats && <Stats />}

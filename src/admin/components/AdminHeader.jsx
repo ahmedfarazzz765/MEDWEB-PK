@@ -3,6 +3,7 @@ import { Bell, Search } from 'lucide-react'
 const pageTitles = {
   dashboard:    { title: 'Dashboard',       sub: 'Welcome back, Admin' },
   sections:     { title: 'Homepage Sections', sub: 'Show or hide sections on the live site' },
+  announcements:{ title: 'Announcements',    sub: 'Manage the homepage promo banner' },
   students:     { title: 'Students',        sub: 'Manage all enrolled students' },
   webinars:     { title: 'Webinars',        sub: 'Manage live sessions & registrations' },
   courses:      { title: 'Courses',         sub: 'Manage all programs & content' },

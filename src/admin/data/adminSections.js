@@ -8,6 +8,7 @@
 // signed-in admin can always see it, it's not a grantable section.
 export const ADMIN_SECTIONS = [
   { key: 'sections',            label: 'Homepage Sections',       group: 'Content' },
+  { key: 'announcements',       label: 'Announcements',           group: 'Content' },
   { key: 'content:hero',        label: 'Hero',                     group: 'Content' },
   { key: 'content:founder',     label: 'Founder Message',          group: 'Content' },
   { key: 'content:why',         label: 'Why MEDWEB',               group: 'Content' },

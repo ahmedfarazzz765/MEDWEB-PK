@@ -27,6 +27,7 @@ const GROUPS = [
     accent: '#6ee7b7',
     items: [
       { id: 'sections', label: 'Homepage Sections',      icon: ToggleRight },
+      { id: 'announcements', label: 'Announcements',     icon: Megaphone },
       { id: 'content',  label: 'Hero',                    icon: Image,       tab: 'hero' },
       { id: 'content',  label: 'Founder Message',         icon: Quote,       tab: 'founder' },
       { id: 'content',  label: 'Why MEDWEB',              icon: Sparkles,    tab: 'why' },

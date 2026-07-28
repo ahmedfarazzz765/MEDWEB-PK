@@ -188,6 +188,32 @@ export const ambassadorsService = {
   ),
 }
 
+// ─── ANNOUNCEMENTS (general-purpose homepage promo banner) ───────────────────
+// Separate from the existing webinar-specific announcement popup
+// (WebinarAnnouncementPopup.jsx / webinarsService) — this is for ANY
+// event/course/conference, including links out to entirely separate
+// external sites. `order` uses the same manual-reorder pattern as Courses/
+// Team/Ambassadors (see applyManualOrder/reorderCollection above).
+const ANNOUNCEMENTS_COL = 'announcements'
+
+export const announcementsService = {
+  getAll: () => getAll(ANNOUNCEMENTS_COL, orderBy('createdAt', 'desc')).then(applyManualOrder),
+  getOne: id => getOne(ANNOUNCEMENTS_COL, id),
+  getBySlug: async slug => {
+    const rows = await getAll(ANNOUNCEMENTS_COL, where('slug', '==', slug), limit(1))
+    return rows[0] || null
+  },
+  add: data => add(ANNOUNCEMENTS_COL, data),
+  update: (id, data) => update(ANNOUNCEMENTS_COL, id, data),
+  delete: id => remove(ANNOUNCEMENTS_COL, id),
+  reorder: items => reorderCollection(ANNOUNCEMENTS_COL, items),
+  listen: cb => onSnapshot(
+    query(col(ANNOUNCEMENTS_COL), orderBy('createdAt', 'desc')),
+    snap => cb(applyManualOrder(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
+    err => console.error("Firebase listen error:", err)
+  ),
+}
+
 // ─── STUDENT DATABASE (aggregated, deduped-by-email) ─────────────────────────
 // One doc per unique email, doc ID = the email itself (URL-encoded so it's a
 // valid Firestore doc ID). Fed from 3 places only — webinar registrations,
