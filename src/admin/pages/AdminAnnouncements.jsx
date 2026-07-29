@@ -9,6 +9,7 @@ import AdminButton from '../components/AdminButton'
 import ActionButtons from '../components/ActionButtons'
 import CoverImage from '../../components/CoverImage'
 import SortableGrid, { SortableItem } from '../components/SortableGrid'
+import TagInput from '../components/TagInput'
 import { announcementsService } from '../../firebase/services'
 import { isAnnouncementActive } from '../../lib/announcements'
 
@@ -27,7 +28,7 @@ function uniqueSlug(base, existingSlugs) {
 const emptyForm = () => ({
   title: '', shortDescription: '', content: '', imageUrl: '',
   linkType: 'internal', externalUrl: '', slug: '', ctaLabel: 'Learn More',
-  enabled: true, autoHideDate: '',
+  enabled: true, autoHideDate: '', highlights: [],
 })
 
 export default function AdminAnnouncements() {
@@ -68,6 +69,7 @@ export default function AdminAnnouncements() {
       imageUrl: row.imageUrl || '', linkType: row.linkType || 'internal', externalUrl: row.externalUrl || '',
       slug: row.slug || '', ctaLabel: row.ctaLabel || 'Learn More',
       enabled: row.enabled !== false, autoHideDate: row.autoHideDate || '',
+      highlights: Array.isArray(row.highlights) ? row.highlights : [],
     })
     setEditId(row.id); setModal('edit')
   }
@@ -189,6 +191,13 @@ export default function AdminAnnouncements() {
             <FormField label="Short Description (shown on the homepage banner)">
               <textarea className={`${inputCls} resize-none`} rows={2} value={form.shortDescription} onChange={set('shortDescription')} placeholder="One or two lines that grab attention…" />
             </FormField>
+
+            <TagInput
+              value={form.highlights}
+              onChange={highlights => setForm(prev => ({ ...prev, highlights }))}
+              label="Highlight Badges (optional — shown as small chips on the banner)"
+              placeholder="e.g. 500+ Delegates — press Enter"
+            />
 
             <FormField label="Call-to-Action Button Text">
               <input className={inputCls} value={form.ctaLabel} onChange={set('ctaLabel')} placeholder="Learn More" />

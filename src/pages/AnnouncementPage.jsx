@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, CalendarClock } from 'lucide-react'
+import { ArrowLeft, CalendarClock, Sparkles } from 'lucide-react'
 import { announcementsService } from '../firebase/services'
 import { isAnnouncementActive } from '../lib/announcements'
 import Navbar from '../components/Navbar'
@@ -82,7 +82,16 @@ export default function AnnouncementPage() {
 
           <div className="p-6 sm:p-10">
             {item.shortDescription && (
-              <p className="text-gray-500 text-base sm:text-lg mb-6 font-medium">{item.shortDescription}</p>
+              <p className="text-gray-500 text-base sm:text-lg mb-4 font-medium">{item.shortDescription}</p>
+            )}
+            {Array.isArray(item.highlights) && item.highlights.filter(Boolean).length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-6">
+                {item.highlights.filter(Boolean).map((h, i) => (
+                  <span key={i} className="inline-flex items-center gap-1.5 text-xs font-bold text-[#1655c3] bg-blue-50 px-3 py-1.5 rounded-full">
+                    <Sparkles size={12} className="text-[#64ac37]" /> {h}
+                  </span>
+                ))}
+              </div>
             )}
             <div className="text-gray-700 text-[15px] sm:text-base leading-[1.85] whitespace-pre-line">
               {item.content}

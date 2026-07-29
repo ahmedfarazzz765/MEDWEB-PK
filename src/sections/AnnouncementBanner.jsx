@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowRight, ExternalLink, Megaphone, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ArrowRight, ExternalLink, Megaphone, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react'
 import { announcementsService } from '../firebase/services'
 import { isAnnouncementActive } from '../lib/announcements'
 import CoverImage from '../components/CoverImage'
@@ -38,6 +38,7 @@ export default function AnnouncementBanner() {
   if (!items || items.length === 0) return null
 
   const current = items[index % items.length]
+  const highlights = Array.isArray(current.highlights) ? current.highlights.filter(Boolean).slice(0, 4) : []
 
   const handleActivate = a => {
     if (a.linkType === 'external' && a.externalUrl) {
@@ -53,22 +54,30 @@ export default function AnnouncementBanner() {
         <motion.div
           className="relative rounded-2xl sm:rounded-3xl p-[2px] overflow-hidden"
           style={{ background: 'linear-gradient(135deg, #64ac37, #1655c3, #64ac37)', backgroundSize: '200% 200%' }}
-          initial={{ opacity: 0, y: -16 }}
-          animate={{ opacity: 1, y: 0, backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
-          transition={{ opacity: { duration: 0.6 }, y: { duration: 0.6 }, backgroundPosition: { duration: 8, repeat: Infinity, ease: 'linear' } }}
+          initial={{ opacity: 0, scale: 0.96 }}
+          animate={{ opacity: 1, scale: 1, backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
+          transition={{ opacity: { duration: 0.6 }, scale: { duration: 0.6, ease: 'easeOut' }, backgroundPosition: { duration: 8, repeat: Infinity, ease: 'linear' } }}
         >
-          <div className="relative rounded-[calc(1rem-2px)] sm:rounded-[calc(1.5rem-2px)] overflow-hidden bg-white">
+          {/* Soft outer glow pulse — reinforces "urgent" without being noisy */}
+          <motion.div
+            className="absolute -inset-3 rounded-[2rem] pointer-events-none -z-10"
+            style={{ background: 'radial-gradient(ellipse at center, rgba(22,85,195,0.35), transparent 70%)' }}
+            animate={{ opacity: [0.5, 0.9, 0.5] }}
+            transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
+          />
+
+          <div className="relative rounded-[calc(1rem-2px)] sm:rounded-[calc(1.5rem-2px)] overflow-hidden">
             <AnimatePresence mode="wait">
               <motion.button
                 key={current.id}
                 onClick={() => handleActivate(current)}
                 className="flex flex-col sm:flex-row items-stretch w-full text-left group"
-                initial={{ opacity: 0, x: 24 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -24 }}
-                transition={{ duration: 0.45 }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.5, ease: 'easeInOut' }}
               >
-                {/* Banner image */}
+                {/* Banner image — left side, unchanged */}
                 <div className="relative w-full sm:w-64 md:w-80 h-40 sm:h-auto shrink-0 overflow-hidden" style={{ background: 'linear-gradient(135deg,#eff6ff,#f0fdf4)' }}>
                   {current.imageUrl ? (
                     <CoverImage src={current.imageUrl} alt={current.title} className="w-full h-full group-hover:scale-105 transition-transform duration-500" />
@@ -82,26 +91,74 @@ export default function AnnouncementBanner() {
                   </span>
                 </div>
 
-                {/* Copy */}
-                <div className="flex-1 min-w-0 p-5 sm:p-6 flex flex-col justify-center gap-2">
-                  <h3 className="font-black text-lg sm:text-xl text-[#0f172a] leading-snug group-hover:text-[#1655c3] transition-colors">
-                    {current.title}
-                  </h3>
-                  {current.shortDescription && (
-                    <p className="text-gray-500 text-sm leading-relaxed line-clamp-2">{current.shortDescription}</p>
-                  )}
-                  <span
-                    className="inline-flex items-center gap-1.5 mt-2 text-sm font-bold text-white w-fit px-4 py-2 rounded-full shadow-sm group-hover:shadow-md group-hover:gap-2.5 transition-all"
-                    style={{ background: 'linear-gradient(135deg, #1655c3, #64ac37)' }}
-                  >
-                    {current.ctaLabel || 'Learn More'}
-                    {current.linkType === 'external' ? <ExternalLink size={14} /> : <ArrowRight size={14} />}
-                  </span>
+                {/* Copy — right side, redesigned: rich brand-gradient background,
+                    animated glow blob, description, highlight chips, prominent CTA */}
+                <div
+                  className="relative flex-1 min-w-0 p-5 sm:p-7 flex flex-col justify-center gap-3 overflow-hidden"
+                  style={{ background: 'linear-gradient(135deg, #0c1f45 0%, #123f8f 50%, #145a32 100%)' }}
+                >
+                  {/* Ambient animated glow blob for visual energy */}
+                  <motion.div
+                    className="absolute -top-10 -right-10 w-48 h-48 rounded-full pointer-events-none"
+                    style={{ background: 'radial-gradient(circle, rgba(100,172,55,0.45), transparent 70%)' }}
+                    animate={{ scale: [1, 1.25, 1], opacity: [0.6, 1, 0.6] }}
+                    transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+                  />
+
+                  <div className="relative z-10 flex flex-col gap-2.5">
+                    <h3 className="font-black text-xl sm:text-2xl text-white leading-snug">
+                      {current.title}
+                    </h3>
+
+                    {current.shortDescription && (
+                      <p className="text-white/80 text-sm sm:text-[15px] leading-relaxed line-clamp-3">{current.shortDescription}</p>
+                    )}
+
+                    {highlights.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-1">
+                        {highlights.map((h, i) => (
+                          <span
+                            key={i}
+                            className="inline-flex items-center gap-1.5 text-[11px] sm:text-xs font-bold text-white bg-white/10 border border-white/20 backdrop-blur-sm px-3 py-1.5 rounded-full"
+                          >
+                            <Sparkles size={11} className="text-[#7ee08a] shrink-0" />
+                            {h}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <motion.span
+                      className="inline-flex items-center gap-2 mt-3 text-sm sm:text-base font-black text-[#0c1f45] w-fit px-5 sm:px-6 py-3 rounded-full shadow-[0_6px_20px_rgba(0,0,0,0.25)] bg-white group-hover:gap-3 transition-all"
+                      animate={{ scale: [1, 1.035, 1] }}
+                      transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+                    >
+                      {current.ctaLabel || 'Learn More'}
+                      {current.linkType === 'external' ? <ExternalLink size={16} /> : <ArrowRight size={16} />}
+                    </motion.span>
+
+                    {/* Rotation indicators — sit under the CTA, in normal flow so they
+                        never overlap the poster image on the stacked mobile layout */}
+                    {items.length > 1 && (
+                      <div className="flex items-center gap-1.5 mt-1">
+                        {items.map((a, i) => (
+                          <button
+                            key={a.id}
+                            onClick={e => { e.stopPropagation(); setIndex(i) }}
+                            aria-label={`Show announcement ${i + 1}`}
+                            className="p-1"
+                          >
+                            <span className={`block rounded-full transition-all ${i === index ? 'w-5 h-1.5 bg-white' : 'w-1.5 h-1.5 bg-white/40'}`} />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </motion.button>
             </AnimatePresence>
 
-            {/* Carousel controls — only when more than one is active */}
+            {/* Prev/Next arrows — only when more than one is active */}
             {items.length > 1 && (
               <>
                 <button
@@ -118,19 +175,6 @@ export default function AnnouncementBanner() {
                 >
                   <ChevronRight size={16} />
                 </button>
-
-                <div className="flex items-center justify-center gap-1.5 pb-3">
-                  {items.map((a, i) => (
-                    <button
-                      key={a.id}
-                      onClick={() => setIndex(i)}
-                      aria-label={`Show announcement ${i + 1}`}
-                      className="p-1"
-                    >
-                      <span className={`block rounded-full transition-all ${i === index ? 'w-5 h-1.5 bg-[#1655c3]' : 'w-1.5 h-1.5 bg-gray-300'}`} />
-                    </button>
-                  ))}
-                </div>
               </>
             )}
           </div>
