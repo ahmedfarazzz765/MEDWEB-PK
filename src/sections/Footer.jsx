@@ -23,6 +23,7 @@ const DEFAULTS = {
     { label: 'Advisory Board', url: '#advisory' },
     { label: 'Certificates', url: '#certificates' },
     { label: 'Blog', url: '#blog' },
+    { label: 'Announcements', url: '/announcements' },
     { label: 'Contact', url: '#contact' },
   ],
   footerPrograms: [

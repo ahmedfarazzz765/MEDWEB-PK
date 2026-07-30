@@ -8,6 +8,7 @@ import CourseDetailPage   from './pages/CourseDetailPage'
 import AmbassadorProfilePage from './pages/AmbassadorProfilePage'
 import BlogPostPage       from './pages/BlogPostPage'
 import AnnouncementPage   from './pages/AnnouncementPage'
+import AnnouncementsListPage from './pages/AnnouncementsListPage'
 import WebinarsListPage   from './pages/WebinarsListPage'
 import CoursesListPage    from './pages/CoursesListPage'
 import TeamListPage       from './pages/TeamListPage'
@@ -43,6 +44,7 @@ function App() {
         <Route path="/advisory-board"         element={<AdvisoryBoardListPage />} />
         <Route path="/blog"                   element={<BlogListPage />} />
         <Route path="/blog/:slug"             element={<BlogPostPage />} />
+        <Route path="/announcements"          element={<AnnouncementsListPage />} />
         <Route path="/announcements/:slug"    element={<AnnouncementPage />} />
         <Route path="/privacy-policy"         element={<PrivacyPolicyPage />} />
         <Route path="/terms-of-service"       element={<TermsOfServicePage />} />
