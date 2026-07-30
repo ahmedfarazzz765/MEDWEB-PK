@@ -99,6 +99,16 @@ function NewsletterForm() {
 
 export default function Footer() {
   const f = useSiteSettings(DEFAULTS)
+
+  // Guarantee the Announcements link always shows regardless of whatever
+  // quickLinks array is actually saved in Firestore — a site whose footer
+  // links were customized/saved before this feature existed has its own
+  // frozen array there that this code-level default can never reach on its
+  // own (same class of bug fixed for the Navbar's "Team" link earlier).
+  const rawQuickLinks = f.quickLinks || DEFAULTS.quickLinks
+  const quickLinks = rawQuickLinks.some(l => l.url === '/announcements')
+    ? rawQuickLinks
+    : [...rawQuickLinks, { label: 'Announcements', url: '/announcements' }]
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -165,7 +175,7 @@ export default function Footer() {
               <span className="w-6 h-0.5 bg-[#64ac37]" /> Quick Links
             </h4>
             <ul className="space-y-2.5">
-              {(f.quickLinks || DEFAULTS.quickLinks).map((link, i) => (
+              {quickLinks.map((link, i) => (
                 <li key={i}>
                   <a
                     href={link.url || '/'}

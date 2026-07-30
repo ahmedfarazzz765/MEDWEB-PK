@@ -10,6 +10,7 @@ const DEFAULT_LINKS = [
   { label: 'Courses', url: '#courses' },
   { label: 'Webinars', url: '#webinars' },
   { label: 'Blog', url: '#blog' },
+  { label: 'Announcements', url: '/announcements' },
   { label: 'Contact', url: '#contact' },
 ]
 const DEFAULT_PROGRAMS = ['Clinical Pharmacy Masterclass', 'Drug Therapy Series', '100 Vital Drugs', 'How to Treat Series', 'Ambassador Program', 'Certificate Verification']
