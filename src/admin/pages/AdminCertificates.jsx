@@ -4,12 +4,25 @@ import StatCard   from '../components/StatCard'
 import DataTable  from '../components/DataTable'
 import Modal      from '../components/Modal'
 import FormField, { inputCls } from '../components/FormField'
+import ImageUpload from '../components/ImageUpload'
+import CertPositionEditor from '../components/CertPositionEditor'
 import CertificateTemplate, { TEMPLATES } from '../../components/CertificateTemplate'
 import AdminButton from '../components/AdminButton'
 import ResponsesModal from '../components/ResponsesModal'
 import { certificatesService, webinarsService, coursesService, formsService } from '../../firebase/services'
+import { issueManualCertificate } from '../../lib/certificateGenerator'
 
 const genCode = () => `CERT-MW-${new Date().getFullYear()}-${Math.random().toString(36).substring(2,7).toUpperCase()}`
+
+// Manual "Issue Certificate" — rebuilt to match the automatic
+// webinar-feedback flow exactly (template image + drag-to-position editor
+// + font picker, see CertPositionEditor), instead of the old
+// design-picker/signatory form below (kept only for editing legacy
+// records that don't have a certificateImageUrl).
+const emptyIssueForm = () => ({
+  imageUrl: '', namePos: null, idPos: null,
+  recipient: '', recipientEmail: '', description: '',
+})
 
 const emptyForm = () => ({
   certCode: genCode(),
@@ -60,10 +73,13 @@ export default function AdminCertificates() {
   const [forms,   setForms]   = useState([])
   const [subs,    setSubs]    = useState([])
   const [loading, setLoading] = useState(true)
-  const [modal,   setModal]   = useState(false)        // 'add' | 'edit'
+  const [modal,   setModal]   = useState(false)        // 'edit' only now — 'add' replaced by issueModal below
   const [form,    setForm]    = useState(emptyForm)
   const [editId,  setEditId]  = useState(null)
   const [saving,  setSaving]  = useState(false)
+  const [issueModal, setIssueModal] = useState(false)
+  const [issueForm,  setIssueForm]  = useState(emptyIssueForm)
+  const [issueSaving, setIssueSaving] = useState(false)
   const [preview, setPreview] = useState(null)         // cert row for full preview modal
   const [viewSubCert, setViewSubCert] = useState(null) // cert row whose submission is being viewed
   const [verifyCode,   setVerifyCode]   = useState('')
@@ -90,10 +106,30 @@ export default function AdminCertificates() {
     return { sub, parentForm }
   })()
 
-  const openAdd  = () => { setForm(emptyForm()); setEditId(null); setModal('add') }
   const openEdit = row => { setForm({ ...emptyForm(), ...row }); setEditId(row.id); setModal('edit') }
   const closeModal = () => { setModal(false); setEditId(null) }
   const set = field => e => setForm(p => ({ ...p, [field]: e.target.value }))
+
+  // --- Manual "Issue Certificate" (rebuilt to match the automatic flow) ---
+  const openIssue  = () => { setIssueForm(emptyIssueForm()); setIssueModal(true) }
+  const closeIssue = () => setIssueModal(false)
+  const setIssueField = field => e => setIssueForm(p => ({ ...p, [field]: e.target.value }))
+
+  const handleIssueSave = async () => {
+    setIssueSaving(true)
+    try {
+      await issueManualCertificate({
+        templateUrl: issueForm.imageUrl,
+        namePos: issueForm.namePos,
+        idPos: issueForm.idPos,
+        recipientName: issueForm.recipient,
+        recipientEmail: issueForm.recipientEmail,
+        description: issueForm.description,
+      })
+      closeIssue()
+    } catch (e) { alert('Error: ' + e.message) }
+    finally { setIssueSaving(false) }
+  }
 
   // when admin links a webinar/course, auto-fill the title
   const onSourceChange = (type, id) => {
@@ -103,13 +139,15 @@ export default function AdminCertificates() {
     setForm(p => ({ ...p, sourceType: type, sourceId: id, title }))
   }
 
+  // Metadata-only edit for legacy (pre-image-template) certificate records —
+  // recompositing an already-issued image-based certificate isn't supported
+  // here; those are edited by revoking and issuing a new one.
   const handleSave = async () => {
     if (!form.recipient.trim()) { alert('Recipient name is required'); return }
     if (!form.title.trim())     { alert('Certificate title is required'); return }
     setSaving(true)
     try {
-      if (modal === 'add') await certificatesService.add(form)
-      else                 await certificatesService.update(editId, form)
+      await certificatesService.update(editId, form)
       closeModal()
     } catch (e) { alert('Error: ' + e.message) }
     finally { setSaving(false) }
@@ -146,7 +184,15 @@ export default function AdminCertificates() {
     { key: 'certCode', label: 'Certificate ID', render: v => <span className="font-mono text-xs text-[#1655c3] font-bold">{v}</span> },
     { key: 'recipient', label: 'Recipient', render: (v, row) => <span className="font-semibold text-[#1a1a1a]">{v || row.student}</span> },
     { key: 'title', label: 'For', render: (v, row) => <span className="text-xs text-gray-600 max-w-[180px] truncate block">{v || row.course}</span> },
-    { key: 'template', label: 'Design', render: v => <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-[#1655c3]">{TEMPLATES.find(t => t.id === v)?.name || 'Classic'}</span> },
+    { key: 'sourceType', label: 'Source', render: v => (
+      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${v === 'manual' ? 'bg-purple-50 text-purple-600' : v === 'webinar' ? 'bg-blue-50 text-[#1655c3]' : 'bg-gray-100 text-gray-500'}`}>
+        {v === 'manual' ? 'Manual' : v === 'webinar' ? 'Webinar' : v === 'course' ? 'Course' : '—'}
+      </span>
+    )},
+    { key: 'template', label: 'Design', render: (v, row) => row.certificateImageUrl
+      ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-50 text-[#64ac37]">Custom Template</span>
+      : <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-[#1655c3]">{TEMPLATES.find(t => t.id === v)?.name || 'Classic'}</span>
+    },
     { key: 'issued', label: 'Issued' },
     { key: 'verifications', label: 'Verified', render: v => <span className="font-bold text-[#1655c3]">{v || 0}×</span> },
     { key: 'status', label: 'Status', render: v => <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${v === 'Valid' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'}`}>{v}</span> },
@@ -209,12 +255,12 @@ export default function AdminCertificates() {
       </div>
 
       <DataTable title="All Certificates" columns={columns} data={data} searchKey="recipient" emptyMessage="No certificates yet — click Issue Certificate to create one"
-        actions={<AdminButton size="sm" onClick={openAdd}>+ Issue Certificate</AdminButton>}
+        actions={<AdminButton size="sm" onClick={openIssue}>+ Issue Certificate</AdminButton>}
       />
 
-      {/* ISSUE / EDIT MODAL with live preview */}
+      {/* EDIT MODAL (legacy design-picker records only) with live preview */}
       {modal && (
-        <Modal title={modal === 'add' ? 'Issue Certificate' : 'Edit Certificate'} onClose={closeModal} wide>
+        <Modal title="Edit Certificate" onClose={closeModal} wide>
           <div className="grid lg:grid-cols-2 gap-6">
             {/* LEFT — form */}
             <div className="space-y-4">
@@ -297,7 +343,7 @@ export default function AdminCertificates() {
               <div className="flex gap-3 pt-2">
                 <AdminButton variant="ghost" className="flex-1" onClick={closeModal}>Cancel</AdminButton>
                 <AdminButton variant="primary" className="flex-1" onClick={handleSave} disabled={saving}>
-                  {saving ? 'Saving…' : modal === 'add' ? 'Issue Certificate' : 'Save'}
+                  {saving ? 'Saving…' : 'Save'}
                 </AdminButton>
               </div>
             </div>
@@ -309,6 +355,63 @@ export default function AdminCertificates() {
                 <PreviewBox form={form} scale={0.42} />
               </div>
               <p className="text-[11px] text-gray-400 mt-2">The recipient can view & download this at <span className="font-mono">/certificate/{form.certCode}</span></p>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* MANUAL "ISSUE CERTIFICATE" MODAL — rebuilt to match the automatic
+          webinar-feedback flow exactly: template image upload + the same
+          drag-to-position editor (with its built-in font picker, including
+          Alex Brush) used in Admin > Webinars > Certificate Template. On
+          submit this calls issueManualCertificate() in
+          src/lib/certificateGenerator.js — the SAME composite/upload/
+          record/email pipeline the automatic flow uses, not a second
+          copy of it. */}
+      {issueModal && (
+        <Modal title="Issue Certificate" onClose={closeIssue} wide>
+          <div className="space-y-4">
+            <div className="rounded-xl border border-gray-200 p-4 space-y-3">
+              <p className="text-xs font-bold text-gray-600 uppercase tracking-wider">Certificate Template</p>
+              <ImageUpload
+                label="Certificate Template Image"
+                folder="medweb/certificates/templates"
+                value={issueForm.imageUrl}
+                onChange={v => setIssueForm(p => ({ ...p, imageUrl: v }))}
+              />
+              {issueForm.imageUrl && (
+                <CertPositionEditor
+                  imageUrl={issueForm.imageUrl}
+                  namePos={issueForm.namePos}
+                  idPos={issueForm.idPos}
+                  onChange={({ namePos, idPos }) => setIssueForm(p => ({ ...p, namePos, idPos }))}
+                />
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField label="Recipient Name">
+                <input className={inputCls} value={issueForm.recipient} onChange={setIssueField('recipient')} placeholder="Fatima Zahra" />
+              </FormField>
+              <FormField label="Recipient Email">
+                <input className={inputCls} type="email" value={issueForm.recipientEmail} onChange={setIssueField('recipientEmail')} placeholder="name@email.com" />
+              </FormField>
+            </div>
+
+            <FormField label="Description (the reason / course / achievement)">
+              <textarea rows={2} className={inputCls} value={issueForm.description} onChange={setIssueField('description')}
+                placeholder="e.g. For successfully completing the Clinical Pharmacy Masterclass" />
+            </FormField>
+
+            <p className="text-[11px] text-gray-400">
+              The Certificate ID is generated automatically (same MEDWEB-XXXXXXXXXX system used for auto-issued certificates), composited onto the template above, uploaded, and emailed to the recipient immediately on save.
+            </p>
+
+            <div className="flex gap-3 pt-2">
+              <AdminButton variant="ghost" className="flex-1" onClick={closeIssue}>Cancel</AdminButton>
+              <AdminButton variant="primary" className="flex-1" onClick={handleIssueSave} disabled={issueSaving || !issueForm.imageUrl}>
+                {issueSaving ? 'Generating & Emailing…' : 'Issue Certificate'}
+              </AdminButton>
             </div>
           </div>
         </Modal>

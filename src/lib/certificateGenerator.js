@@ -92,6 +92,61 @@ function canvasToCompressedBlob(canvas, targetBytes = 350 * 1024) {
 }
 
 /**
+ * Shared core: composite → compress → upload → save the certificates
+ * record → enrich the Student Database → email the recipient. Every
+ * certificate-issuing entry point in the app (the automatic
+ * webinar-feedback flow below, and the admin's manual "Issue Certificate"
+ * flow in AdminCertificates.jsx) funnels through this single
+ * implementation — nothing about the compositing/upload/email pipeline is
+ * duplicated between them, only how each entry point resolves its inputs
+ * and reports success/failure differs.
+ *
+ * Throws on failure (network, canvas, upload, etc.) — callers decide how
+ * to surface that: the webinar flow records it on the submission doc, the
+ * manual admin flow shows an alert.
+ */
+async function compositeAndIssueCertificate({
+  templateUrl, namePos, idPos, rawName, email, title, body, sourceType, extra,
+}) {
+  const studentName = toTitleCase(rawName)
+
+  const certCode = await certificatesService.generateUniqueCode()
+
+  const canvas = await compositeCertificateCanvas({
+    templateUrl, studentName, certCode, namePos, idPos,
+  })
+  const blob = await canvasToCompressedBlob(canvas)
+  const certificateImageUrl = await uploadToCloudinary(blob, 'medweb/certificates/generated')
+
+  // Field names match the schema the old Cloud Function wrote (and what
+  // the public Certificate Verification page / admin Certificates table
+  // already read), so nothing downstream needs to change.
+  await certificatesService.add({
+    certCode,
+    recipient: studentName,
+    recipientEmail: email,
+    title,
+    sourceType,
+    body,
+    issued: new Date().toISOString().split('T')[0],
+    studentName,
+    email,
+    certificateImageUrl,
+    issuedAt: new Date().toISOString(),
+    ...extra,
+  })
+
+  studentsDbService.upsertFromCertificate({
+    email, name: studentName, webinarId: extra?.webinarId, webinarTitle: title, certCode,
+    issuedAt: new Date().toISOString(),
+  }).catch(err => console.error('studentsDbService.upsertFromCertificate failed:', err))
+
+  const emailResult = await sendCertificateEmail({ name: studentName, email, certCode, webinarTitle: title, certificateImageUrl })
+
+  return { certCode, certificateImageUrl, studentName, emailResult }
+}
+
+/**
  * Silently does nothing if the webinar has no certTemplate configured.
  * Never throws into the caller — the feedback form's own success message
  * must not depend on this. Failures are recorded on the submission doc
@@ -110,53 +165,23 @@ export async function generateAndIssueCertificate({ submissionId, webinar, rawNa
     return
   }
 
-  const studentName = toTitleCase(rawName)
   const webinarTitle = webinar.topic || webinar.title || ''
 
   try {
-    const certCode = await certificatesService.generateUniqueCode()
-
-    const canvas = await compositeCertificateCanvas({
+    const { certCode, emailResult } = await compositeAndIssueCertificate({
       templateUrl: certTemplate.imageUrl,
-      studentName,
-      certCode,
       namePos: certTemplate.namePos,
       idPos: certTemplate.idPos,
-    })
-    const blob = await canvasToCompressedBlob(canvas)
-    const certificateImageUrl = await uploadToCloudinary(blob, 'medweb/certificates/generated')
-
-    // Field names match the schema the old Cloud Function wrote (and what
-    // the public Certificate Verification page / admin Certificates table
-    // already read), so nothing downstream needs to change. `submissionId`
-    // is new — it's what lets the admin Certificates view link back to the
-    // student's full feedback-form answers.
-    await certificatesService.add({
-      certCode,
-      recipient: studentName,
-      recipientEmail: email,
-      title: webinarTitle,
-      sourceType: 'webinar',
-      sourceId: webinar.id,
-      body: 'has successfully attended and submitted feedback for this webinar.',
-      issued: new Date().toISOString().split('T')[0],
-      studentName,
+      rawName,
       email,
-      webinarId: webinar.id,
-      webinarTitle,
-      certificateImageUrl,
-      issuedAt: new Date().toISOString(),
-      submissionId,
+      title: webinarTitle,
+      body: 'has successfully attended and submitted feedback for this webinar.',
+      sourceType: 'webinar',
+      extra: { sourceId: webinar.id, webinarId: webinar.id, webinarTitle, submissionId },
     })
 
     await markStatus({ certificateStatus: 'issued', certCode })
 
-    studentsDbService.upsertFromCertificate({
-      email, name: studentName, webinarId: webinar.id, webinarTitle, certCode,
-      issuedAt: new Date().toISOString(),
-    }).catch(err => console.error('studentsDbService.upsertFromCertificate failed:', err))
-
-    const emailResult = await sendCertificateEmail({ name: studentName, email, certCode, webinarTitle, certificateImageUrl })
     if (emailResult?.skipped) {
       // Not a failure — EmailJS just isn't configured/enabled yet. Distinct
       // status so this doesn't read the same as a real send failure, but
@@ -172,4 +197,33 @@ export async function generateAndIssueCertificate({ submissionId, webinar, rawNa
     console.error(`Certificate generation failed for submission ${submissionId}:`, err)
     await markStatus({ certificateStatus: 'failed', certificateError: err.message })
   }
+}
+
+/**
+ * Manual admin-issued certificate — Admin > Certificates > "Issue
+ * Certificate". Same compositing/upload/record/email pipeline as the
+ * automatic webinar-feedback flow above (via the shared
+ * compositeAndIssueCertificate core), just triggered directly from a form
+ * submit instead of a feedback-form event. Unlike the webinar flow, this
+ * throws on failure — there's no submission doc to silently record the
+ * error on, so the admin UI needs a real exception to show.
+ */
+export async function issueManualCertificate({ templateUrl, namePos, idPos, recipientName, recipientEmail, description }) {
+  if (!templateUrl) throw new Error('A certificate template image is required')
+  if (!recipientName?.trim()) throw new Error('Recipient name is required')
+  if (!recipientEmail?.trim()) throw new Error('Recipient email is required')
+
+  const body = description?.trim() || 'has demonstrated outstanding commitment to medical excellence.'
+
+  return compositeAndIssueCertificate({
+    templateUrl,
+    namePos,
+    idPos,
+    rawName: recipientName,
+    email: recipientEmail,
+    title: body,
+    body,
+    sourceType: 'manual',
+    extra: {},
+  })
 }
