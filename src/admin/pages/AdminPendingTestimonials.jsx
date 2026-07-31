@@ -3,7 +3,7 @@ import { Star, Youtube, MapPin, RefreshCw, Check, X, Inbox, Plus } from 'lucide-
 import StatCard from '../components/StatCard'
 import AdminButton from '../components/AdminButton'
 import FormField, { inputCls } from '../components/FormField'
-import { pendingTestimonialsService, testimonialsService } from '../../firebase/services'
+import { pendingTestimonialsService, testimonialsService, youtubeFetchStateService } from '../../firebase/services'
 import { fetchYouTubeReviews } from '../lib/reviewFetchers'
 import CoverImage from '../../components/CoverImage'
 
@@ -99,7 +99,7 @@ function PendingCard({ item, onApprove, onReject, busy }) {
 
       <div className="flex items-center gap-3">
         {item.img ? (
-          <CoverImage src={item.img} alt="" bias={isGoogle ? 'center 25%' : 'center'} className={isGoogle ? 'w-11 h-11 rounded-full shrink-0' : 'w-16 h-11 rounded-lg shrink-0'} />
+          <CoverImage src={item.img} alt="" bias="center 25%" className="w-11 h-11 rounded-full shrink-0" />
         ) : (
           <div className="w-11 h-11 rounded-full bg-blue-50 text-[#1655c3] flex items-center justify-center text-sm font-bold shrink-0">{(item.name || '?')[0]}</div>
         )}
@@ -115,7 +115,7 @@ function PendingCard({ item, onApprove, onReject, busy }) {
 
       {item.videoUrl && (
         <a href={item.videoUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] font-semibold text-[#1655c3] hover:underline">
-          Watch on YouTube →
+          View comment on YouTube →
         </a>
       )}
       {item.reviewLink && (
@@ -151,7 +151,7 @@ export default function AdminPendingTestimonials() {
 
   const pending = useMemo(() => data.filter(d => d.status === 'Pending'), [data])
   const googleCount = pending.filter(d => d.source === 'Google').length
-  const youtubeCount = pending.filter(d => d.source === 'YouTube').length
+  const youtubeCount = pending.filter(d => d.source === 'YouTube Comment').length
 
   const handleFetch = async () => {
     setFetching(true)
@@ -162,13 +162,15 @@ export default function AdminPendingTestimonials() {
     const errors = []
 
     try {
-      const videos = await fetchYouTubeReviews()
-      for (const v of videos) {
-        if (existingKeys.has(v.dedupeKey)) continue
-        await pendingTestimonialsService.add(v)
-        existingKeys.add(v.dedupeKey)
+      const fetchState = await youtubeFetchStateService.get().catch(() => null)
+      const comments = await fetchYouTubeReviews(fetchState?.lastFetchedAt)
+      for (const c of comments) {
+        if (existingKeys.has(c.dedupeKey)) continue
+        await pendingTestimonialsService.add(c)
+        existingKeys.add(c.dedupeKey)
         added++
       }
+      await youtubeFetchStateService.markFetched()
     } catch (e) { errors.push('YouTube: ' + e.message) }
 
     setLastFetchSummary(`Fetch complete — ${added} new item${added === 1 ? '' : 's'} added to the queue.`)
@@ -193,7 +195,7 @@ export default function AdminPendingTestimonials() {
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard icon={Inbox} label="Pending" value={loading ? '…' : pending.length} color="#1655c3" bg="#eff6ff" />
         <StatCard icon={MapPin} label="Google Reviews" value={loading ? '…' : googleCount} color="#1655c3" bg="#eff6ff" />
-        <StatCard icon={Youtube} label="YouTube Videos" value={loading ? '…' : youtubeCount} color="#ef4444" bg="#fef2f2" />
+        <StatCard icon={Youtube} label="YouTube Comments" value={loading ? '…' : youtubeCount} color="#ef4444" bg="#fef2f2" />
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
@@ -201,7 +203,7 @@ export default function AdminPendingTestimonials() {
           <div>
             <h3 className="font-black text-[#1a1a1a] text-sm mb-1">Fetch New Reviews</h3>
             <p className="text-xs text-gray-500">
-              Pulls new YouTube videos tagged <span className="font-semibold text-[#1655c3]">#MedWebReview</span> into the queue below. Run manually whenever you want to check for new ones.
+              Pulls new comments from <span className="font-semibold text-[#1655c3]">MEDWEB's own YouTube channel</span> (@medwebpk) into the queue below. Only checks for comments posted since the last fetch. Run manually whenever you want to check for new ones.
             </p>
           </div>
           <AdminButton onClick={handleFetch} disabled={fetching}>

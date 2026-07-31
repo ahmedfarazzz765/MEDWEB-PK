@@ -449,6 +449,15 @@ export const pendingTestimonialsService = {
   },
 }
 
+// ─── YOUTUBE REVIEW FETCH STATE ────────────────────────────────────────────────
+// Tracks the last successful "Fetch New Reviews" run so re-fetching only walks
+// channel comments newer than that, instead of re-scanning full comment
+// history on every video on every click.
+export const youtubeFetchStateService = {
+  get: () => getOne('settings', 'youtubeReviewFetch'),
+  markFetched: () => setDoc(doc(db, 'settings', 'youtubeReviewFetch'), { lastFetchedAt: serverTimestamp() }, { merge: true }),
+}
+
 // ─── SITE SETTINGS (stats, hero text, etc.) ───────────────────────────────────
 export const settingsService = {
   get: () => getOne('settings', 'site'),
