@@ -1,11 +1,13 @@
 // Client-side Ambassador Letter generation — the admin writes the entire
-// letter body themselves (AmbassadorLetterSettings.jsx), using single
-// curly-brace placeholders like {name}/{code}/{university}. This composites
-// that text, with every placeholder substituted for the real ambassador's
-// data, onto the admin-uploaded letterhead template on an HTML5 canvas, then
-// wraps that image into a downloadable PDF via jsPDF. No server needed.
+// letter body themselves (AmbassadorLetterSettings.jsx) in a Tiptap rich-text
+// editor, using single curly-brace placeholders like {name}/{code}/{university}.
+// This composites that HTML — every placeholder substituted for the real
+// ambassador's data, with bold/highlight/italic/lists/alignment/line-spacing
+// intact — onto the admin-uploaded letterhead template on an HTML5 canvas,
+// then wraps that image into a downloadable PDF via jsPDF. No server needed.
 
 import jsPDF from 'jspdf'
+import html2canvas from 'html2canvas'
 
 function loadImage(url) {
   return new Promise((resolve, reject) => {
@@ -41,23 +43,35 @@ function fillTokens(text, ambassador) {
   return String(text || '').replace(/\{\{?(\w+)\}?\}/g, (match, key) => (key in values ? values[key] : match))
 }
 
-// Basic canvas word-wrap: splits `text` into lines that each fit within
-// `maxWidth` at the context's currently-set font.
-function wrapText(ctx, text, maxWidth) {
-  const words = text.split(/\s+/)
-  const lines = []
-  let line = ''
-  for (const word of words) {
-    const test = line ? `${line} ${word}` : word
-    if (ctx.measureText(test).width > maxWidth && line) {
-      lines.push(line)
-      line = word
-    } else {
-      line = test
-    }
+// Rasterizes the letter body's rich HTML (bold/highlight/italic/lists/
+// alignment/line-spacing all included, via real browser layout+paint rather
+// than reimplementing rich-text layout on a 2D canvas context) at exactly
+// `widthPx` x `heightPx`, matching the box the admin sized in the live
+// preview 1:1. html2canvas needs the node actually laid out in the document,
+// so it's rendered off-screen (fixed position, far outside the viewport)
+// and removed again once captured.
+async function rasterizeBodyHtml(html, { widthPx, heightPx, fontSize, color }) {
+  const holder = document.createElement('div')
+  holder.className = 'letter-body'
+  Object.assign(holder.style, {
+    position: 'fixed',
+    left: '-99999px',
+    top: '0',
+    width: `${widthPx}px`,
+    height: `${heightPx}px`,
+    overflow: 'hidden',
+    fontSize: `${fontSize}px`,
+    color,
+    fontFamily: 'Helvetica, Arial, sans-serif',
+    background: 'transparent',
+  })
+  holder.innerHTML = html
+  document.body.appendChild(holder)
+  try {
+    return await html2canvas(holder, { backgroundColor: null, scale: 1 })
+  } finally {
+    document.body.removeChild(holder)
   }
-  if (line) lines.push(line)
-  return lines
 }
 
 async function compositeLetterCanvas({ ambassador, letterCfg }) {
@@ -71,23 +85,28 @@ async function compositeLetterCanvas({ ambassador, letterCfg }) {
   const body = { ...letterCfg.bodyPos }
   const date = { ...letterCfg.datePos }
 
-  // Body paragraph — centered, word-wrapped to its configured width
-  const bodyText = fillTokens(letterCfg.bodyText, ambassador)
-  ctx.fillStyle = body.color
-  ctx.font = `${body.fontSize}px Helvetica, Arial, sans-serif`
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'alphabetic'
+  // Body — real rich HTML, placeholders substituted by simple regex over the
+  // HTML string (safe: {name}/{{name}} tokens only ever appear as literal
+  // text content between tags, never inside a tag/attribute), then
+  // rasterized and drawn onto the letterhead at the box's exact position/size.
+  const bodyHtml = fillTokens(letterCfg.bodyText, ambassador)
   const boxWidth = (body.widthPct / 100) * canvas.width
+  const boxHeight = ((body.heightPct ?? 40) / 100) * canvas.height
   const boxX = (body.xPct / 100) * canvas.width
-  const startY = (body.yPct / 100) * canvas.height
-  const lineHeight = body.fontSize * 1.5
-  const lines = wrapText(ctx, bodyText, boxWidth)
-  lines.forEach((line, i) => ctx.fillText(line, boxX, startY + i * lineHeight))
+  const boxY = (body.yPct / 100) * canvas.height
+  const bodyCanvas = await rasterizeBodyHtml(bodyHtml, {
+    widthPx: boxWidth,
+    heightPx: boxHeight,
+    fontSize: body.fontSize,
+    color: body.color,
+  })
+  ctx.drawImage(bodyCanvas, boxX, boxY, boxWidth, boxHeight)
 
-  // Date — single point, left-anchored
+  // Date — single point, left-anchored, unchanged (never became rich text)
   ctx.fillStyle = date.color
   ctx.font = `bold ${date.fontSize}px Helvetica, Arial, sans-serif`
   ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
   const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })
   ctx.fillText(today, (date.xPct / 100) * canvas.width, (date.yPct / 100) * canvas.height)
 

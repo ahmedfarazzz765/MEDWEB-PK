@@ -1,26 +1,38 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
+import { Rnd } from 'react-rnd'
 
 // Same drag-to-position pattern as CertPositionEditor.jsx, generalized for
 // the Ambassador Letter's two regions instead of that component's fixed
 // name/id pair:
-//   - "body": the admin's own letter text, shown here literally (curly-brace
-//     placeholders like {name}/{university}/{role} are NOT substituted in
-//     this preview — that only happens for a real ambassador's actual
-//     download, in ambassadorLetterGenerator.js) — a word-wrapped block with
-//     its own width, not just a single point, since it's a whole letter.
-//   - "date": a single point, same convention as the certificate's ID box.
+//   - "body": the admin's own letter text, rendered here as real rich HTML
+//     (curly-brace placeholders like {name}/{university}/{role} are NOT
+//     substituted in this preview — that only happens for a real
+//     ambassador's actual download, in ambassadorLetterGenerator.js). Uses
+//     react-rnd so the admin controls both its position AND its width/height
+//     — the box is a hard boundary (overflow hidden), matching exactly what
+//     compositeLetterCanvas() rasterizes at generation time.
+//   - "date": a single point, same convention as the certificate's ID box —
+//     just a stamp, so it stays drag-only, no resize.
 // Kept as its own component rather than extending CertPositionEditor so the
 // certificate feature's drag boxes (exactly 2, both single-point) are never
-// put at risk by this letter's different (block + point) shape.
-export default function LetterPositionEditor({ imageUrl, bodyText, bodyPos, datePos, onChange }) {
+// put at risk by this letter's different (resizable block + point) shape.
+export default function LetterPositionEditor({ imageUrl, bodyHtml, bodyPos, datePos, onChange }) {
   const containerRef = useRef(null)
-  const [dragging, setDragging] = useState(null) // 'body' | 'date' | null
-  const [previewScale, setPreviewScale] = useState(1)
+  const [dragging, setDragging] = useState(false)
+  // Tracked in state (not read directly off the ref during render) so the
+  // Rnd box's pixel position recomputes once the letterhead image has
+  // actually laid out — clientWidth/Height are 0 until then.
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 })
 
-  const handleImageLoad = e => {
-    const displayedWidth = containerRef.current?.clientWidth || e.target.naturalWidth
-    setPreviewScale(displayedWidth / (e.target.naturalWidth || displayedWidth))
-  }
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const update = () => setContainerSize({ width: el.clientWidth, height: el.clientHeight })
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
 
   const body = bodyPos
   const date = datePos
@@ -37,14 +49,12 @@ export default function LetterPositionEditor({ imageUrl, bodyText, bodyPos, date
     return { xPct, yPct }
   }
 
-  const startDrag = box => e => { e.preventDefault(); setDragging(box) }
-  const handleMove = e => {
+  const startDateDrag = e => { e.preventDefault(); setDragging(true) }
+  const handleDateMove = e => {
     if (!dragging) return
-    const pos = posFromEvent(e)
-    if (dragging === 'body') setBody(pos)
-    else setDate(pos)
+    setDate(posFromEvent(e))
   }
-  const endDrag = () => setDragging(null)
+  const endDateDrag = () => setDragging(false)
 
   return (
     <div>
@@ -52,44 +62,65 @@ export default function LetterPositionEditor({ imageUrl, bodyText, bodyPos, date
         ref={containerRef}
         className="relative w-full rounded-xl overflow-hidden border border-gray-200 select-none"
         style={{ cursor: dragging ? 'grabbing' : 'default' }}
-        onMouseMove={handleMove}
-        onMouseUp={endDrag}
-        onMouseLeave={endDrag}
-        onTouchMove={handleMove}
-        onTouchEnd={endDrag}
+        onMouseMove={handleDateMove}
+        onMouseUp={endDateDrag}
+        onMouseLeave={endDateDrag}
+        onTouchMove={handleDateMove}
+        onTouchEnd={endDateDrag}
       >
-        <img src={imageUrl} alt="Letterhead template" className="w-full h-auto block pointer-events-none" draggable={false} onLoad={handleImageLoad} />
+        <img src={imageUrl} alt="Letterhead template" className="w-full h-auto block pointer-events-none" draggable={false} />
 
-        {/* Body text block — a wrapped paragraph, so it gets a width, not just a point */}
-        <div
-          onMouseDown={startDrag('body')}
-          onTouchStart={startDrag('body')}
-          className="absolute px-2 py-1.5 rounded cursor-grab active:cursor-grabbing border-2 border-dashed border-[#1655c3] bg-white/70"
-          style={{
-            left: `${body.xPct}%`,
-            top: `${body.yPct}%`,
-            width: `${body.widthPct}%`,
-            transform: 'translate(-50%, 0)',
-            fontSize: Math.max(7, body.fontSize * previewScale),
-            lineHeight: 1.5,
-            color: body.color,
-            whiteSpace: 'pre-wrap',
+        {/* Body text box — draggable AND resizable, position/size stored as
+            percentages of the container so it stays correct at any image size */}
+        <Rnd
+          bounds="parent"
+          position={{
+            x: (body.xPct / 100) * containerSize.width,
+            y: (body.yPct / 100) * containerSize.height,
           }}
+          size={{
+            width: `${body.widthPct}%`,
+            height: `${body.heightPct}%`,
+          }}
+          minWidth={60}
+          minHeight={40}
+          onDragStop={(e, d) => {
+            const w = containerSize.width || 1
+            const h = containerSize.height || 1
+            setBody({ xPct: (d.x / w) * 100, yPct: (d.y / h) * 100 })
+          }}
+          onResizeStop={(e, dir, ref, delta, position) => {
+            const w = containerSize.width || 1
+            const h = containerSize.height || 1
+            setBody({
+              widthPct: (ref.offsetWidth / w) * 100,
+              heightPct: (ref.offsetHeight / h) * 100,
+              xPct: (position.x / w) * 100,
+              yPct: (position.y / h) * 100,
+            })
+          }}
+          className="border-2 border-dashed border-[#1655c3] bg-white/70 rounded"
         >
-          {bodyText || 'Start typing the letter body above — it will appear here exactly as written, placeholders included.'}
-        </div>
+          <div
+            className="letter-body w-full h-full overflow-hidden px-2 py-1.5"
+            style={{ fontSize: body.fontSize, color: body.color }}
+            dangerouslySetInnerHTML={{
+              __html: bodyHtml || '<p>Start typing the letter body above — it will appear here exactly as formatted, placeholders included.</p>',
+            }}
+          />
+        </Rnd>
 
         {/* Date box — single point, left-anchored (matches CertPositionEditor's ID box) */}
         <div
-          onMouseDown={startDrag('date')}
-          onTouchStart={startDrag('date')}
+          onMouseDown={startDateDrag}
+          onTouchStart={startDateDrag}
           className="absolute px-2 py-1 rounded cursor-grab active:cursor-grabbing border-2 border-dashed border-[#64ac37] bg-white/70"
           style={{
             left: `${date.xPct}%`,
             top: `${date.yPct}%`,
             transform: 'translate(0, -50%)',
             fontWeight: 'bold',
-            fontSize: Math.max(8, date.fontSize * previewScale),
+            fontSize: date.fontSize,
             color: date.color,
             whiteSpace: 'nowrap',
           }}
@@ -97,7 +128,9 @@ export default function LetterPositionEditor({ imageUrl, bodyText, bodyPos, date
           {new Date().toLocaleDateString()}
         </div>
       </div>
-      <p className="text-[11px] text-gray-400 mt-1.5">Drag the blue box to where the letter body should sit (it wraps to this box's width), and the green box to where the standalone date stamp should print.</p>
+      <p className="text-[11px] text-gray-400 mt-1.5">
+        Drag or resize (corners/edges) the blue box to position and size the letter body, and drag the green box to where the standalone date stamp should print.
+      </p>
 
       <div className="grid sm:grid-cols-2 gap-4 mt-3">
         <div className="rounded-xl border border-gray-100 p-3">
@@ -107,12 +140,6 @@ export default function LetterPositionEditor({ imageUrl, bodyText, bodyPos, date
               Size
               <input type="number" min="8" max="60" value={body.fontSize}
                 onChange={e => setBody({ fontSize: Number(e.target.value) || 20 })}
-                className="w-16 border border-gray-200 rounded-lg px-2 py-1 text-xs" />
-            </label>
-            <label className="text-[11px] text-gray-500 flex items-center gap-1.5">
-              Width %
-              <input type="number" min="20" max="100" value={body.widthPct}
-                onChange={e => setBody({ widthPct: Number(e.target.value) || 80 })}
                 className="w-16 border border-gray-200 rounded-lg px-2 py-1 text-xs" />
             </label>
             <label className="text-[11px] text-gray-500 flex items-center gap-1.5">
@@ -141,5 +168,5 @@ export default function LetterPositionEditor({ imageUrl, bodyText, bodyPos, date
   )
 }
 
-export const DEFAULT_BODY_POS = { xPct: 50, yPct: 40, widthPct: 70, fontSize: 22, color: '#1a1a1a' }
+export const DEFAULT_BODY_POS = { xPct: 15, yPct: 30, widthPct: 70, heightPct: 40, fontSize: 22, color: '#1a1a1a' }
 export const DEFAULT_DATE_POS = { xPct: 15, yPct: 85, fontSize: 18, color: '#1a1a1a' }

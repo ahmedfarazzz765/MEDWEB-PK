@@ -1,19 +1,43 @@
 import { useState, useEffect } from 'react'
 import ImageUpload from './ImageUpload'
-import FormField, { inputCls } from './FormField'
+import FormField from './FormField'
+import LetterBodyRichEditor from './LetterBodyRichEditor'
 import LetterPositionEditor, { DEFAULT_BODY_POS, DEFAULT_DATE_POS } from './LetterPositionEditor'
 import { settingsService } from '../../firebase/services'
 
 const DEFAULT_BODY_TEXT =
-`Dear {name},
+`<p>Dear {name},</p>
+<p>This is to certify that <strong>{name}</strong> is a recognized Ambassador of MEDWEB-PK, currently representing {university} as a {role}.</p>
+<p>Ambassador Code: <strong>{code}</strong></p>
+<p>We appreciate their continued dedication to advancing medical education and student engagement, and look forward to their continued contribution to the MEDWEB community.</p>
+<p>Issued on {date}.</p>`
 
-This is to certify that {name} is a recognized Ambassador of MEDWEB-PK, currently representing {university} as a {role}.
-
-Ambassador Code: {code}
-
-We appreciate their continued dedication to advancing medical education and student engagement, and look forward to their continued contribution to the MEDWEB community.
-
-Issued on {date}.`
+// Settings saved before this rich-text/resizable upgrade stored bodyText as
+// plain text and bodyPos with no heightPct, with xPct meaning the box's
+// *horizontal center* (the old preview centered it via a CSS transform).
+// react-rnd positions by top-left corner instead, so an old xPct has to be
+// converted to a left edge, and a sane default height/HTML wrapper added —
+// otherwise an admin who already configured this would see their box jump
+// to the wrong spot and their plain text silently vanish (dangerouslySetInnerHTML
+// would render literal text fine, but the rich toolbar couldn't edit it as
+// paragraphs). Runs once, transparently, on load.
+function migrateLegacyConfig(cfg) {
+  let { bodyText, bodyPos } = cfg
+  let wasLegacy = false
+  if (bodyPos && bodyPos.heightPct == null) {
+    wasLegacy = true
+    bodyPos = {
+      ...bodyPos,
+      xPct: Math.max(0, bodyPos.xPct - (bodyPos.widthPct || 0) / 2),
+      heightPct: 40,
+    }
+  }
+  if (typeof bodyText === 'string' && bodyText.trim() && !/^\s*</.test(bodyText)) {
+    wasLegacy = true
+    bodyText = bodyText.split(/\n{2,}/).map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('\n')
+  }
+  return { cfg: { ...cfg, bodyText, bodyPos }, wasLegacy }
+}
 
 // Kept in sync with the same key set fillTokens() substitutes in
 // ambassadorLetterGenerator.js — every ambassador field available to the
@@ -49,7 +73,14 @@ export default function AmbassadorLetterSettings() {
 
   useEffect(() => {
     settingsService.get().then(s => {
-      if (s?.ambassadorLetter) setCfg({ ...emptyCfg(), ...s.ambassadorLetter })
+      if (s?.ambassadorLetter) {
+        const { cfg: migrated, wasLegacy } = migrateLegacyConfig({ ...emptyCfg(), ...s.ambassadorLetter })
+        setCfg(migrated)
+        // Persist immediately (not on next edit) so a real ambassador
+        // downloading a letter right now doesn't hit the pre-migration
+        // config just because no admin has touched this page yet.
+        if (wasLegacy) settingsService.update({ ambassadorLetter: migrated }).catch(() => {})
+      }
       setLoaded(true)
     }).catch(() => setLoaded(true))
   }, [])
@@ -87,11 +118,9 @@ export default function AmbassadorLetterSettings() {
 
       <div className="mt-4">
         <FormField label="Letter Body (write the full letter — use the placeholders above wherever you want an ambassador's data inserted)">
-          <textarea
-            className={`${inputCls} font-mono`}
-            rows={12}
+          <LetterBodyRichEditor
             value={cfg.bodyText}
-            onChange={e => setCfg(p => ({ ...p, bodyText: e.target.value }))}
+            onChange={html => setCfg(p => ({ ...p, bodyText: html }))}
             onBlur={() => save(cfg)}
           />
         </FormField>
@@ -99,9 +128,9 @@ export default function AmbassadorLetterSettings() {
 
       {cfg.templateUrl && (
         <div className="mt-4">
-          <p className="text-xs font-bold text-gray-500 mb-2">Live Preview — drag the boxes to position them; text below is shown exactly as typed (placeholders are not substituted here)</p>
+          <p className="text-xs font-bold text-gray-500 mb-2">Live Preview — drag or resize the blue box to position/size the letter body, and drag the green box for the date; formatting is shown exactly as typed (placeholders are not substituted here)</p>
           <LetterPositionEditor
-            bodyText={cfg.bodyText}
+            bodyHtml={cfg.bodyText}
             imageUrl={cfg.templateUrl}
             bodyPos={cfg.bodyPos}
             datePos={cfg.datePos}

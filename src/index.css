@@ -32,6 +32,20 @@ body {
 .blog-content em { font-style: italic; }
 .blog-content u { text-decoration: underline; }
 
+/* Rich-text Ambassador Letter body (Tiptap output) — shared between the
+   admin editor's editable area (LetterBodyRichEditor.jsx), the draggable
+   live-preview box (LetterPositionEditor.jsx), and the offscreen node
+   html2canvas rasterizes at generation time (ambassadorLetterGenerator.js)
+   so all three render the exact same thing. Line-height/text-align come
+   from inline styles the editor already writes. */
+.letter-body p { margin: 0 0 0.6em; }
+.letter-body p:last-child { margin-bottom: 0; }
+.letter-body ul { margin: 0 0 0.6em 1.4em; list-style: disc; }
+.letter-body li { margin-bottom: 0.25em; }
+.letter-body strong { font-weight: 700; }
+.letter-body em { font-style: italic; }
+.letter-body mark { background-color: #fef08a; border-radius: 2px; padding: 0 0.15em; }
+
 @layer utilities {
   /* Blue → teal → green diagonal brand gradient (from Why MEDWEB card) */
   .brand-gradient {
