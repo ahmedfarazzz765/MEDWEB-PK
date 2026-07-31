@@ -71,7 +71,15 @@ export default function LetterPositionEditor({ imageUrl, bodyHtml, bodyPos, date
         <img src={imageUrl} alt="Letterhead template" className="w-full h-auto block pointer-events-none" draggable={false} />
 
         {/* Body text box — draggable AND resizable, position/size stored as
-            percentages of the container so it stays correct at any image size */}
+            percentages of the container so it stays correct at any image size.
+            `size` is computed in pixels (not passed as a CSS "%" string) for
+            the same reason `position` already is: the container's height is
+            'auto' (driven by the letterhead <img>'s own aspect ratio, not an
+            explicit CSS height), and a percentage height only resolves
+            against an ancestor with an explicit height per the CSS spec —
+            with a "%" string here the box's height silently fell back to its
+            content's natural height instead of the manual resize, while
+            width kept working since the container's width IS explicit. */}
         <Rnd
           bounds="parent"
           position={{
@@ -79,8 +87,12 @@ export default function LetterPositionEditor({ imageUrl, bodyHtml, bodyPos, date
             y: (body.yPct / 100) * containerSize.height,
           }}
           size={{
-            width: `${body.widthPct}%`,
-            height: `${body.heightPct}%`,
+            width: (body.widthPct / 100) * containerSize.width,
+            height: (body.heightPct / 100) * containerSize.height,
+          }}
+          enableResizing={{
+            top: true, right: true, bottom: true, left: true,
+            topRight: true, bottomRight: true, bottomLeft: true, topLeft: true,
           }}
           minWidth={60}
           minHeight={40}
