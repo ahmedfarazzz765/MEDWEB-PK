@@ -185,6 +185,24 @@ export default function AdminTeam() {
     teamService.reorder(reordered).catch(e => alert('Error saving order: ' + e.message))
   }
 
+  // Backfill: any category card saved before drag-reorder existed gets an
+  // `order` matching its current position (already createdAt-desc, so
+  // nothing's visual order changes) the next time this admin list loads.
+  useEffect(() => {
+    if (!catsLoaded) return
+    const missing = dbCategories.filter(c => c.order === undefined || c.order === null)
+    if (missing.length === 0) return
+    missing.forEach(c => {
+      const idx = dbCategories.findIndex(x => x.id === c.id)
+      teamCategoriesService.update(c.id, { order: idx }).catch(() => {})
+    })
+  }, [dbCategories, catsLoaded])
+
+  const handleReorderCategories = reordered => {
+    setDbCategories(reordered) // optimistic
+    teamCategoriesService.reorder(reordered).catch(e => alert('Error saving order: ' + e.message))
+  }
+
   // All unique category names from DB + Presets
   const categoryNames = useMemo(() => {
     const set = new Set(PRESET_CATEGORIES)
@@ -492,11 +510,15 @@ export default function AdminTeam() {
             <p className="text-sm text-gray-400 text-center py-10">No category cards yet — click "+ Add Category Card" to create one.</p>
           )}
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {dbCategories.length > 0 && (
+            <p className="text-xs text-gray-400">Drag the <span className="font-semibold text-gray-500">⠿</span> handle on a card to reorder — this is the order shown in the public homepage marquee.</p>
+          )}
+
+          <SortableGrid items={dbCategories} onReorder={handleReorderCategories} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {dbCategories.map((cat, i) => {
               const count = data.filter(m => (m.category || 'Chief Executive') === cat.name).length
               return (
-                <div key={cat.id || i} className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col justify-between">
+                <SortableItem key={cat.id || i} id={cat.id || i} className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col justify-between">
                   {/* Thumbnail Image Header */}
                   <div className="relative aspect-video bg-gray-100">
                     {cat.imageUrl ? (
@@ -529,10 +551,10 @@ export default function AdminTeam() {
                       />
                     </div>
                   </div>
-                </div>
+                </SortableItem>
               )
             })}
-          </div>
+          </SortableGrid>
         </div>
       )}
 

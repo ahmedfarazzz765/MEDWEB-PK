@@ -8,7 +8,7 @@ import ImageUpload from '../components/ImageUpload'
 import AdminButton from '../components/AdminButton'
 import ActionButtons from '../components/ActionButtons'
 import NewsletterSendModal from '../components/NewsletterSendModal'
-import RichTextEditor from '../components/RichTextEditor'
+import BlogContentEditor from '../components/BlogContentEditor'
 import { blogService, blogCategoriesService, newsletterService } from '../../firebase/services'
 import { sendNewsletterEmail, getRemainingEmailQuota } from '../../firebase/email'
 import { DEFAULT_BLOG_CATEGORIES } from '../../constants/blogCategories'
@@ -22,10 +22,11 @@ function truncateExcerpt(content, max = 200) {
   return text.length > max ? text.slice(0, max).trim() + '…' : text
 }
 
+// Step 1 popup's fields only — content/status are owned by the step-2
+// full-page editor (BlogContentEditor.jsx) now, not this form.
 const emptyForm = () => ({
   title: '', author: '', category: '',
-  excerpt: '', content: '', status: 'Draft',
-  views: 0, imageUrl: '', slug: '',
+  excerpt: '', imageUrl: '', slug: '',
 })
 
 const emptyCatForm = () => ({ name: '' })
@@ -72,6 +73,16 @@ export default function AdminBlog() {
   const [editId,  setEditId]  = useState(null)
   const [saving,  setSaving]  = useState(false)
   const [sendModal, setSendModal] = useState(null)
+
+  // Step 2: full-page content editor (BlogContentEditor.jsx). `editorPost`
+  // holds the currently-open post's basic fields + status (kept in sync when
+  // "Edit Details" reopens the step-1 popup without leaving the editor);
+  // `editorContent` is the live HTML being written, only persisted to
+  // Firestore on Save Draft / Publish, not on every keystroke.
+  const [contentEditorOpen, setContentEditorOpen] = useState(false)
+  const [editorPost, setEditorPost] = useState(null)
+  const [editorContent, setEditorContent] = useState('')
+  const [editorSaving, setEditorSaving] = useState(false)
   // { phase: 'confirm-quota'|'confirm'|'sending'|'done', total, remaining, sent, failed, failedEmails, job }
 
   // Category CRUD modal state
@@ -119,10 +130,13 @@ export default function AdminBlog() {
 
   const openAdd  = () => { setForm({ ...emptyForm(), category: categoryNames[0] || '' }); setEditId(null); setModal('add') }
   const openEdit = row => {
-    setForm({ title: row.title, author: row.author, category: row.category, excerpt: row.excerpt || '', content: row.content || '', status: row.status, views: row.views || 0, imageUrl: row.imageUrl || '', slug: row.slug || '' })
+    setForm({ title: row.title, author: row.author, category: row.category, excerpt: row.excerpt || '', imageUrl: row.imageUrl || '', slug: row.slug || '' })
     setEditId(row.id); setModal('edit')
   }
-  const closeModal = () => { setModal(false); setEditId(null) }
+  // While the content editor is open, Cancel on a reopened "Edit Details"
+  // popup must only close the popup — editId/editorPost/editorContent all
+  // need to stay intact so writing can continue where it left off.
+  const closeModal = () => { setModal(false); if (!contentEditorOpen) setEditId(null) }
   const set = field => e => setForm(prev => {
     const next = { ...prev, [field]: e.target.value }
     // Auto-fill the slug from the title only while it's still empty — once
@@ -133,23 +147,77 @@ export default function AdminBlog() {
   })
   const setImg = url => setForm(prev => ({ ...prev, imageUrl: url }))
 
-  const handleSave = async () => {
+  // Step 1 popup's primary action — saves only the basic fields. On a fresh
+  // Add/Edit (not already in the content editor) this also transitions into
+  // the step-2 full-page editor; reopened via "Edit Details" from inside the
+  // editor, it just updates editorPost in place and stays there.
+  const handleSaveBasics = async () => {
     if (!form.title.trim()) return
     setSaving(true)
     try {
       const existingSlugs = new Set(data.filter(p => p.id !== editId).map(p => p.slug).filter(Boolean))
-      const payload = { ...form, slug: uniqueSlug(slugify(form.slug || form.title), existingSlugs) }
-      const prevStatus = editId ? data.find(p => p.id === editId)?.status : null
-      if (modal === 'add') await blogService.add(payload)
-      else                 await blogService.update(editId, payload)
-      closeModal()
-      // Only on the genuine transition INTO Published — editing an
-      // already-published post's typo must never re-blast subscribers.
-      if (prevStatus !== 'Published' && payload.status === 'Published') {
-        maybeNotifySubscribers(payload)
+      const basics = {
+        title: form.title.trim(),
+        slug: uniqueSlug(slugify(form.slug || form.title), existingSlugs),
+        author: form.author,
+        category: form.category,
+        excerpt: form.excerpt,
+        imageUrl: form.imageUrl,
+      }
+      let id = editId
+      if (modal === 'add') id = await blogService.add({ ...basics, status: 'Draft', content: '' })
+      else                 await blogService.update(editId, basics)
+
+      setModal(false)
+      if (contentEditorOpen) {
+        setEditorPost(prev => ({ ...prev, ...basics }))
+      } else {
+        const existing = editId ? data.find(p => p.id === editId) : null
+        setEditId(id)
+        setEditorPost({ id, ...basics, status: existing?.status || 'Draft' })
+        setEditorContent(existing?.content || '')
+        setContentEditorOpen(true)
       }
     } catch (e) { alert('Error: ' + e.message) }
     finally { setSaving(false) }
+  }
+
+  const openEditDetailsFromEditor = () => {
+    setForm({ ...emptyForm(), ...editorPost })
+    setEditId(editorPost.id)
+    setModal('edit')
+  }
+
+  const closeContentEditor = () => {
+    setContentEditorOpen(false)
+    setEditorPost(null)
+    setEditorContent('')
+    setEditId(null)
+  }
+
+  const handleSaveDraftFromEditor = async () => {
+    setEditorSaving(true)
+    try {
+      await blogService.update(editorPost.id, { content: editorContent, status: 'Draft' })
+      setEditorPost(prev => ({ ...prev, status: 'Draft' }))
+    } catch (e) { alert('Error: ' + e.message) }
+    finally { setEditorSaving(false) }
+  }
+
+  const handlePublishFromEditor = async () => {
+    setEditorSaving(true)
+    try {
+      const prevStatus = editorPost.status
+      await blogService.update(editorPost.id, { content: editorContent })
+      await blogService.publish(editorPost.id)
+      // Only on the genuine transition INTO Published — editing an
+      // already-published post's typo must never re-blast subscribers.
+      if (prevStatus !== 'Published') {
+        maybeNotifySubscribers({ ...editorPost, content: editorContent, status: 'Published' })
+      }
+      closeContentEditor()
+    } catch (e) { alert('Error: ' + e.message) }
+    finally { setEditorSaving(false) }
   }
 
   const handlePublish = async id => {
@@ -316,7 +384,7 @@ export default function AdminBlog() {
       )}
 
       {modal && (
-        <Modal title={modal === 'add' ? 'New Blog Post' : 'Edit Post'} onClose={closeModal} wide>
+        <Modal title={contentEditorOpen ? 'Edit Post Details' : modal === 'add' ? 'New Blog Post — Basic Details' : 'Edit Post — Basic Details'} onClose={closeModal} wide>
           <div className="space-y-4">
             <ImageUpload value={form.imageUrl} onChange={setImg} folder="medweb/blog" label="Cover Image" />
             <FormField label="Title">
@@ -339,22 +407,27 @@ export default function AdminBlog() {
             <FormField label="Excerpt (shown on cards)">
               <textarea className={inputCls} rows={2} value={form.excerpt} onChange={set('excerpt')} placeholder="Short summary…" />
             </FormField>
-            <FormField label="Full Content">
-              <RichTextEditor value={form.content} onChange={html => setForm(prev => ({ ...prev, content: html }))} />
-            </FormField>
-            <FormField label="Status">
-              <select className={inputCls} value={form.status} onChange={set('status')}>
-                <option>Draft</option><option>Published</option>
-              </select>
-            </FormField>
             <div className="flex gap-3 pt-2">
               <AdminButton variant="ghost" className="flex-1" onClick={closeModal}>Cancel</AdminButton>
-              <AdminButton variant="primary" className="flex-1" onClick={handleSave} disabled={saving}>
-                {saving ? 'Saving…' : modal === 'add' ? 'Create Post' : 'Save Changes'}
+              <AdminButton variant="primary" className="flex-1" onClick={handleSaveBasics} disabled={saving}>
+                {saving ? 'Saving…' : contentEditorOpen ? 'Save Details' : 'Next: Write Content →'}
               </AdminButton>
             </div>
           </div>
         </Modal>
+      )}
+
+      {contentEditorOpen && editorPost && (
+        <BlogContentEditor
+          post={editorPost}
+          content={editorContent}
+          onChangeContent={setEditorContent}
+          onEditDetails={openEditDetailsFromEditor}
+          onBack={closeContentEditor}
+          onSaveDraft={handleSaveDraftFromEditor}
+          onPublish={handlePublishFromEditor}
+          saving={editorSaving}
+        />
       )}
 
       {catModal && (

@@ -47,7 +47,7 @@ function loadImage(url) {
   })
 }
 
-async function compositeCertificateCanvas({ templateUrl, studentName, certCode, namePos, idPos }) {
+async function compositeCertificateCanvas({ templateUrl, studentName, certCode, namePos, idPos, customFields }) {
   const img = await loadImage(templateUrl)
   const canvas = document.createElement('canvas')
   canvas.width = img.naturalWidth
@@ -71,6 +71,21 @@ async function compositeCertificateCanvas({ templateUrl, studentName, certCode, 
   ctx.font = `bold ${id.fontSize}px Helvetica, Arial, sans-serif`
   ctx.textAlign = 'left'
   ctx.fillText(`ID: ${certCode}`, (id.xPct / 100) * canvas.width, (id.yPct / 100) * canvas.height)
+
+  // Optional dynamic fields (manual "Issue Certificate" flow only — the
+  // automatic webinar flow never passes these). Centered on their point,
+  // same convention as the Name box — must match CertPositionEditor.jsx's
+  // preview exactly (translate(-50%,-50%) there, textAlign 'center' here).
+  for (const field of customFields || []) {
+    const value = field.value?.trim()
+    if (!value) continue
+    const font = CERTIFICATE_FONTS.find(f => f.css === field.fontFamily) || CERTIFICATE_FONTS[0]
+    await ensureFontLoaded(field.fontFamily, field.fontSize)
+    ctx.fillStyle = field.color || '#1a1a1a'
+    ctx.font = `${font.bold ? 'bold ' : ''}${field.fontSize || 28}px ${field.fontFamily || DEFAULT_CERT_FONT}`
+    ctx.textAlign = 'center'
+    ctx.fillText(value, ((field.xPct ?? 50) / 100) * canvas.width, ((field.yPct ?? 50) / 100) * canvas.height)
+  }
 
   return canvas
 }
@@ -106,21 +121,23 @@ function canvasToCompressedBlob(canvas, targetBytes = 350 * 1024) {
  * manual admin flow shows an alert.
  */
 async function compositeAndIssueCertificate({
-  templateUrl, namePos, idPos, rawName, email, title, body, sourceType, extra,
+  templateUrl, namePos, idPos, rawName, email, title, body, sourceType, extra, customFields,
 }) {
   const studentName = toTitleCase(rawName)
 
   const certCode = await certificatesService.generateUniqueCode()
 
   const canvas = await compositeCertificateCanvas({
-    templateUrl, studentName, certCode, namePos, idPos,
+    templateUrl, studentName, certCode, namePos, idPos, customFields,
   })
   const blob = await canvasToCompressedBlob(canvas)
   const certificateImageUrl = await uploadToCloudinary(blob, 'medweb/certificates/generated')
 
   // Field names match the schema the old Cloud Function wrote (and what
   // the public Certificate Verification page / admin Certificates table
-  // already read), so nothing downstream needs to change.
+  // already read), so nothing downstream needs to change. `customFields`
+  // is new and additive — a record with none (every pre-existing
+  // certificate, and every automatic webinar-flow one) simply omits it.
   await certificatesService.add({
     certCode,
     recipient: studentName,
@@ -133,6 +150,7 @@ async function compositeAndIssueCertificate({
     email,
     certificateImageUrl,
     issuedAt: new Date().toISOString(),
+    ...(customFields?.length ? { customFields } : {}),
     ...extra,
   })
 
@@ -208,7 +226,7 @@ export async function generateAndIssueCertificate({ submissionId, webinar, rawNa
  * throws on failure — there's no submission doc to silently record the
  * error on, so the admin UI needs a real exception to show.
  */
-export async function issueManualCertificate({ templateUrl, namePos, idPos, recipientName, recipientEmail, description }) {
+export async function issueManualCertificate({ templateUrl, namePos, idPos, recipientName, recipientEmail, description, customFields }) {
   if (!templateUrl) throw new Error('A certificate template image is required')
   if (!recipientName?.trim()) throw new Error('Recipient name is required')
   if (!recipientEmail?.trim()) throw new Error('Recipient email is required')
@@ -225,5 +243,9 @@ export async function issueManualCertificate({ templateUrl, namePos, idPos, reci
     body,
     sourceType: 'manual',
     extra: {},
+    // Blank rows (no label typed yet) are dropped here rather than upstream
+    // so the admin UI can freely have an in-progress empty row without it
+    // ever reaching the canvas or the saved record.
+    customFields: (customFields || []).filter(f => f.label?.trim()),
   })
 }

@@ -1,12 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { motion } from 'framer-motion'
-import DOMPurify from 'dompurify'
-import { ArrowLeft, User, Calendar } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { blogService } from '../firebase/services'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
-import CoverImage from '../components/CoverImage'
+import PostArticleView from '../components/PostArticleView'
 
 export default function BlogPostPage() {
   const { slug } = useParams()
@@ -53,44 +51,16 @@ export default function BlogPostPage() {
   }
 
   return (
-    <div className="font-poppins bg-[#f7f9fc] min-h-screen">
+    <div className="min-h-screen">
       <Navbar />
-
-      {/* Hero band */}
-      <div className="px-4 pt-10 pb-20 sm:pt-14 sm:pb-28" style={{ background: 'linear-gradient(135deg, #1655c3, #64ac37)' }}>
-        <div className="max-w-3xl mx-auto">
+      <PostArticleView
+        post={post}
+        topLeft={
           <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-sm text-white/80 hover:text-white mb-6 transition-colors">
             <ArrowLeft size={16} /> Back
           </button>
-          {post.category && <span className="inline-block text-[11px] font-bold text-white bg-white/20 px-3 py-1 rounded-full mb-4">{post.category}</span>}
-          <h1 className="text-white font-black text-3xl sm:text-4xl lg:text-5xl leading-tight">{post.title}</h1>
-          <div className="flex items-center gap-5 mt-4 text-white/85 text-sm flex-wrap">
-            {post.author && <span className="flex items-center gap-1.5"><User size={14} /> {post.author}</span>}
-            {post.published && <span className="flex items-center gap-1.5"><Calendar size={14} /> {post.published}</span>}
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-3xl mx-auto px-4 -mt-12 sm:-mt-16 pb-16">
-        <motion.div
-          className="bg-white rounded-3xl shadow-[0_8px_40px_rgba(0,0,0,0.06)] overflow-hidden"
-          initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }}
-        >
-          {post.imageUrl && (
-            <div className="w-full h-56 sm:h-80 overflow-hidden">
-              <CoverImage src={post.imageUrl} alt={post.title} className="w-full h-full" onError={e => { e.target.style.display = 'none' }} />
-            </div>
-          )}
-
-          <div className="p-6 sm:p-10">
-            <div
-              className="blog-content text-gray-700 text-[15px] sm:text-base leading-[1.85]"
-              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(post.content || '') }}
-            />
-          </div>
-        </motion.div>
-      </div>
-
+        }
+      />
       <Footer />
     </div>
   )

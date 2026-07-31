@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import { Link, useSearchParams, useNavigate } from 'react-router-dom'
+import { ArrowLeft, ArrowRight } from 'lucide-react'
 import { teamService, teamCategoriesService } from '../firebase/services'
 import { MemberCard, WhyMedwebCategoryCard } from '../sections/About'
 import Navbar from '../components/Navbar'
@@ -12,6 +12,7 @@ import SectionEmptyState from '../components/SectionEmptyState'
 const PAGE_SIZE = 16
 
 export default function TeamListPage() {
+  const navigate = useNavigate()
   const [team, setTeam] = useState(null)
   const [dbCategories, setDbCategories] = useState([])
   const [searchParams, setSearchParams] = useSearchParams()
@@ -43,6 +44,8 @@ export default function TeamListPage() {
   // (see About.jsx's categoryCards for why: merging in defaults here made
   // Admin-deleted category cards keep reappearing regardless of Firestore state).
   const categoryCards = dbCategories
+  const activeCategoryObj = categoryCards.find(c => c.name === activeCategory)
+  const showApply = activeCategoryObj?.applyEnabled && activeCategoryObj?.applyFormId
 
   // Filter team members based on selected category
   const filteredTeam = useMemo(() => {
@@ -113,6 +116,18 @@ export default function TeamListPage() {
                 </button>
                 <span className="text-sm font-bold text-[#1a1a1a]">{activeCategory} ({filteredTeam.length})</span>
               </div>
+
+              {showApply && (
+                <div className="max-w-6xl mx-auto mb-6 rounded-2xl p-5 flex items-center justify-between gap-4 flex-wrap" style={{ background: 'linear-gradient(135deg, #1655c3, #64ac37)' }}>
+                  <p className="text-white text-sm font-semibold">Interested in joining {activeCategory}? Applications are open.</p>
+                  <button
+                    onClick={() => navigate(`/form/${activeCategoryObj.applyFormId}`)}
+                    className="inline-flex items-center gap-2 bg-white text-[#1655c3] text-sm font-bold px-5 py-2.5 rounded-xl hover:gap-3 transition-all shrink-0"
+                  >
+                    Apply Now <ArrowRight size={15} />
+                  </button>
+                </div>
+              )}
 
               {filteredTeam.length === 0 ? (
                 <SectionEmptyState message={`No team members found under category '${activeCategory}'.`} />

@@ -351,13 +351,14 @@ export const teamService = {
 }
 
 export const teamCategoriesService = {
-  getAll: () => getAll('teamCategories', orderBy('createdAt', 'desc')),
+  getAll: () => getAll('teamCategories', orderBy('createdAt', 'desc')).then(applyManualOrder),
   add: data => add('teamCategories', data),
   update: (id, data) => update('teamCategories', id, data),
   delete: id => remove('teamCategories', id),
+  reorder: items => reorderCollection('teamCategories', items),
   listen: cb => onSnapshot(
     query(collection(db, 'teamCategories'), orderBy('createdAt', 'desc')),
-    snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+    snap => cb(applyManualOrder(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
     err => console.error("Firebase teamCategories listen error:", err)
   ),
 }

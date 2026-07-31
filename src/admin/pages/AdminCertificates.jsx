@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Award, CheckCircle, XCircle, Eye, Edit2, Download, Copy, ExternalLink, FileText } from 'lucide-react'
+import { Award, CheckCircle, XCircle, Eye, Edit2, Download, Copy, ExternalLink, FileText, Plus, X } from 'lucide-react'
 import StatCard   from '../components/StatCard'
 import DataTable  from '../components/DataTable'
 import Modal      from '../components/Modal'
@@ -11,6 +11,7 @@ import AdminButton from '../components/AdminButton'
 import ResponsesModal from '../components/ResponsesModal'
 import { certificatesService, webinarsService, coursesService, formsService } from '../../firebase/services'
 import { issueManualCertificate } from '../../lib/certificateGenerator'
+import { DEFAULT_CERT_FONT } from '../../constants/certificateFonts'
 
 const genCode = () => `CERT-MW-${new Date().getFullYear()}-${Math.random().toString(36).substring(2,7).toUpperCase()}`
 
@@ -22,6 +23,7 @@ const genCode = () => `CERT-MW-${new Date().getFullYear()}-${Math.random().toStr
 const emptyIssueForm = () => ({
   imageUrl: '', namePos: null, idPos: null,
   recipient: '', recipientEmail: '', description: '',
+  customFields: [],
 })
 
 const emptyForm = () => ({
@@ -125,11 +127,28 @@ export default function AdminCertificates() {
         recipientName: issueForm.recipient,
         recipientEmail: issueForm.recipientEmail,
         description: issueForm.description,
+        customFields: issueForm.customFields,
       })
       closeIssue()
     } catch (e) { alert('Error: ' + e.message) }
     finally { setIssueSaving(false) }
   }
+
+  // Custom fields (Score, Grade, Duration, etc.) — fully optional, each gets
+  // its own draggable box on the template via CertPositionEditor.
+  const addCustomField = () => setIssueForm(p => ({
+    ...p,
+    customFields: [...p.customFields, { id: crypto.randomUUID(), label: '', value: '', xPct: 50, yPct: 50, fontSize: 28, color: '#1a1a1a', fontFamily: DEFAULT_CERT_FONT }],
+  }))
+  const removeCustomField = id => setIssueForm(p => ({ ...p, customFields: p.customFields.filter(f => f.id !== id) }))
+  const setCustomFieldText = (id, key) => e => setIssueForm(p => ({
+    ...p,
+    customFields: p.customFields.map(f => f.id === id ? { ...f, [key]: e.target.value } : f),
+  }))
+  const setCustomFieldPos = (id, patch) => setIssueForm(p => ({
+    ...p,
+    customFields: p.customFields.map(f => f.id === id ? { ...f, ...patch } : f),
+  }))
 
   // when admin links a webinar/course, auto-fill the title
   const onSourceChange = (type, id) => {
@@ -385,6 +404,8 @@ export default function AdminCertificates() {
                   namePos={issueForm.namePos}
                   idPos={issueForm.idPos}
                   onChange={({ namePos, idPos }) => setIssueForm(p => ({ ...p, namePos, idPos }))}
+                  customFields={issueForm.customFields}
+                  onChangeCustomField={setCustomFieldPos}
                 />
               )}
             </div>
@@ -402,6 +423,28 @@ export default function AdminCertificates() {
               <textarea rows={2} className={inputCls} value={issueForm.description} onChange={setIssueField('description')}
                 placeholder="e.g. For successfully completing the Clinical Pharmacy Masterclass" />
             </FormField>
+
+            <div className="rounded-xl border border-gray-200 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-bold text-gray-600 uppercase tracking-wider">Custom Fields (optional)</p>
+                <button type="button" onClick={addCustomField} className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg border border-dashed border-[#a855f7]/50 text-[#a855f7] hover:bg-purple-50">
+                  <Plus size={13} /> Add Custom Field
+                </button>
+              </div>
+              {issueForm.customFields.length === 0 ? (
+                <p className="text-[11px] text-gray-400">Add extra fields like Score, Grade, or Duration — each gets its own draggable position on the template above.</p>
+              ) : (
+                <div className="space-y-2">
+                  {issueForm.customFields.map(f => (
+                    <div key={f.id} className="flex gap-2 items-center">
+                      <input className={`${inputCls} flex-1`} value={f.label} onChange={setCustomFieldText(f.id, 'label')} placeholder="Field Label (e.g. Score)" />
+                      <input className={`${inputCls} flex-1`} value={f.value} onChange={setCustomFieldText(f.id, 'value')} placeholder="Field Value (e.g. 95/100)" />
+                      <button onClick={() => removeCustomField(f.id)} className="p-2 rounded-lg hover:bg-red-50 text-red-400 flex-shrink-0"><X size={16} /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <p className="text-[11px] text-gray-400">
               The Certificate ID is generated automatically (same MEDWEB-XXXXXXXXXX system used for auto-issued certificates), composited onto the template above, uploaded, and emailed to the recipient immediately on save.

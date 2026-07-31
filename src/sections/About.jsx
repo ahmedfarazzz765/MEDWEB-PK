@@ -130,7 +130,6 @@ export function MemberCard({ member }) {
 
 // ─── WHY MEDWEB STYLE CATEGORY CARD (Displayed on Homepage Slider) ───────────
 export function WhyMedwebCategoryCard({ category, memberCount, onSelect }) {
-  const navigate = useNavigate()
   const [line1, line2] = category.label1 && category.label2
     ? [category.label1, category.label2]
     : splitLabel(category.name)
@@ -141,11 +140,6 @@ export function WhyMedwebCategoryCard({ category, memberCount, onSelect }) {
     : { text: '#1655c3', bg: '#eff6ff' }
 
   const Icon = ICONS[category.icon] || Users
-  const showApply = category.applyEnabled && category.applyFormId
-  const handleApply = e => {
-    e.stopPropagation()
-    navigate(`/form/${category.applyFormId}`)
-  }
 
   return (
     <div
@@ -199,16 +193,6 @@ export function WhyMedwebCategoryCard({ category, memberCount, onSelect }) {
           <span>See Members</span>
           <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
         </div>
-
-        {showApply && (
-          <button
-            onClick={handleApply}
-            className="mt-2 w-full text-center text-xs font-bold text-white py-2 rounded-lg transition-transform hover:scale-[1.02]"
-            style={{ background: accent.text }}
-          >
-            Apply Now
-          </button>
-        )}
       </div>
     </div>
   )
