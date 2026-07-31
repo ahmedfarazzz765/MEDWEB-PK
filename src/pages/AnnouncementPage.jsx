@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, CalendarClock, Sparkles } from 'lucide-react'
+import { ArrowLeft, CalendarClock, Sparkles, ExternalLink } from 'lucide-react'
 import { announcementsService } from '../firebase/services'
 import { isAnnouncementActive } from '../lib/announcements'
 import Navbar from '../components/Navbar'
@@ -96,6 +96,21 @@ export default function AnnouncementPage() {
             <div className="text-gray-700 text-[15px] sm:text-base leading-[1.85] whitespace-pre-line">
               {item.content}
             </div>
+
+            {/* Only 'external' announcements have anywhere further to go —
+                'internal' ones already ARE this page, so a CTA back to itself
+                would be pointless and is intentionally omitted. */}
+            {item.linkType === 'external' && item.externalUrl && (
+              <a
+                href={item.externalUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-2 mt-8 text-base font-bold text-white px-7 py-3.5 rounded-xl hover:gap-3 transition-all shadow-md"
+                style={{ background: 'linear-gradient(135deg, #1655c3, #64ac37)' }}
+              >
+                {item.ctaLabel || 'Learn More'} <ExternalLink size={16} />
+              </a>
+            )}
           </div>
         </motion.div>
       </div>

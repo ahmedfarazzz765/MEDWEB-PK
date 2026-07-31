@@ -14,7 +14,16 @@ function AnnouncementCard({ a }) {
   const navigate = useNavigate()
   const active = isAnnouncementActive(a)
 
-  const handleActivate = () => {
+  // Every announcement gets a slug regardless of linkType (AdminAnnouncements.jsx
+  // always assigns one on save), so /announcements/:slug works as a universal
+  // detail page — clicking the card body always goes there first. The CTA
+  // button below is a separate, faster shortcut straight to the destination
+  // (external tab, or the same detail page for 'internal' since that page IS
+  // the destination) — kept working exactly as before via stopPropagation so
+  // it doesn't also trigger the card's own navigation.
+  const goToDetail = () => { if (a.slug) navigate(`/announcements/${a.slug}`) }
+  const handleCtaClick = e => {
+    e.stopPropagation()
     if (a.linkType === 'external' && a.externalUrl) {
       window.open(a.externalUrl, '_blank', 'noopener,noreferrer')
     } else if (a.slug) {
@@ -23,7 +32,13 @@ function AnnouncementCard({ a }) {
   }
 
   return (
-    <article className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-100 flex flex-col h-full">
+    <article
+      onClick={goToDetail}
+      role="button"
+      tabIndex={0}
+      onKeyDown={e => { if (e.key === 'Enter') goToDetail() }}
+      className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-100 flex flex-col h-full cursor-pointer"
+    >
       <div className="relative aspect-video overflow-hidden" style={{ background: 'linear-gradient(135deg,#eff6ff,#f0fdf4)' }}>
         {a.imageUrl ? (
           <CoverImage src={a.imageUrl} alt={a.title} className="w-full h-full hover:scale-105 transition-transform duration-500" />
@@ -52,7 +67,7 @@ function AnnouncementCard({ a }) {
         )}
 
         <button
-          onClick={handleActivate}
+          onClick={handleCtaClick}
           className="inline-flex items-center justify-center gap-2 mt-auto text-sm font-bold text-white px-4 py-2.5 rounded-xl hover:gap-3 transition-all w-fit"
           style={{ background: 'linear-gradient(135deg, #1655c3, #64ac37)' }}
         >

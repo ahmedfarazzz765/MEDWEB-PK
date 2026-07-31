@@ -12,6 +12,7 @@ import AnnouncementsListPage from './pages/AnnouncementsListPage'
 import WebinarsListPage   from './pages/WebinarsListPage'
 import CoursesListPage    from './pages/CoursesListPage'
 import TeamListPage       from './pages/TeamListPage'
+import SpeakersPage       from './pages/SpeakersPage'
 import AmbassadorsListPage from './pages/AmbassadorsListPage'
 import AdvisoryBoardListPage from './pages/AdvisoryBoardListPage'
 import BlogListPage       from './pages/BlogListPage'
@@ -39,6 +40,7 @@ function App() {
         <Route path="/courses"                element={<CoursesListPage />} />
         <Route path="/courses/:id"            element={<CourseDetailPage />} />
         <Route path="/team"                   element={<TeamListPage />} />
+        <Route path="/speakers"               element={<SpeakersPage />} />
         <Route path="/ambassadors"            element={<AmbassadorsListPage />} />
         <Route path="/ambassadors/:id"        element={<AmbassadorProfilePage />} />
         <Route path="/advisory-board"         element={<AdvisoryBoardListPage />} />

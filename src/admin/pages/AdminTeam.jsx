@@ -9,7 +9,7 @@ import AdminButton from '../components/AdminButton'
 import ActionButtons from '../components/ActionButtons'
 import CoverImage from '../../components/CoverImage'
 import SortableGrid, { SortableItem } from '../components/SortableGrid'
-import { teamService, teamCategoriesService, settingsService } from '../../firebase/services'
+import { teamService, teamCategoriesService, settingsService, formsService } from '../../firebase/services'
 
 export const PRESET_CATEGORIES = [
   'Chief Executive',
@@ -36,7 +36,9 @@ const emptyCatForm = () => ({
   name: '',
   desc: '',
   imageUrl: '',
-  accent: 'green'
+  accent: 'green',
+  applyEnabled: false,
+  applyFormId: '',
 })
 
 const colors = ['#1655c3', '#64ac37', '#2563eb', '#16a34a', '#0ea5e9', '#7c3aed']
@@ -105,6 +107,7 @@ export default function AdminTeam() {
   const [data, setData] = useState([])
   const [dbCategories, setDbCategories] = useState([])
   const [loading, setLoading] = useState(true)
+  const [forms, setForms] = useState([])
 
   // Member Modal states
   const [memberModal, setMemberModal] = useState(false)
@@ -130,9 +133,11 @@ export default function AdminTeam() {
       setDbCategories(cats)
       setCatsLoaded(true)
     })
+    const unsubForms = formsService.listen(setForms)
     return () => {
       unsubTeam()
       unsubCats()
+      unsubForms()
     }
   }, [])
 
@@ -276,7 +281,9 @@ export default function AdminTeam() {
       name: cat.name || '',
       desc: cat.desc || '',
       imageUrl: cat.imageUrl || '',
-      accent: cat.accent || 'green'
+      accent: cat.accent || 'green',
+      applyEnabled: cat.applyEnabled || false,
+      applyFormId: cat.applyFormId || '',
     })
     setCatEditId(cat.id)
     setCatModal('edit')
@@ -284,12 +291,15 @@ export default function AdminTeam() {
 
   const handleSaveCategory = async () => {
     if (!catForm.name.trim()) return
+    if (catForm.applyEnabled && !catForm.applyFormId) { alert('Select a form to link, or disable Apply Now.'); return }
 
     const payload = {
       name: catForm.name.trim(),
       desc: catForm.desc.trim(),
       imageUrl: catForm.imageUrl.trim(),
-      accent: catForm.accent
+      accent: catForm.accent,
+      applyEnabled: catForm.applyEnabled,
+      applyFormId: catForm.applyEnabled ? catForm.applyFormId : '',
     }
 
     setSaving(true)
@@ -624,6 +634,29 @@ export default function AdminTeam() {
                 <option value="blue">Blue (#1655c3)</option>
               </select>
             </FormField>
+
+            <div className="rounded-xl border border-blue-100 bg-blue-50/40 p-4 space-y-3">
+              <label className="flex items-center gap-3 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={catForm.applyEnabled}
+                  onChange={e => setCatForm(p => ({ ...p, applyEnabled: e.target.checked }))}
+                  className="w-4 h-4 accent-[#1655c3]"
+                />
+                <span className="text-sm font-semibold text-gray-700">Enable "Apply Now" for this category</span>
+              </label>
+              {catForm.applyEnabled && (
+                <FormField label="Linked Form">
+                  <select className={inputCls} value={catForm.applyFormId} onChange={e => setCatForm(p => ({ ...p, applyFormId: e.target.value }))}>
+                    <option value="">Select a form…</option>
+                    {forms.map(f => <option key={f.id} value={f.id}>{f.title}</option>)}
+                  </select>
+                  {forms.length === 0 && (
+                    <p className="text-[11px] text-gray-400 mt-1">No forms yet — create one in Form Builder first.</p>
+                  )}
+                </FormField>
+              )}
+            </div>
 
             <div className="flex gap-3 pt-2">
               <AdminButton variant="ghost" className="flex-1" onClick={() => setCatModal(false)}>Cancel</AdminButton>

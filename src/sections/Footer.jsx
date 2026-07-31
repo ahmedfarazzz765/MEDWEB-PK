@@ -20,6 +20,7 @@ const DEFAULTS = {
     { label: 'Webinars', url: '#webinars' },
     { label: 'Ambassador Program', url: '#ambassadors' },
     { label: 'Our Team', url: '/team' },
+    { label: 'Our Speakers', url: '/speakers' },
     { label: 'Advisory Board', url: '#advisory' },
     { label: 'Certificates', url: '#certificates' },
     { label: 'Blog', url: '#blog' },
@@ -100,15 +101,21 @@ function NewsletterForm() {
 export default function Footer() {
   const f = useSiteSettings(DEFAULTS)
 
-  // Guarantee the Announcements link always shows regardless of whatever
-  // quickLinks array is actually saved in Firestore — a site whose footer
-  // links were customized/saved before this feature existed has its own
-  // frozen array there that this code-level default can never reach on its
-  // own (same class of bug fixed for the Navbar's "Team" link earlier).
+  // Guarantee links added after a site's footer was first customized always
+  // show, regardless of whatever quickLinks array is actually saved in
+  // Firestore — a site whose footer links were saved before a given feature
+  // existed has its own frozen array there that this code-level default can
+  // never reach on its own (same class of bug fixed for the Navbar's "Team"
+  // link, then the Footer's "Announcements" link, earlier).
+  const REQUIRED_LINKS = [
+    { label: 'Announcements', url: '/announcements' },
+    { label: 'Our Speakers', url: '/speakers' },
+  ]
   const rawQuickLinks = f.quickLinks || DEFAULTS.quickLinks
-  const quickLinks = rawQuickLinks.some(l => l.url === '/announcements')
-    ? rawQuickLinks
-    : [...rawQuickLinks, { label: 'Announcements', url: '/announcements' }]
+  const quickLinks = REQUIRED_LINKS.reduce(
+    (links, req) => (links.some(l => l.url === req.url) ? links : [...links, req]),
+    rawQuickLinks
+  )
   const navigate = useNavigate()
   const location = useLocation()
 
