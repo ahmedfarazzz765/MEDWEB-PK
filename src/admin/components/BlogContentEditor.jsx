@@ -52,7 +52,7 @@ export default function BlogContentEditor({ post, content, onChangeContent, onEd
 
       <div className="flex-1 overflow-y-auto bg-gray-50">
         {view === 'write' ? (
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 h-full">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
             <RichTextEditor
               value={content}
               onChange={onChangeContent}

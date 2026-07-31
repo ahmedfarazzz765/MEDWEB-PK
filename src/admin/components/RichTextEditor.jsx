@@ -120,7 +120,13 @@ export default function RichTextEditor({ value, onChange, folder = 'medweb/blog/
   }
 
   return (
-    <div className="border border-gray-200 rounded-xl overflow-hidden bg-gray-50 flex flex-col h-full">
+    // No h-full here: this box must size to its own content (height: auto)
+    // so a long post grows taller than the viewport and the page around it
+    // scrolls to reach it. `h-full` previously clamped this box to its
+    // parent's height, and with `overflow-hidden` (kept only to clip the
+    // rounded corners) that silently hard-cropped everything past the fold
+    // instead of letting it scroll — the full-page editor's exact bug.
+    <div className="border border-gray-200 rounded-xl overflow-hidden bg-gray-50 flex flex-col">
       <div className="flex flex-wrap items-center gap-1 p-2 border-b border-gray-200 bg-white shrink-0">
         <select value={activeFormat} onChange={handleFormatChange} className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white cursor-pointer">
           {FORMATS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
@@ -163,8 +169,8 @@ export default function RichTextEditor({ value, onChange, folder = 'medweb/blog/
         <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageFile} />
       </div>
 
-      <div className={`bg-white flex-1 ${contentHeightClass}`}>
-        <EditorContent editor={editor} className="h-full" />
+      <div className={`bg-white ${contentHeightClass}`}>
+        <EditorContent editor={editor} />
       </div>
     </div>
   )
