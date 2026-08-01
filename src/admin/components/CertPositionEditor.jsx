@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect } from 'react'
 import { Rnd } from 'react-rnd'
 import { CERTIFICATE_FONTS, DEFAULT_CERT_FONT } from '../../constants/certificateFonts'
-import { fitFontSize, boxWidthPx, boxHeightPx } from '../../lib/certFontFit'
+import { fitFontSize, resolveBoxSize, boxWidthPx, boxHeightPx } from '../../lib/certFontFit'
 
 // Must match DEFAULT_NAME_POS / DEFAULT_ID_POS in functions/index.js exactly —
 // these are the fallbacks used if a webinar's certTemplate has no saved
@@ -12,17 +12,6 @@ const DEFAULT_ID_POS   = { xPct: 10, yPct: 90, fontSize: 26, color: '#1a1a1a' }
 const DEFAULT_CUSTOM_FIELD_POS = { xPct: 50, yPct: 50, fontSize: 28, color: '#1a1a1a', fontFamily: DEFAULT_CERT_FONT }
 
 const MIN_BOX_PX = { width: 30, height: 16 }
-
-// A box with no saved widthPct/heightPct yet (every position saved before
-// resize handles existed) needs SOME starting size to render — derived from
-// its own fontSize relative to the image, not an arbitrary flat number, so
-// the initial box roughly matches the text it already contains.
-function defaultBoxPct(fontSize, naturalWidth, naturalHeight, widthFactor) {
-  return {
-    widthPct: naturalWidth ? Math.min(90, (fontSize * widthFactor / naturalWidth) * 100) : 30,
-    heightPct: naturalHeight ? Math.max(4, (fontSize * 1.7 / naturalHeight) * 100) : 8,
-  }
-}
 
 // Draggable + resizable box editor: shows the certificate template image
 // with two fixed overlay boxes (Name, Certificate ID) the admin can drag
@@ -81,29 +70,32 @@ export default function CertPositionEditor({ imageUrl, namePos, idPos, onChange,
   const h = containerSize.height || 1
   const previewScale = naturalSize.width ? w / naturalSize.width : 1
 
-  const nameBoxDefaults = defaultBoxPct(name.fontSize, naturalSize.width, naturalSize.height, 12)
-  const nameWidthPct = name.widthPct ?? nameBoxDefaults.widthPct
-  const nameHeightPct = name.heightPct ?? nameBoxDefaults.heightPct
+  // resolveBoxSize() is the exact function certificateGenerator.js calls
+  // for the same purpose — a box with no saved widthPct/heightPct yet gets
+  // the identical fallback size here and at generation time.
+  const nameBoxSize = resolveBoxSize(name, naturalSize.width, naturalSize.height, 12)
+  const nameWidthPct = nameBoxSize.widthPct
+  const nameHeightPct = nameBoxSize.heightPct
   const fittedNameSize = fitFontSize({
     text: nameSample,
     fontFamily: name.fontFamily || DEFAULT_CERT_FONT,
     bold: nameFontMeta.bold,
     startSize: name.fontSize,
-    maxWidthPx: boxWidthPx({ ...name, widthPct: nameWidthPct }, naturalSize.width),
-    maxHeightPx: boxHeightPx({ ...name, heightPct: nameHeightPct }, naturalSize.height),
+    maxWidthPx: boxWidthPx(nameWidthPct, naturalSize.width),
+    maxHeightPx: boxHeightPx(nameHeightPct, naturalSize.height),
   })
 
-  const idBoxDefaults = defaultBoxPct(id.fontSize, naturalSize.width, naturalSize.height, 10)
-  const idWidthPct = id.widthPct ?? idBoxDefaults.widthPct
-  const idHeightPct = id.heightPct ?? idBoxDefaults.heightPct
+  const idBoxSize = resolveBoxSize(id, naturalSize.width, naturalSize.height, 10)
+  const idWidthPct = idBoxSize.widthPct
+  const idHeightPct = idBoxSize.heightPct
   const idText = 'ID: MEDWEB-000123'
   const fittedIdSize = fitFontSize({
     text: idText,
     fontFamily: 'Helvetica, Arial, sans-serif',
     bold: true,
     startSize: id.fontSize,
-    maxWidthPx: boxWidthPx({ ...id, widthPct: idWidthPct }, naturalSize.width),
-    maxHeightPx: boxHeightPx({ ...id, heightPct: idHeightPct }, naturalSize.height),
+    maxWidthPx: boxWidthPx(idWidthPct, naturalSize.width),
+    maxHeightPx: boxHeightPx(idHeightPct, naturalSize.height),
   })
 
   return (
@@ -188,17 +180,17 @@ export default function CertPositionEditor({ imageUrl, namePos, idPos, onChange,
         {fields.map(f => {
           const pos = { ...DEFAULT_CUSTOM_FIELD_POS, ...f }
           const font = CERTIFICATE_FONTS.find(cf => cf.css === pos.fontFamily) || CERTIFICATE_FONTS[0]
-          const fieldDefaults = defaultBoxPct(pos.fontSize, naturalSize.width, naturalSize.height, 12)
-          const widthPct = pos.widthPct ?? fieldDefaults.widthPct
-          const heightPct = pos.heightPct ?? fieldDefaults.heightPct
+          const fieldBoxSize = resolveBoxSize(pos, naturalSize.width, naturalSize.height, 12)
+          const widthPct = fieldBoxSize.widthPct
+          const heightPct = fieldBoxSize.heightPct
           const text = f.value?.trim() || f.label?.trim() || 'Custom Field'
           const fittedSize = fitFontSize({
             text,
             fontFamily: pos.fontFamily || DEFAULT_CERT_FONT,
             bold: font.bold,
             startSize: pos.fontSize,
-            maxWidthPx: boxWidthPx({ ...pos, widthPct }, naturalSize.width),
-            maxHeightPx: boxHeightPx({ ...pos, heightPct }, naturalSize.height),
+            maxWidthPx: boxWidthPx(widthPct, naturalSize.width),
+            maxHeightPx: boxHeightPx(heightPct, naturalSize.height),
           })
           return (
             <Rnd

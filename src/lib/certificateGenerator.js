@@ -13,7 +13,7 @@ import { certificatesService, formsService, studentsDbService } from '../firebas
 import { uploadToCloudinary } from '../firebase/cloudinary'
 import { sendCertificateEmail } from '../firebase/email'
 import { CERTIFICATE_FONTS, DEFAULT_CERT_FONT } from '../constants/certificateFonts'
-import { fitFontSize, boxWidthPx, boxHeightPx } from './certFontFit'
+import { fitFontSize, resolveBoxSize, boxWidthPx, boxHeightPx } from './certFontFit'
 
 const DEFAULT_NAME_POS = { xPct: 50, yPct: 28, fontSize: 48, color: '#1a1a1a', fontFamily: DEFAULT_CERT_FONT }
 const DEFAULT_ID_POS   = { xPct: 10, yPct: 90, fontSize: 26, color: '#1a1a1a' }
@@ -62,36 +62,44 @@ async function compositeCertificateCanvas({ templateUrl, studentName, certCode, 
 
   await ensureFontLoaded(name.fontFamily, name.fontSize)
 
-  // Long names auto-shrink to fit — once an admin has resized the Name box
-  // (CertPositionEditor.jsx), its own widthPct/heightPct become the real
-  // constraint; boxWidthPx falls back to the old edge-derived heuristic for
-  // legacy positions that predate resizable boxes. Short names that already
-  // fit at the admin's configured size are untouched.
+  // Long names auto-shrink to fit. resolveBoxSize() is the SAME function
+  // CertPositionEditor.jsx's live preview calls for the same purpose — a
+  // box with no saved widthPct/heightPct yet (every position saved before
+  // resizable boxes existed) gets the identical font-size-derived fallback
+  // size in both places, not two different formulas that can disagree.
   const nameFontFamily = name.fontFamily || DEFAULT_CERT_FONT
+  const nameSize = resolveBoxSize(name, canvas.width, canvas.height, 12)
   const fittedNameSize = fitFontSize({
     text: studentName,
     fontFamily: nameFontFamily,
     bold: nameFont.bold,
     startSize: name.fontSize,
-    maxWidthPx: boxWidthPx(name, canvas.width),
-    maxHeightPx: boxHeightPx(name, canvas.height),
+    maxWidthPx: boxWidthPx(nameSize.widthPct, canvas.width),
+    maxHeightPx: boxHeightPx(nameSize.heightPct, canvas.height),
     ctx,
   })
 
-  ctx.textBaseline = 'alphabetic'
+  // 'middle' baseline, not 'alphabetic' — the admin preview vertically
+  // centers each box's text via CSS flexbox (align-items: center), which
+  // anchors to the true vertical center of the line, not its baseline.
+  // 'alphabetic' sits noticeably lower (roughly where a lowercase letter
+  // without descenders rests), which is exactly the vertical drift between
+  // the preview and the generated image this fixes.
+  ctx.textBaseline = 'middle'
   ctx.fillStyle = name.color
   ctx.font = `${nameFont.bold ? 'bold ' : ''}${fittedNameSize}px ${nameFontFamily}`
   ctx.textAlign = 'center'
   ctx.fillText(studentName, (name.xPct / 100) * canvas.width, (name.yPct / 100) * canvas.height)
 
   const idText = `ID: ${certCode}`
+  const idSize = resolveBoxSize(id, canvas.width, canvas.height, 10)
   const fittedIdSize = fitFontSize({
     text: idText,
     fontFamily: 'Helvetica, Arial, sans-serif',
     bold: true,
     startSize: id.fontSize,
-    maxWidthPx: boxWidthPx(id, canvas.width),
-    maxHeightPx: boxHeightPx(id, canvas.height),
+    maxWidthPx: boxWidthPx(idSize.widthPct, canvas.width),
+    maxHeightPx: boxHeightPx(idSize.heightPct, canvas.height),
     ctx,
   })
   ctx.fillStyle = id.color
@@ -109,13 +117,14 @@ async function compositeCertificateCanvas({ templateUrl, studentName, certCode, 
     const font = CERTIFICATE_FONTS.find(f => f.css === field.fontFamily) || CERTIFICATE_FONTS[0]
     const fieldFontFamily = field.fontFamily || DEFAULT_CERT_FONT
     await ensureFontLoaded(field.fontFamily, field.fontSize)
+    const fieldSize = resolveBoxSize({ ...field, fontSize: field.fontSize || 28 }, canvas.width, canvas.height, 12)
     const fittedFieldSize = fitFontSize({
       text: value,
       fontFamily: fieldFontFamily,
       bold: font.bold,
       startSize: field.fontSize || 28,
-      maxWidthPx: boxWidthPx(field, canvas.width),
-      maxHeightPx: boxHeightPx(field, canvas.height),
+      maxWidthPx: boxWidthPx(fieldSize.widthPct, canvas.width),
+      maxHeightPx: boxHeightPx(fieldSize.heightPct, canvas.height),
       ctx,
     })
     ctx.fillStyle = field.color || '#1a1a1a'
