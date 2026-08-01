@@ -85,6 +85,7 @@ export default function AdminCertificates() {
   const [issueForm,  setIssueForm]  = useState(emptyIssueForm)
   const [issueSaving, setIssueSaving] = useState(false)
   const [issueProgress, setIssueProgress] = useState(null) // { done, total } while a batch is issuing
+  const [focusedRecipientId, setFocusedRecipientId] = useState(null) // drives the Name box's live preview text
   const [preview, setPreview] = useState(null)         // cert row for full preview modal
   const [viewSubCert, setViewSubCert] = useState(null) // cert row whose submission is being viewed
   const [verifyCode,   setVerifyCode]   = useState('')
@@ -129,13 +130,15 @@ export default function AdminCertificates() {
   // any) — only Recipient Name/Email/Description and custom field VALUES
   // start blank, since those are naturally different per recipient.
   const openIssue = () => {
-    setIssueForm(lastTemplate ? {
+    const next = lastTemplate ? {
       ...emptyIssueForm(),
       imageUrl: lastTemplate.imageUrl || '',
       namePos: lastTemplate.namePos || null,
       idPos: lastTemplate.idPos || null,
       customFields: (lastTemplate.customFields || []).map(f => ({ ...f, value: '' })),
-    } : emptyIssueForm())
+    } : emptyIssueForm()
+    setIssueForm(next)
+    setFocusedRecipientId(next.recipients[0].id)
     setIssueModal(true)
   }
   const closeIssue = () => setIssueModal(false)
@@ -144,12 +147,20 @@ export default function AdminCertificates() {
   // Recipients — a repeatable list so one template/description/custom-field
   // set can be issued to many people in one go, each still getting their
   // own distinct certificate ID (generated per-recipient below).
-  const addRecipient = () => setIssueForm(p => ({ ...p, recipients: [...p.recipients, emptyRecipient()] }))
+  // `focusedRecipientId` drives the Name box's live preview in
+  // CertPositionEditor — only the actively-edited row needs to preview live.
+  const addRecipient = () => setIssueForm(p => {
+    const row = emptyRecipient()
+    setFocusedRecipientId(row.id)
+    return { ...p, recipients: [...p.recipients, row] }
+  })
   const removeRecipient = id => setIssueForm(p => ({ ...p, recipients: p.recipients.filter(r => r.id !== id) }))
   const setRecipientField = (id, key) => e => setIssueForm(p => ({
     ...p,
     recipients: p.recipients.map(r => r.id === id ? { ...r, [key]: e.target.value } : r),
   }))
+  const activeRecipientName = issueForm.recipients.find(r => r.id === focusedRecipientId)?.name
+    || issueForm.recipients[0]?.name || ''
 
   // Loops issueManualCertificate() once per recipient — each call is its
   // own composite/upload/record/email pass with its own generated cert
@@ -480,6 +491,7 @@ export default function AdminCertificates() {
                   onChange={({ namePos, idPos }) => setIssueForm(p => ({ ...p, namePos, idPos }))}
                   customFields={issueForm.customFields}
                   onChangeCustomField={setCustomFieldPos}
+                  nameSampleText={activeRecipientName}
                 />
               )}
             </div>
@@ -494,7 +506,7 @@ export default function AdminCertificates() {
               <div className="space-y-2">
                 {issueForm.recipients.map(r => (
                   <div key={r.id} className="flex gap-2 items-center">
-                    <input className={`${inputCls} flex-1`} value={r.name} onChange={setRecipientField(r.id, 'name')} placeholder="Recipient Name" />
+                    <input className={`${inputCls} flex-1`} value={r.name} onChange={setRecipientField(r.id, 'name')} onFocus={() => setFocusedRecipientId(r.id)} placeholder="Recipient Name" />
                     <input className={`${inputCls} flex-1`} type="email" value={r.email} onChange={setRecipientField(r.id, 'email')} placeholder="name@email.com" />
                     {issueForm.recipients.length > 1 && (
                       <button onClick={() => removeRecipient(r.id)} className="p-2 rounded-lg hover:bg-red-50 text-red-400 flex-shrink-0"><X size={16} /></button>

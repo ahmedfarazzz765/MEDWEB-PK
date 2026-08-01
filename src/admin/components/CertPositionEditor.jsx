@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { CERTIFICATE_FONTS, DEFAULT_CERT_FONT } from '../../constants/certificateFonts'
+import { fitFontSize, maxNameWidthPx } from '../../lib/certFontFit'
 
 // Must match DEFAULT_NAME_POS / DEFAULT_ID_POS in functions/index.js exactly —
 // these are the fallbacks used if a webinar's certTemplate has no saved
@@ -19,7 +20,11 @@ const DEFAULT_CUSTOM_FIELD_POS = { xPct: 50, yPct: 50, fontSize: 28, color: '#1a
 // text-anchor:start there) — these conventions must stay in sync with
 // certificateGenerator.js's compositeCertificateCanvas or what the admin sees
 // here won't match the generated certificate image.
-export default function CertPositionEditor({ imageUrl, namePos, idPos, onChange, customFields, onChangeCustomField }) {
+// `nameSampleText` lets a caller drive the Name box's live preview with a
+// real value (the bulk Issue Certificate flow passes the currently-focused
+// recipient's typed name) instead of the generic placeholder — defaults to
+// "Ahmed Khan" so every other caller (AdminWebinars.jsx) is unaffected.
+export default function CertPositionEditor({ imageUrl, namePos, idPos, onChange, customFields, onChangeCustomField, nameSampleText }) {
   const containerRef = useRef(null)
   const [dragging, setDragging] = useState(null) // 'name' | 'id' | `custom:${id}` | null
   // fontSize is stored in the template image's own pixel units (the Cloud
@@ -27,15 +32,29 @@ export default function CertPositionEditor({ imageUrl, namePos, idPos, onChange,
   // preview text is the same relative size as it'll be on the real image,
   // not an arbitrary approximation.
   const [previewScale, setPreviewScale] = useState(1)
+  const [naturalWidth, setNaturalWidth] = useState(1)
 
   const handleImageLoad = e => {
     const displayedWidth = containerRef.current?.clientWidth || e.target.naturalWidth
     setPreviewScale(displayedWidth / (e.target.naturalWidth || displayedWidth))
+    setNaturalWidth(e.target.naturalWidth || 1)
   }
 
   const name = { ...DEFAULT_NAME_POS, ...(namePos || {}) }
   const id = { ...DEFAULT_ID_POS, ...(idPos || {}) }
   const fields = customFields || []
+  const nameSample = nameSampleText?.trim() || 'Ahmed Khan'
+  const nameFontMeta = CERTIFICATE_FONTS.find(f => f.css === name.fontFamily) || CERTIFICATE_FONTS[0]
+  // Fitted at full image resolution (matching how the real generator
+  // measures it), then scaled down by previewScale for on-screen display —
+  // same convention the raw fontSize already used below.
+  const fittedNameSize = fitFontSize({
+    text: nameSample,
+    fontFamily: name.fontFamily || DEFAULT_CERT_FONT,
+    bold: nameFontMeta.bold,
+    startSize: name.fontSize,
+    maxWidthPx: maxNameWidthPx(name.xPct, naturalWidth),
+  })
 
   const setName = patch => onChange({ namePos: { ...name, ...patch }, idPos: id })
   const setId = patch => onChange({ namePos: name, idPos: { ...id, ...patch } })
@@ -88,14 +107,14 @@ export default function CertPositionEditor({ imageUrl, namePos, idPos, onChange,
             left: `${name.xPct}%`,
             top: `${name.yPct}%`,
             transform: 'translate(-50%, -50%)',
-            fontWeight: (CERTIFICATE_FONTS.find(f => f.css === name.fontFamily) || CERTIFICATE_FONTS[0]).bold ? 'bold' : 'normal',
+            fontWeight: nameFontMeta.bold ? 'bold' : 'normal',
             fontFamily: name.fontFamily || DEFAULT_CERT_FONT,
-            fontSize: Math.max(8, name.fontSize * previewScale),
+            fontSize: Math.max(8, fittedNameSize * previewScale),
             color: name.color,
             whiteSpace: 'nowrap',
           }}
         >
-          Ahmed Khan
+          {nameSample}
         </div>
 
         {/* ID box — left-anchored at its point */}

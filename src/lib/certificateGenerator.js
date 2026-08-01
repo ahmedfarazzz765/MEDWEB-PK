@@ -13,6 +13,7 @@ import { certificatesService, formsService, studentsDbService } from '../firebas
 import { uploadToCloudinary } from '../firebase/cloudinary'
 import { sendCertificateEmail } from '../firebase/email'
 import { CERTIFICATE_FONTS, DEFAULT_CERT_FONT } from '../constants/certificateFonts'
+import { fitFontSize, maxNameWidthPx } from './certFontFit'
 
 const DEFAULT_NAME_POS = { xPct: 50, yPct: 28, fontSize: 48, color: '#1a1a1a', fontFamily: DEFAULT_CERT_FONT }
 const DEFAULT_ID_POS   = { xPct: 10, yPct: 90, fontSize: 26, color: '#1a1a1a' }
@@ -61,9 +62,23 @@ async function compositeCertificateCanvas({ templateUrl, studentName, certCode, 
 
   await ensureFontLoaded(name.fontFamily, name.fontSize)
 
+  // Long names auto-shrink to fit — the name box has no configured width
+  // (just a center point), so the available width is derived from how much
+  // room exists between that point and the nearer edge of the image. Short
+  // names that already fit at the admin's configured size are untouched.
+  const nameFontFamily = name.fontFamily || DEFAULT_CERT_FONT
+  const fittedNameSize = fitFontSize({
+    text: studentName,
+    fontFamily: nameFontFamily,
+    bold: nameFont.bold,
+    startSize: name.fontSize,
+    maxWidthPx: maxNameWidthPx(name.xPct, canvas.width),
+    ctx,
+  })
+
   ctx.textBaseline = 'alphabetic'
   ctx.fillStyle = name.color
-  ctx.font = `${nameFont.bold ? 'bold ' : ''}${name.fontSize}px ${name.fontFamily || DEFAULT_CERT_FONT}`
+  ctx.font = `${nameFont.bold ? 'bold ' : ''}${fittedNameSize}px ${nameFontFamily}`
   ctx.textAlign = 'center'
   ctx.fillText(studentName, (name.xPct / 100) * canvas.width, (name.yPct / 100) * canvas.height)
 
