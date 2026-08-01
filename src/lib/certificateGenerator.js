@@ -13,7 +13,7 @@ import { certificatesService, formsService, studentsDbService } from '../firebas
 import { uploadToCloudinary } from '../firebase/cloudinary'
 import { sendCertificateEmail } from '../firebase/email'
 import { CERTIFICATE_FONTS, DEFAULT_CERT_FONT } from '../constants/certificateFonts'
-import { fitFontSize, maxNameWidthPx } from './certFontFit'
+import { fitFontSize, boxWidthPx, boxHeightPx } from './certFontFit'
 
 const DEFAULT_NAME_POS = { xPct: 50, yPct: 28, fontSize: 48, color: '#1a1a1a', fontFamily: DEFAULT_CERT_FONT }
 const DEFAULT_ID_POS   = { xPct: 10, yPct: 90, fontSize: 26, color: '#1a1a1a' }
@@ -62,17 +62,19 @@ async function compositeCertificateCanvas({ templateUrl, studentName, certCode, 
 
   await ensureFontLoaded(name.fontFamily, name.fontSize)
 
-  // Long names auto-shrink to fit — the name box has no configured width
-  // (just a center point), so the available width is derived from how much
-  // room exists between that point and the nearer edge of the image. Short
-  // names that already fit at the admin's configured size are untouched.
+  // Long names auto-shrink to fit — once an admin has resized the Name box
+  // (CertPositionEditor.jsx), its own widthPct/heightPct become the real
+  // constraint; boxWidthPx falls back to the old edge-derived heuristic for
+  // legacy positions that predate resizable boxes. Short names that already
+  // fit at the admin's configured size are untouched.
   const nameFontFamily = name.fontFamily || DEFAULT_CERT_FONT
   const fittedNameSize = fitFontSize({
     text: studentName,
     fontFamily: nameFontFamily,
     bold: nameFont.bold,
     startSize: name.fontSize,
-    maxWidthPx: maxNameWidthPx(name.xPct, canvas.width),
+    maxWidthPx: boxWidthPx(name, canvas.width),
+    maxHeightPx: boxHeightPx(name, canvas.height),
     ctx,
   })
 
@@ -82,10 +84,20 @@ async function compositeCertificateCanvas({ templateUrl, studentName, certCode, 
   ctx.textAlign = 'center'
   ctx.fillText(studentName, (name.xPct / 100) * canvas.width, (name.yPct / 100) * canvas.height)
 
+  const idText = `ID: ${certCode}`
+  const fittedIdSize = fitFontSize({
+    text: idText,
+    fontFamily: 'Helvetica, Arial, sans-serif',
+    bold: true,
+    startSize: id.fontSize,
+    maxWidthPx: boxWidthPx(id, canvas.width),
+    maxHeightPx: boxHeightPx(id, canvas.height),
+    ctx,
+  })
   ctx.fillStyle = id.color
-  ctx.font = `bold ${id.fontSize}px Helvetica, Arial, sans-serif`
+  ctx.font = `bold ${fittedIdSize}px Helvetica, Arial, sans-serif`
   ctx.textAlign = 'left'
-  ctx.fillText(`ID: ${certCode}`, (id.xPct / 100) * canvas.width, (id.yPct / 100) * canvas.height)
+  ctx.fillText(idText, (id.xPct / 100) * canvas.width, (id.yPct / 100) * canvas.height)
 
   // Optional dynamic fields (manual "Issue Certificate" flow only — the
   // automatic webinar flow never passes these). Centered on their point,
@@ -95,9 +107,19 @@ async function compositeCertificateCanvas({ templateUrl, studentName, certCode, 
     const value = field.value?.trim()
     if (!value) continue
     const font = CERTIFICATE_FONTS.find(f => f.css === field.fontFamily) || CERTIFICATE_FONTS[0]
+    const fieldFontFamily = field.fontFamily || DEFAULT_CERT_FONT
     await ensureFontLoaded(field.fontFamily, field.fontSize)
+    const fittedFieldSize = fitFontSize({
+      text: value,
+      fontFamily: fieldFontFamily,
+      bold: font.bold,
+      startSize: field.fontSize || 28,
+      maxWidthPx: boxWidthPx(field, canvas.width),
+      maxHeightPx: boxHeightPx(field, canvas.height),
+      ctx,
+    })
     ctx.fillStyle = field.color || '#1a1a1a'
-    ctx.font = `${font.bold ? 'bold ' : ''}${field.fontSize || 28}px ${field.fontFamily || DEFAULT_CERT_FONT}`
+    ctx.font = `${font.bold ? 'bold ' : ''}${fittedFieldSize}px ${fieldFontFamily}`
     ctx.textAlign = 'center'
     ctx.fillText(value, ((field.xPct ?? 50) / 100) * canvas.width, ((field.yPct ?? 50) / 100) * canvas.height)
   }
