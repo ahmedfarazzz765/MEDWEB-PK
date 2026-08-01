@@ -9,7 +9,7 @@ import CertPositionEditor from '../components/CertPositionEditor'
 import CertificateTemplate, { TEMPLATES } from '../../components/CertificateTemplate'
 import AdminButton from '../components/AdminButton'
 import ResponsesModal from '../components/ResponsesModal'
-import { certificatesService, webinarsService, coursesService, formsService } from '../../firebase/services'
+import { certificatesService, webinarsService, coursesService, formsService, settingsService } from '../../firebase/services'
 import { issueManualCertificate } from '../../lib/certificateGenerator'
 import { DEFAULT_CERT_FONT } from '../../constants/certificateFonts'
 
@@ -87,6 +87,11 @@ export default function AdminCertificates() {
   const [verifyCode,   setVerifyCode]   = useState('')
   const [verifyResult, setVerifyResult] = useState(null)
   const [verifying,    setVerifying]    = useState(false)
+  // The last template (image + Name/ID/custom-field positions & fonts) the
+  // admin actually issued a certificate with — so re-opening "Issue
+  // Certificate" for the next recipient doesn't force a re-upload every
+  // time. Persisted on settings/site, so it also carries across sessions.
+  const [lastTemplate, setLastTemplate] = useState(null)
 
   useEffect(() => {
     const u1 = certificatesService.listen(rows => { setData(rows); setLoading(false) })
@@ -95,6 +100,10 @@ export default function AdminCertificates() {
     const u4 = formsService.listen(rows => setForms(rows))
     const u5 = formsService.listenSubmissions(rows => setSubs(rows))
     return () => { u1(); u2(); u3(); u4(); u5() }
+  }, [])
+
+  useEffect(() => {
+    settingsService.get().then(s => { if (s?.lastManualCertTemplate) setLastTemplate(s.lastManualCertTemplate) }).catch(() => {})
   }, [])
 
   // The submission a certificate was auto-issued from, plus the form that
@@ -113,7 +122,19 @@ export default function AdminCertificates() {
   const set = field => e => setForm(p => ({ ...p, [field]: e.target.value }))
 
   // --- Manual "Issue Certificate" (rebuilt to match the automatic flow) ---
-  const openIssue  = () => { setIssueForm(emptyIssueForm()); setIssueModal(true) }
+  // Pre-fills the template/positions/fonts from the last-used template (if
+  // any) — only Recipient Name/Email/Description and custom field VALUES
+  // start blank, since those are naturally different per recipient.
+  const openIssue = () => {
+    setIssueForm(lastTemplate ? {
+      ...emptyIssueForm(),
+      imageUrl: lastTemplate.imageUrl || '',
+      namePos: lastTemplate.namePos || null,
+      idPos: lastTemplate.idPos || null,
+      customFields: (lastTemplate.customFields || []).map(f => ({ ...f, value: '' })),
+    } : emptyIssueForm())
+    setIssueModal(true)
+  }
   const closeIssue = () => setIssueModal(false)
   const setIssueField = field => e => setIssueForm(p => ({ ...p, [field]: e.target.value }))
 
@@ -129,6 +150,14 @@ export default function AdminCertificates() {
         description: issueForm.description,
         customFields: issueForm.customFields,
       })
+      const usedTemplate = {
+        imageUrl: issueForm.imageUrl,
+        namePos: issueForm.namePos,
+        idPos: issueForm.idPos,
+        customFields: issueForm.customFields.map(({ value, ...rest }) => rest),
+      }
+      setLastTemplate(usedTemplate)
+      settingsService.update({ lastManualCertTemplate: usedTemplate }).catch(() => {})
       closeIssue()
     } catch (e) { alert('Error: ' + e.message) }
     finally { setIssueSaving(false) }
