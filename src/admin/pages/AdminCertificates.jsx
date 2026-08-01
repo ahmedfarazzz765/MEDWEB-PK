@@ -20,9 +20,11 @@ const genCode = () => `CERT-MW-${new Date().getFullYear()}-${Math.random().toStr
 // + font picker, see CertPositionEditor), instead of the old
 // design-picker/signatory form below (kept only for editing legacy
 // records that don't have a certificateImageUrl).
+const emptyRecipient = () => ({ id: crypto.randomUUID(), name: '', email: '' })
+
 const emptyIssueForm = () => ({
   imageUrl: '', namePos: null, idPos: null,
-  recipient: '', recipientEmail: '', description: '',
+  recipients: [emptyRecipient()], description: '',
   customFields: [],
 })
 
@@ -82,6 +84,7 @@ export default function AdminCertificates() {
   const [issueModal, setIssueModal] = useState(false)
   const [issueForm,  setIssueForm]  = useState(emptyIssueForm)
   const [issueSaving, setIssueSaving] = useState(false)
+  const [issueProgress, setIssueProgress] = useState(null) // { done, total } while a batch is issuing
   const [preview, setPreview] = useState(null)         // cert row for full preview modal
   const [viewSubCert, setViewSubCert] = useState(null) // cert row whose submission is being viewed
   const [verifyCode,   setVerifyCode]   = useState('')
@@ -138,29 +141,71 @@ export default function AdminCertificates() {
   const closeIssue = () => setIssueModal(false)
   const setIssueField = field => e => setIssueForm(p => ({ ...p, [field]: e.target.value }))
 
+  // Recipients — a repeatable list so one template/description/custom-field
+  // set can be issued to many people in one go, each still getting their
+  // own distinct certificate ID (generated per-recipient below).
+  const addRecipient = () => setIssueForm(p => ({ ...p, recipients: [...p.recipients, emptyRecipient()] }))
+  const removeRecipient = id => setIssueForm(p => ({ ...p, recipients: p.recipients.filter(r => r.id !== id) }))
+  const setRecipientField = (id, key) => e => setIssueForm(p => ({
+    ...p,
+    recipients: p.recipients.map(r => r.id === id ? { ...r, [key]: e.target.value } : r),
+  }))
+
+  // Loops issueManualCertificate() once per recipient — each call is its
+  // own composite/upload/record/email pass with its own generated cert
+  // code, exactly like the single-recipient flow, just repeated. A failure
+  // on one recipient is caught and recorded, not thrown — the rest of the
+  // batch keeps going, and the admin sees a full success/failure summary
+  // at the end rather than a silent partial batch.
   const handleIssueSave = async () => {
+    const validRecipients = issueForm.recipients.filter(r => r.name.trim() && r.email.trim())
+    if (validRecipients.length === 0) { alert('Add at least one recipient with a name and email'); return }
+
     setIssueSaving(true)
-    try {
-      await issueManualCertificate({
-        templateUrl: issueForm.imageUrl,
-        namePos: issueForm.namePos,
-        idPos: issueForm.idPos,
-        recipientName: issueForm.recipient,
-        recipientEmail: issueForm.recipientEmail,
-        description: issueForm.description,
-        customFields: issueForm.customFields,
-      })
-      const usedTemplate = {
-        imageUrl: issueForm.imageUrl,
-        namePos: issueForm.namePos,
-        idPos: issueForm.idPos,
-        customFields: issueForm.customFields.map(({ value, ...rest }) => rest),
+    setIssueProgress({ done: 0, total: validRecipients.length })
+    const results = []
+    for (const r of validRecipients) {
+      try {
+        await issueManualCertificate({
+          templateUrl: issueForm.imageUrl,
+          namePos: issueForm.namePos,
+          idPos: issueForm.idPos,
+          recipientName: r.name,
+          recipientEmail: r.email,
+          description: issueForm.description,
+          customFields: issueForm.customFields,
+        })
+        results.push({ ...r, success: true })
+      } catch (e) {
+        results.push({ ...r, success: false, error: e.message })
       }
-      setLastTemplate(usedTemplate)
-      settingsService.update({ lastManualCertTemplate: usedTemplate }).catch(() => {})
+      setIssueProgress(p => ({ ...p, done: p.done + 1 }))
+    }
+
+    const usedTemplate = {
+      imageUrl: issueForm.imageUrl,
+      namePos: issueForm.namePos,
+      idPos: issueForm.idPos,
+      customFields: issueForm.customFields.map(({ value, ...rest }) => rest),
+    }
+    setLastTemplate(usedTemplate)
+    settingsService.update({ lastManualCertTemplate: usedTemplate }).catch(() => {})
+
+    setIssueSaving(false)
+    setIssueProgress(null)
+
+    const failed = results.filter(r => !r.success)
+    if (failed.length === 0) {
+      alert(`Issued ${results.length} certificate${results.length > 1 ? 's' : ''} successfully.`)
       closeIssue()
-    } catch (e) { alert('Error: ' + e.message) }
-    finally { setIssueSaving(false) }
+    } else {
+      // Left open (not closed) so the admin can see which rows failed and
+      // fix/retry them — the succeeded ones are already issued either way.
+      alert(
+        `Issued ${results.length - failed.length} of ${results.length}.\n\nFailed:\n` +
+        failed.map(f => `• ${f.name} (${f.email}) — ${f.error}`).join('\n')
+      )
+    }
   }
 
   // Custom fields (Score, Grade, Duration, etc.) — fully optional, each gets
@@ -439,16 +484,28 @@ export default function AdminCertificates() {
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField label="Recipient Name">
-                <input className={inputCls} value={issueForm.recipient} onChange={setIssueField('recipient')} placeholder="Fatima Zahra" />
-              </FormField>
-              <FormField label="Recipient Email">
-                <input className={inputCls} type="email" value={issueForm.recipientEmail} onChange={setIssueField('recipientEmail')} placeholder="name@email.com" />
-              </FormField>
+            <div className="rounded-xl border border-gray-200 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-bold text-gray-600 uppercase tracking-wider">Recipients</p>
+                <button type="button" onClick={addRecipient} className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg border border-dashed border-[#1655c3]/40 text-[#1655c3] hover:bg-blue-50">
+                  <Plus size={13} /> Add Recipient
+                </button>
+              </div>
+              <div className="space-y-2">
+                {issueForm.recipients.map(r => (
+                  <div key={r.id} className="flex gap-2 items-center">
+                    <input className={`${inputCls} flex-1`} value={r.name} onChange={setRecipientField(r.id, 'name')} placeholder="Recipient Name" />
+                    <input className={`${inputCls} flex-1`} type="email" value={r.email} onChange={setRecipientField(r.id, 'email')} placeholder="name@email.com" />
+                    {issueForm.recipients.length > 1 && (
+                      <button onClick={() => removeRecipient(r.id)} className="p-2 rounded-lg hover:bg-red-50 text-red-400 flex-shrink-0"><X size={16} /></button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <p className="text-[11px] text-gray-400">Every recipient gets their own certificate ID, image, and email — the description and custom fields below are shared across the whole batch.</p>
             </div>
 
-            <FormField label="Description (the reason / course / achievement)">
+            <FormField label="Description (the reason / course / achievement — shared by every recipient above)">
               <textarea rows={2} className={inputCls} value={issueForm.description} onChange={setIssueField('description')}
                 placeholder="e.g. For successfully completing the Clinical Pharmacy Masterclass" />
             </FormField>
@@ -476,13 +533,23 @@ export default function AdminCertificates() {
             </div>
 
             <p className="text-[11px] text-gray-400">
-              The Certificate ID is generated automatically (same MEDWEB-XXXXXXXXXX system used for auto-issued certificates), composited onto the template above, uploaded, and emailed to the recipient immediately on save.
+              Each recipient gets their own automatically-generated Certificate ID (same MEDWEB-XXXXXXXXXX system used for auto-issued certificates), composited onto the template above, uploaded, and emailed to them immediately on save.
             </p>
 
+            {issueProgress && (
+              <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-2.5 text-xs font-bold text-[#1655c3]">
+                Issuing {issueProgress.done + 1} of {issueProgress.total}…
+              </div>
+            )}
+
             <div className="flex gap-3 pt-2">
-              <AdminButton variant="ghost" className="flex-1" onClick={closeIssue}>Cancel</AdminButton>
+              <AdminButton variant="ghost" className="flex-1" onClick={closeIssue} disabled={issueSaving}>Cancel</AdminButton>
               <AdminButton variant="primary" className="flex-1" onClick={handleIssueSave} disabled={issueSaving || !issueForm.imageUrl}>
-                {issueSaving ? 'Generating & Emailing…' : 'Issue Certificate'}
+                {issueSaving
+                  ? `Issuing ${Math.min((issueProgress?.done ?? 0) + 1, issueProgress?.total ?? 1)}/${issueProgress?.total ?? ''}…`
+                  : issueForm.recipients.filter(r => r.name.trim() && r.email.trim()).length > 1
+                  ? `Issue ${issueForm.recipients.filter(r => r.name.trim() && r.email.trim()).length} Certificates`
+                  : 'Issue Certificate'}
               </AdminButton>
             </div>
           </div>
