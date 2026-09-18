@@ -41,3 +41,33 @@ export function toCircleAvatarUrl(url, size = 400) {
   if (!url || !url.includes('/upload/')) return url
   return url.replace('/upload/', `/upload/c_fill,g_face,w_${size},h_${size},q_auto,f_auto/`)
 }
+
+/**
+ * Upload a non-image File (e.g. a .ttf/.otf custom certificate font) to
+ * Cloudinary via its `raw` resource type — the `image/upload` endpoint
+ * above will reject anything Cloudinary can't decode as an image. Same
+ * unsigned preset/cloud, just a different endpoint.
+ *
+ * @param {File} file
+ * @param {string} folder
+ * @returns {Promise<string>} secure_url
+ */
+export async function uploadRawToCloudinary(file, folder = 'medweb') {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('upload_preset', UPLOAD_PRESET)
+  formData.append('folder', folder)
+
+  const res = await fetch(
+    `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/raw/upload`,
+    { method: 'POST', body: formData }
+  )
+
+  if (!res.ok) {
+    const err = await res.json()
+    throw new Error(err.error?.message || 'Cloudinary upload failed')
+  }
+
+  const data = await res.json()
+  return data.secure_url
+}

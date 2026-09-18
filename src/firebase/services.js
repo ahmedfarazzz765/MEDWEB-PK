@@ -335,6 +335,22 @@ export const blogCategoriesService = {
   ),
 }
 
+// ─── CUSTOM CERTIFICATE FONTS ─────────────────────────────────────────────────
+// Admin-uploaded .ttf/.otf files (see src/lib/customCertFonts.js, which reads
+// this collection and injects @font-face rules sitewide) — persisted here so
+// an uploaded font stays available to every certificate template, in every
+// browser/session, not just the one it was uploaded from.
+export const customFontsService = {
+  getAll: () => getAll('customFonts', orderBy('createdAt', 'desc')),
+  add: data => add('customFonts', data),
+  delete: id => remove('customFonts', id),
+  listen: cb => onSnapshot(
+    query(collection(db, 'customFonts'), orderBy('createdAt', 'desc')),
+    snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+    err => console.error("Firebase customFonts listen error:", err)
+  ),
+}
+
 // ─── TEAM ────────────────────────────────────────────────────────────────────
 export const teamService = {
   getAll: () => getAll(COLS.team, orderBy('createdAt', 'desc')).then(applyManualOrder),

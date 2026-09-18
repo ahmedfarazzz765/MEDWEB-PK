@@ -246,6 +246,8 @@ export default function AdminWebinars() {
                   namePos={form.certTemplate.namePos}
                   idPos={form.certTemplate.idPos}
                   onChange={({ namePos, idPos }) => setVal('certTemplate', { ...form.certTemplate, namePos, idPos })}
+                  elements={form.certTemplate.elements}
+                  onChangeElements={els => setVal('certTemplate', { ...form.certTemplate, elements: els })}
                 />
               )}
             </div>

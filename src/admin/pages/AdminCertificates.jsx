@@ -25,7 +25,7 @@ const emptyRecipient = () => ({ id: crypto.randomUUID(), name: '', email: '' })
 const emptyIssueForm = () => ({
   imageUrl: '', namePos: null, idPos: null,
   recipients: [emptyRecipient()], description: '',
-  customFields: [],
+  customFields: [], elements: [],
 })
 
 const emptyForm = () => ({
@@ -136,6 +136,7 @@ export default function AdminCertificates() {
       namePos: lastTemplate.namePos || null,
       idPos: lastTemplate.idPos || null,
       customFields: (lastTemplate.customFields || []).map(f => ({ ...f, value: '' })),
+      elements: lastTemplate.elements || [],
     } : emptyIssueForm()
     setIssueForm(next)
     setFocusedRecipientId(next.recipients[0].id)
@@ -181,6 +182,7 @@ export default function AdminCertificates() {
           templateUrl: issueForm.imageUrl,
           namePos: issueForm.namePos,
           idPos: issueForm.idPos,
+          elements: issueForm.elements,
           recipientName: r.name,
           recipientEmail: r.email,
           description: issueForm.description,
@@ -198,6 +200,7 @@ export default function AdminCertificates() {
       namePos: issueForm.namePos,
       idPos: issueForm.idPos,
       customFields: issueForm.customFields.map(({ value, ...rest }) => rest),
+      elements: issueForm.elements,
     }
     setLastTemplate(usedTemplate)
     settingsService.update({ lastManualCertTemplate: usedTemplate }).catch(() => {})
@@ -491,6 +494,8 @@ export default function AdminCertificates() {
                   onChange={({ namePos, idPos }) => setIssueForm(p => ({ ...p, namePos, idPos }))}
                   customFields={issueForm.customFields}
                   onChangeCustomField={setCustomFieldPos}
+                  elements={issueForm.elements}
+                  onChangeElements={els => setIssueForm(p => ({ ...p, elements: els }))}
                   nameSampleText={activeRecipientName}
                 />
               )}

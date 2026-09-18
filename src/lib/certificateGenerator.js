@@ -14,6 +14,7 @@ import { uploadToCloudinary } from '../firebase/cloudinary'
 import { sendCertificateEmail } from '../firebase/email'
 import { DEFAULT_CERT_FONT } from '../constants/certificateFonts'
 import { drawTextField } from './certFontFit'
+import { drawElement } from './certElements'
 
 const DEFAULT_NAME_POS = { xPct: 50, yPct: 28, fontSize: 48, color: '#1a1a1a', fontFamily: DEFAULT_CERT_FONT }
 const DEFAULT_ID_POS   = { xPct: 10, yPct: 90, fontSize: 26, color: '#1a1a1a' }
@@ -32,13 +33,21 @@ function loadImage(url) {
   })
 }
 
-async function compositeCertificateCanvas({ templateUrl, studentName, certCode, namePos, idPos, customFields }) {
+async function compositeCertificateCanvas({ templateUrl, studentName, certCode, namePos, idPos, customFields, elements }) {
   const img = await loadImage(templateUrl)
   const canvas = document.createElement('canvas')
   canvas.width = img.naturalWidth
   canvas.height = img.naturalHeight
   const ctx = canvas.getContext('2d')
   ctx.drawImage(img, 0, 0)
+
+  // Decorative shapes/icons draw first — a divider line or seal sits behind
+  // the text layer, same stacking order as the live preview canvas.
+  // drawElement() is the SAME function CertPositionEditor.jsx's preview
+  // canvas calls, so a shape's position/size/color match exactly.
+  for (const el of elements || []) {
+    drawElement(ctx, el, canvas.width, canvas.height)
+  }
 
   const name = { ...DEFAULT_NAME_POS, ...(namePos || {}) }
   const id = { ...DEFAULT_ID_POS, ...(idPos || {}) }
@@ -104,14 +113,14 @@ function canvasToCompressedBlob(canvas, targetBytes = 350 * 1024) {
  * manual admin flow shows an alert.
  */
 async function compositeAndIssueCertificate({
-  templateUrl, namePos, idPos, rawName, email, title, body, sourceType, extra, customFields,
+  templateUrl, namePos, idPos, rawName, email, title, body, sourceType, extra, customFields, elements,
 }) {
   const studentName = toTitleCase(rawName)
 
   const certCode = await certificatesService.generateUniqueCode()
 
   const canvas = await compositeCertificateCanvas({
-    templateUrl, studentName, certCode, namePos, idPos, customFields,
+    templateUrl, studentName, certCode, namePos, idPos, customFields, elements,
   })
   const blob = await canvasToCompressedBlob(canvas)
   const certificateImageUrl = await uploadToCloudinary(blob, 'medweb/certificates/generated')
@@ -173,6 +182,7 @@ export async function generateAndIssueCertificate({ submissionId, webinar, rawNa
       templateUrl: certTemplate.imageUrl,
       namePos: certTemplate.namePos,
       idPos: certTemplate.idPos,
+      elements: certTemplate.elements,
       rawName,
       email,
       title: webinarTitle,
@@ -209,7 +219,7 @@ export async function generateAndIssueCertificate({ submissionId, webinar, rawNa
  * throws on failure — there's no submission doc to silently record the
  * error on, so the admin UI needs a real exception to show.
  */
-export async function issueManualCertificate({ templateUrl, namePos, idPos, recipientName, recipientEmail, description, customFields }) {
+export async function issueManualCertificate({ templateUrl, namePos, idPos, elements, recipientName, recipientEmail, description, customFields }) {
   if (!templateUrl) throw new Error('A certificate template image is required')
   if (!recipientName?.trim()) throw new Error('Recipient name is required')
   if (!recipientEmail?.trim()) throw new Error('Recipient email is required')
@@ -220,6 +230,7 @@ export async function issueManualCertificate({ templateUrl, namePos, idPos, reci
     templateUrl,
     namePos,
     idPos,
+    elements,
     rawName: recipientName,
     email: recipientEmail,
     title: body,
