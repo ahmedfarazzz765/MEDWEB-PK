@@ -7,7 +7,7 @@ import {
   FileText, UserCheck, LogOut, ChevronLeft, ChevronRight, Shield, Mail,
   FormInput, Star, Inbox, Link2, ToggleRight, GraduationCap,
   Image, Quote, Sparkles, Building2, ShieldCheck, PanelTop, Scale, ClipboardCheck,
-  UserCog,
+  UserCog, Newspaper,
 } from 'lucide-react'
 
 // Each item's `id` is the page key in AdminPanel's `pages` map. Items that
@@ -64,6 +64,7 @@ const GROUPS = [
       { id: 'testimonials', label: 'Testimonials', icon: Star },
       { id: 'pendingTestimonials', label: 'Pending Reviews', icon: ClipboardCheck },
       { id: 'blog',         label: 'Blog Posts',   icon: FileText },
+      { id: 'news',         label: 'Medical News', icon: Newspaper },
       { id: 'forms',        label: 'Form Builder', icon: FormInput },
       { id: 'submissions',  label: 'Submissions',  icon: Inbox },
     ],

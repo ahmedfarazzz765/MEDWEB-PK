@@ -10,6 +10,7 @@ const pageTitles = {
   certificates: { title: 'Certificates',   sub: 'Issue & verify student certificates' },
   ambassadors:  { title: 'Ambassadors',    sub: 'Manage student ambassador network' },
   blog:         { title: 'Blog Posts',     sub: 'Manage articles & knowledge hub' },
+  news:         { title: 'Medical News',   sub: 'Curate & publish referenced medical news' },
   team:         { title: 'Team',           sub: 'Manage MEDWEB team members' },
   advisory:     { title: 'Advisory Board', sub: 'Manage advisory board members' },
   email:        { title: 'Email Settings', sub: 'Configure automatic emails' },

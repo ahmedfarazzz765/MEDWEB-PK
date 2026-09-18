@@ -25,6 +25,7 @@ const DEFAULTS = {
     { label: 'Certificates', url: '#certificates' },
     { label: 'Blog', url: '#blog' },
     { label: 'Announcements', url: '/announcements' },
+    { label: 'Medical News', url: '/news' },
     { label: 'Contact', url: '#contact' },
   ],
   footerPrograms: [
@@ -110,6 +111,7 @@ export default function Footer() {
   const REQUIRED_LINKS = [
     { label: 'Announcements', url: '/announcements' },
     { label: 'Our Speakers', url: '/speakers' },
+    { label: 'Medical News', url: '/news' },
   ]
   const rawQuickLinks = f.quickLinks || DEFAULTS.quickLinks
   const quickLinks = REQUIRED_LINKS.reduce(

@@ -30,6 +30,7 @@ export const ADMIN_SECTIONS = [
   { key: 'testimonials',        label: 'Testimonials',    group: 'Engagement' },
   { key: 'pendingTestimonials', label: 'Pending Reviews', group: 'Engagement' },
   { key: 'blog',                label: 'Blog Posts',      group: 'Engagement' },
+  { key: 'news',                label: 'Medical News',    group: 'Engagement' },
   { key: 'forms',                label: 'Form Builder',   group: 'Engagement' },
   { key: 'submissions',          label: 'Submissions',    group: 'Engagement' },
 

@@ -335,6 +335,33 @@ export const blogCategoriesService = {
   ),
 }
 
+// ─── MEDICAL NEWS ────────────────────────────────────────────────────────────
+// Same shape/lifecycle as blogService (Draft → Published via publish(),
+// slug-based public lookup, `published` set to today's date on publish) —
+// `getLatest(1)` is what NewsPopup.jsx uses to pick the single item shown in
+// the bottom-right teaser. `references` is an array of { label, url } source
+// links, required (validated in AdminNews.jsx) since attribution matters for
+// medical content.
+export const newsService = {
+  getAll: () => getAll('news', orderBy('createdAt', 'desc')),
+  getPublished: () => getAll('news', where('status', '==', 'Published'), orderBy('createdAt', 'desc')),
+  getLatest: n => getAll('news', where('status', '==', 'Published'), orderBy('createdAt', 'desc'), limit(n || 1)),
+  getOne: id => getOne('news', id),
+  getBySlug: async slug => {
+    const rows = await getAll('news', where('slug', '==', slug), limit(1))
+    return rows[0] || null
+  },
+  add: data => add('news', data),
+  update: (id, data) => update('news', id, data),
+  publish: id => update('news', id, { status: 'Published', published: new Date().toISOString().split('T')[0] }),
+  delete: id => remove('news', id),
+  listen: cb => onSnapshot(
+    query(collection(db, 'news'), orderBy('createdAt', 'desc')),
+    snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+    err => console.error("Firebase news listen error:", err)
+  ),
+}
+
 // ─── CUSTOM CERTIFICATE FONTS ─────────────────────────────────────────────────
 // Admin-uploaded .ttf/.otf files (see src/lib/customCertFonts.js, which reads
 // this collection and injects @font-face rules sitewide) — persisted here so

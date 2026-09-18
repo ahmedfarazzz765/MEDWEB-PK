@@ -16,6 +16,8 @@ import SpeakersPage       from './pages/SpeakersPage'
 import AmbassadorsListPage from './pages/AmbassadorsListPage'
 import AdvisoryBoardListPage from './pages/AdvisoryBoardListPage'
 import BlogListPage       from './pages/BlogListPage'
+import NewsListPage       from './pages/NewsListPage'
+import NewsPostPage       from './pages/NewsPostPage'
 import PrivacyPolicyPage  from './pages/PrivacyPolicyPage'
 import TermsOfServicePage from './pages/TermsOfServicePage'
 import RefundPolicyPage   from './pages/RefundPolicyPage'
@@ -26,11 +28,13 @@ import AdminLogin        from './admin/AdminLogin'
 import AdminPanel        from './admin/AdminPanel'
 import RequireAuth       from './admin/RequireAuth'
 import WebinarAnnouncementPopup from './components/WebinarAnnouncementPopup'
+import NewsPopup from './components/NewsPopup'
 
 function App() {
   return (
     <Router>
       <WebinarAnnouncementPopup />
+      <NewsPopup />
       <Routes>
         <Route path="/"                       element={<HomePage />} />
         <Route path="/founder-message"        element={<FounderMessagePage />} />
@@ -46,6 +50,8 @@ function App() {
         <Route path="/advisory-board"         element={<AdvisoryBoardListPage />} />
         <Route path="/blog"                   element={<BlogListPage />} />
         <Route path="/blog/:slug"             element={<BlogPostPage />} />
+        <Route path="/news"                   element={<NewsListPage />} />
+        <Route path="/news/:slug"             element={<NewsPostPage />} />
         <Route path="/announcements"          element={<AnnouncementsListPage />} />
         <Route path="/announcements/:slug"    element={<AnnouncementPage />} />
         <Route path="/privacy-policy"         element={<PrivacyPolicyPage />} />
