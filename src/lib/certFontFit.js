@@ -1,19 +1,34 @@
-// Shared "shrink text to fit its box" logic — used by both the live admin
-// preview (CertPositionEditor.jsx, so what the admin sees while positioning/
-// resizing/typing matches reality) and the real canvas compositing step
-// (certificateGenerator.js, so every generated certificate — automatic
-// webinar flow and manual/bulk flow alike — gets the same treatment). Kept
-// in one place so the two can never drift apart.
+// Shared "shrink text to fit its box" + "draw text on canvas" logic — used
+// by BOTH the live admin preview (CertPositionEditor.jsx) and the real canvas
+// compositing step (certificateGenerator.js). Kept in ONE place so the two
+// can NEVER drift apart — this was the root cause of the preview-vs-output
+// mismatch: the preview used CSS/DOM rendering (flexbox centering, CSS
+// font-size) while the generator used Canvas 2D (ctx.fillText, textBaseline
+// 'middle'), and these two engines position/size text differently.
 //
-// A prior version had boxWidthPx()/boxHeightPx() each contain their OWN
-// fallback formula for "no widthPct/heightPct saved yet" — the editor
-// resolved that fallback itself (via a locally-duplicated defaultBoxPct)
-// before calling them, while certificateGenerator.js called them directly
-// on the raw, unresolved position. Two different formulas for the same
-// "not resized yet" case meant the live preview and the actual generated
-// image could genuinely disagree on both size AND fit. resolveBoxSize()
-// below is now the ONLY place that decision is made, and both call sites
-// are required to go through it first — see the docs on each function.
+// Now both render onto an actual <canvas> via `drawTextField()` below —
+// the preview's canvas is drawn at the template's full natural resolution
+// and then scaled down for display exactly like the template <img> is
+// (CSS width: 100%), so it is pixel-identical to the generated certificate,
+// not just visually similar.
+
+import { CERTIFICATE_FONTS } from '../constants/certificateFonts'
+
+// The Google Fonts <link> in index.html only guarantees the stylesheet is
+// requested, not that the font file has finished downloading by the time
+// ctx.fillText runs — without waiting on this, the first draw after a fresh
+// page load (preview OR real generation) can silently use the fallback font.
+export async function ensureFontLoaded(fontFamily, fontSize, bold) {
+  const entry = CERTIFICATE_FONTS.find(f => f.css === fontFamily)
+  if (!entry?.google || typeof document === 'undefined' || !document.fonts) return
+  try {
+    await document.fonts.load(`${bold ?? entry.bold ? 'bold ' : ''}${fontSize}px "${entry.google}"`)
+    await document.fonts.ready
+  } catch {
+    // Font failed to load — fillText just falls back to the next family in
+    // the stack rather than throwing, so this is safe to swallow.
+  }
+}
 
 let measureCanvasCtx
 function getMeasureCtx() {
@@ -73,4 +88,81 @@ export function boxWidthPx(widthPct, totalWidthPx) {
 }
 export function boxHeightPx(heightPct, totalHeightPx) {
   return (heightPct / 100) * totalHeightPx
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// drawTextField — THE single function that draws text onto a canvas for both
+// the live preview AND the actual generated certificate. By using the exact
+// same Canvas 2D code path in both places, what the admin sees while
+// positioning IS what gets generated — pixel-accurate WYSIWYG.
+//
+// Parameters:
+//   ctx           : CanvasRenderingContext2D to draw on
+//   text          : string to render
+//   pos           : { xPct, yPct, fontSize, color, fontFamily, widthPct?, heightPct? }
+//   naturalWidth  : image natural width (px) — canvas.width for generation,
+//                   or the template image's naturalWidth for preview
+//   naturalHeight : image natural height (px)
+//   options:
+//     centered    : true = Name/custom field (textAlign 'center', anchor at
+//                   center of box); false = ID (textAlign 'left', anchor at
+//                   left edge of box)
+//     bold        : whether to use bold weight — omit to auto-resolve from
+//                   CERTIFICATE_FONTS for pos.fontFamily (so both call sites
+//                   share the same "is this font a bold-weight one" lookup
+//                   instead of each duplicating it)
+//     fontFamily  : override for pos.fontFamily (used for ID which always
+//                   uses Helvetica)
+//     widthFactor : passed to resolveBoxSize (12 for Name/custom, 10 for ID)
+//
+// Returns: { fittedSize, boxWidthPct, boxHeightPct } so callers can use the
+//          resolved box dimensions (e.g. CertPositionEditor needs them for
+//          the Rnd box size).
+// ────────────────────────────────────────────────────────────────────────────
+export async function drawTextField(ctx, text, pos, naturalWidth, naturalHeight, options = {}) {
+  const {
+    centered = true,
+    bold: boldOverride,
+    fontFamily: fontFamilyOverride,
+    widthFactor = 12,
+  } = options
+
+  const fontFamily = fontFamilyOverride || pos.fontFamily || 'Helvetica, Arial, sans-serif'
+  const bold = boldOverride ?? ((CERTIFICATE_FONTS.find(f => f.css === fontFamily) || CERTIFICATE_FONTS[0]).bold)
+  await ensureFontLoaded(fontFamily, pos.fontSize, bold)
+  const boxSize = resolveBoxSize(pos, naturalWidth, naturalHeight, widthFactor)
+  const maxW = boxWidthPx(boxSize.widthPct, naturalWidth)
+  const maxH = boxHeightPx(boxSize.heightPct, naturalHeight)
+
+  const fittedSize = fitFontSize({
+    text,
+    fontFamily,
+    bold,
+    startSize: pos.fontSize,
+    maxWidthPx: maxW,
+    maxHeightPx: maxH,
+    ctx,
+  })
+
+  // These must match EXACTLY between preview and generation — that's the
+  // whole point of this shared function.
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = pos.color || '#1a1a1a'
+  ctx.font = `${bold ? 'bold ' : ''}${fittedSize}px ${fontFamily}`
+
+  if (centered) {
+    // Name / custom field: text is centered on the box's center point
+    ctx.textAlign = 'center'
+    ctx.fillText(text, (pos.xPct / 100) * naturalWidth, (pos.yPct / 100) * naturalHeight)
+  } else {
+    // ID: text is left-anchored at xPct, vertically centered at yPct
+    ctx.textAlign = 'left'
+    ctx.fillText(text, (pos.xPct / 100) * naturalWidth, (pos.yPct / 100) * naturalHeight)
+  }
+
+  return {
+    fittedSize,
+    boxWidthPct: boxSize.widthPct,
+    boxHeightPct: boxSize.heightPct,
+  }
 }

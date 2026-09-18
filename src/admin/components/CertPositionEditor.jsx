@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect } from 'react'
 import { Rnd } from 'react-rnd'
 import { CERTIFICATE_FONTS, DEFAULT_CERT_FONT } from '../../constants/certificateFonts'
-import { fitFontSize, resolveBoxSize, boxWidthPx, boxHeightPx } from '../../lib/certFontFit'
+import { resolveBoxSize, drawTextField } from '../../lib/certFontFit'
 
 // Must match DEFAULT_NAME_POS / DEFAULT_ID_POS in functions/index.js exactly —
 // these are the fallbacks used if a webinar's certTemplate has no saved
@@ -33,6 +33,7 @@ const MIN_BOX_PX = { width: 30, height: 16 }
 // "Ahmed Khan" so every other caller (AdminWebinars.jsx) is unaffected.
 export default function CertPositionEditor({ imageUrl, namePos, idPos, onChange, customFields, onChangeCustomField, nameSampleText }) {
   const containerRef = useRef(null)
+  const canvasRef = useRef(null)
   // Tracked in state (not read directly off the ref during render) so box
   // pixel positions/sizes recompute once the template image has actually
   // laid out — clientWidth/Height are 0 until then. Same pattern as
@@ -58,45 +59,54 @@ export default function CertPositionEditor({ imageUrl, namePos, idPos, onChange,
   const id = { ...DEFAULT_ID_POS, ...(idPos || {}) }
   const fields = customFields || []
   const nameSample = nameSampleText?.trim() || 'Ahmed Khan'
-  const nameFontMeta = CERTIFICATE_FONTS.find(f => f.css === name.fontFamily) || CERTIFICATE_FONTS[0]
+  const idText = 'ID: MEDWEB-000123'
 
   const setName = patch => onChange({ namePos: { ...name, ...patch }, idPos: id })
   const setId = patch => onChange({ namePos: name, idPos: { ...id, ...patch } })
   const setCustom = (fieldId, patch) => onChangeCustomField?.(fieldId, patch)
 
-  // Fitted at full image resolution (matching how the real generator
-  // measures it), then scaled down for on-screen display via containerSize.
   const w = containerSize.width || 1
   const h = containerSize.height || 1
-  const previewScale = naturalSize.width ? w / naturalSize.width : 1
 
-  // resolveBoxSize() is the exact function certificateGenerator.js calls
-  // for the same purpose — a box with no saved widthPct/heightPct yet gets
-  // the identical fallback size here and at generation time.
+  // resolveBoxSize() is the exact function drawTextField() (and, through
+  // it, certificateGenerator.js) uses internally for the same purpose — a
+  // box with no saved widthPct/heightPct yet gets the identical fallback
+  // size here (for sizing the drag handle) and at generation time (for
+  // sizing the auto-shrink-to-fit box), so the two can never disagree.
   const nameBoxSize = resolveBoxSize(name, naturalSize.width, naturalSize.height, 12)
-  const nameWidthPct = nameBoxSize.widthPct
-  const nameHeightPct = nameBoxSize.heightPct
-  const fittedNameSize = fitFontSize({
-    text: nameSample,
-    fontFamily: name.fontFamily || DEFAULT_CERT_FONT,
-    bold: nameFontMeta.bold,
-    startSize: name.fontSize,
-    maxWidthPx: boxWidthPx(nameWidthPct, naturalSize.width),
-    maxHeightPx: boxHeightPx(nameHeightPct, naturalSize.height),
-  })
-
   const idBoxSize = resolveBoxSize(id, naturalSize.width, naturalSize.height, 10)
-  const idWidthPct = idBoxSize.widthPct
-  const idHeightPct = idBoxSize.heightPct
-  const idText = 'ID: MEDWEB-000123'
-  const fittedIdSize = fitFontSize({
-    text: idText,
-    fontFamily: 'Helvetica, Arial, sans-serif',
-    bold: true,
-    startSize: id.fontSize,
-    maxWidthPx: boxWidthPx(idWidthPct, naturalSize.width),
-    maxHeightPx: boxHeightPx(idHeightPct, naturalSize.height),
-  })
+
+  // The actual text is drawn on the <canvas> below via drawTextField() —
+  // the SAME function certificateGenerator.js calls to composite the real
+  // certificate. It draws at the template's full natural resolution onto a
+  // canvas sized/scaled exactly like the <img> (CSS width: 100%), so what
+  // renders here is pixel-identical to the generated certificate, not a
+  // separate CSS approximation of it.
+  useEffect(() => {
+    let cancelled = false
+    async function draw() {
+      const canvas = canvasRef.current
+      if (!canvas || naturalSize.width <= 1) return
+      canvas.width = naturalSize.width
+      canvas.height = naturalSize.height
+      const ctx = canvas.getContext('2d')
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+      await drawTextField(ctx, nameSample, name, naturalSize.width, naturalSize.height, { centered: true, widthFactor: 12 })
+      if (cancelled) return
+      await drawTextField(ctx, idText, id, naturalSize.width, naturalSize.height, { centered: false, fontFamily: 'Helvetica, Arial, sans-serif', widthFactor: 10 })
+      if (cancelled) return
+      for (const f of fields) {
+        const pos = { ...DEFAULT_CUSTOM_FIELD_POS, ...f }
+        const text = f.value?.trim() || f.label?.trim() || 'Custom Field'
+        await drawTextField(ctx, text, pos, naturalSize.width, naturalSize.height, { centered: true, widthFactor: 12 })
+        if (cancelled) return
+      }
+    }
+    draw()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(name), JSON.stringify(id), JSON.stringify(fields), nameSample, idText, naturalSize.width, naturalSize.height])
 
   return (
     <div>
@@ -105,17 +115,19 @@ export default function CertPositionEditor({ imageUrl, namePos, idPos, onChange,
         className="relative w-full rounded-xl overflow-hidden border border-gray-200 select-none"
       >
         <img src={imageUrl} alt="Certificate template" className="w-full h-auto block pointer-events-none" draggable={false} onLoad={handleImageLoad} />
+        <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
 
-        {/* Name box — centered on its point */}
+        {/* Name box — centered on its point. Drag handle only; the actual
+            text is rendered on the canvas above, not inside this box. */}
         <Rnd
           bounds="parent"
-          position={{ x: (name.xPct / 100) * w - (nameWidthPct / 100) * w / 2, y: (name.yPct / 100) * h - (nameHeightPct / 100) * h / 2 }}
-          size={{ width: (nameWidthPct / 100) * w, height: (nameHeightPct / 100) * h }}
+          position={{ x: (name.xPct / 100) * w - (nameBoxSize.widthPct / 100) * w / 2, y: (name.yPct / 100) * h - (nameBoxSize.heightPct / 100) * h / 2 }}
+          size={{ width: (nameBoxSize.widthPct / 100) * w, height: (nameBoxSize.heightPct / 100) * h }}
           minWidth={MIN_BOX_PX.width}
           minHeight={MIN_BOX_PX.height}
           onDragStop={(e, d) => {
-            const widthPx = (nameWidthPct / 100) * w
-            const heightPx = (nameHeightPct / 100) * h
+            const widthPx = (nameBoxSize.widthPct / 100) * w
+            const heightPx = (nameBoxSize.heightPct / 100) * h
             setName({ xPct: ((d.x + widthPx / 2) / w) * 100, yPct: ((d.y + heightPx / 2) / h) * 100 })
           }}
           onResizeStop={(e, dir, ref, delta, position) => {
@@ -127,30 +139,18 @@ export default function CertPositionEditor({ imageUrl, namePos, idPos, onChange,
               heightPct: (newH / h) * 100,
             })
           }}
-          className="border-2 border-dashed border-[#1655c3] bg-white/70 rounded flex items-center justify-center"
-        >
-          <span
-            style={{
-              fontWeight: nameFontMeta.bold ? 'bold' : 'normal',
-              fontFamily: name.fontFamily || DEFAULT_CERT_FONT,
-              fontSize: Math.max(8, fittedNameSize * previewScale),
-              color: name.color,
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {nameSample}
-          </span>
-        </Rnd>
+          className="border-2 border-dashed border-[#1655c3]/70 hover:bg-[#1655c3]/10 rounded"
+        />
 
         {/* ID box — left-anchored horizontally, centered vertically */}
         <Rnd
           bounds="parent"
-          position={{ x: (id.xPct / 100) * w, y: (id.yPct / 100) * h - (idHeightPct / 100) * h / 2 }}
-          size={{ width: (idWidthPct / 100) * w, height: (idHeightPct / 100) * h }}
+          position={{ x: (id.xPct / 100) * w, y: (id.yPct / 100) * h - (idBoxSize.heightPct / 100) * h / 2 }}
+          size={{ width: (idBoxSize.widthPct / 100) * w, height: (idBoxSize.heightPct / 100) * h }}
           minWidth={MIN_BOX_PX.width}
           minHeight={MIN_BOX_PX.height}
           onDragStop={(e, d) => {
-            const heightPx = (idHeightPct / 100) * h
+            const heightPx = (idBoxSize.heightPct / 100) * h
             setId({ xPct: (d.x / w) * 100, yPct: ((d.y + heightPx / 2) / h) * 100 })
           }}
           onResizeStop={(e, dir, ref, delta, position) => {
@@ -162,36 +162,15 @@ export default function CertPositionEditor({ imageUrl, namePos, idPos, onChange,
               heightPct: (newH / h) * 100,
             })
           }}
-          className="border-2 border-dashed border-[#64ac37] bg-white/70 rounded flex items-center justify-start"
-        >
-          <span
-            style={{
-              fontWeight: 'bold',
-              fontSize: Math.max(8, fittedIdSize * previewScale),
-              color: id.color,
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {idText}
-          </span>
-        </Rnd>
+          className="border-2 border-dashed border-[#64ac37]/70 hover:bg-[#64ac37]/10 rounded"
+        />
 
         {/* Custom field boxes — centered on their point, same convention as Name */}
         {fields.map(f => {
           const pos = { ...DEFAULT_CUSTOM_FIELD_POS, ...f }
-          const font = CERTIFICATE_FONTS.find(cf => cf.css === pos.fontFamily) || CERTIFICATE_FONTS[0]
           const fieldBoxSize = resolveBoxSize(pos, naturalSize.width, naturalSize.height, 12)
           const widthPct = fieldBoxSize.widthPct
           const heightPct = fieldBoxSize.heightPct
-          const text = f.value?.trim() || f.label?.trim() || 'Custom Field'
-          const fittedSize = fitFontSize({
-            text,
-            fontFamily: pos.fontFamily || DEFAULT_CERT_FONT,
-            bold: font.bold,
-            startSize: pos.fontSize,
-            maxWidthPx: boxWidthPx(widthPct, naturalSize.width),
-            maxHeightPx: boxHeightPx(heightPct, naturalSize.height),
-          })
           return (
             <Rnd
               key={f.id}
@@ -214,20 +193,8 @@ export default function CertPositionEditor({ imageUrl, namePos, idPos, onChange,
                   heightPct: (newH / h) * 100,
                 })
               }}
-              className="border-2 border-dashed border-[#a855f7] bg-white/70 rounded flex items-center justify-center"
-            >
-              <span
-                style={{
-                  fontWeight: font.bold ? 'bold' : 'normal',
-                  fontFamily: pos.fontFamily || DEFAULT_CERT_FONT,
-                  fontSize: Math.max(8, fittedSize * previewScale),
-                  color: pos.color,
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {text}
-              </span>
-            </Rnd>
+              className="border-2 border-dashed border-[#a855f7]/70 hover:bg-[#a855f7]/10 rounded"
+            />
           )
         })}
       </div>

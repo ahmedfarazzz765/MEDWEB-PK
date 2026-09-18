@@ -12,27 +12,11 @@
 import { certificatesService, formsService, studentsDbService } from '../firebase/services'
 import { uploadToCloudinary } from '../firebase/cloudinary'
 import { sendCertificateEmail } from '../firebase/email'
-import { CERTIFICATE_FONTS, DEFAULT_CERT_FONT } from '../constants/certificateFonts'
-import { fitFontSize, resolveBoxSize, boxWidthPx, boxHeightPx } from './certFontFit'
+import { DEFAULT_CERT_FONT } from '../constants/certificateFonts'
+import { drawTextField } from './certFontFit'
 
 const DEFAULT_NAME_POS = { xPct: 50, yPct: 28, fontSize: 48, color: '#1a1a1a', fontFamily: DEFAULT_CERT_FONT }
 const DEFAULT_ID_POS   = { xPct: 10, yPct: 90, fontSize: 26, color: '#1a1a1a' }
-
-// The Google Fonts <link> in index.html only guarantees the stylesheet is
-// requested, not that the font file has finished downloading by the time
-// canvas.fillText runs — without waiting on this, the very first certificate
-// generated after a fresh page load can silently draw in the fallback font.
-async function ensureFontLoaded(fontFamily, fontSize) {
-  const entry = CERTIFICATE_FONTS.find(f => f.css === fontFamily)
-  if (!entry?.google || typeof document === 'undefined' || !document.fonts) return
-  try {
-    await document.fonts.load(`${entry.bold ? 'bold ' : ''}${fontSize}px "${entry.google}"`)
-    await document.fonts.ready
-  } catch {
-    // Font failed to load — fillText will just fall back to the next family
-    // in the stack rather than throwing, so this is safe to swallow.
-  }
-}
 
 function toTitleCase(str) {
   return String(str).trim().toLowerCase().replace(/\b\w/g, c => c.toUpperCase())
@@ -58,79 +42,32 @@ async function compositeCertificateCanvas({ templateUrl, studentName, certCode, 
 
   const name = { ...DEFAULT_NAME_POS, ...(namePos || {}) }
   const id = { ...DEFAULT_ID_POS, ...(idPos || {}) }
-  const nameFont = CERTIFICATE_FONTS.find(f => f.css === name.fontFamily) || CERTIFICATE_FONTS[0]
 
-  await ensureFontLoaded(name.fontFamily, name.fontSize)
-
-  // Long names auto-shrink to fit. resolveBoxSize() is the SAME function
-  // CertPositionEditor.jsx's live preview calls for the same purpose — a
-  // box with no saved widthPct/heightPct yet (every position saved before
-  // resizable boxes existed) gets the identical font-size-derived fallback
-  // size in both places, not two different formulas that can disagree.
-  const nameFontFamily = name.fontFamily || DEFAULT_CERT_FONT
-  const nameSize = resolveBoxSize(name, canvas.width, canvas.height, 12)
-  const fittedNameSize = fitFontSize({
-    text: studentName,
-    fontFamily: nameFontFamily,
-    bold: nameFont.bold,
-    startSize: name.fontSize,
-    maxWidthPx: boxWidthPx(nameSize.widthPct, canvas.width),
-    maxHeightPx: boxHeightPx(nameSize.heightPct, canvas.height),
-    ctx,
+  // drawTextField() is the SAME function CertPositionEditor.jsx's live
+  // preview canvas calls — same box-resolution, auto-shrink and draw code,
+  // so what the admin saw while positioning is exactly what lands here.
+  await drawTextField(ctx, studentName, name, canvas.width, canvas.height, {
+    centered: true,
+    widthFactor: 12,
   })
-
-  // 'middle' baseline, not 'alphabetic' — the admin preview vertically
-  // centers each box's text via CSS flexbox (align-items: center), which
-  // anchors to the true vertical center of the line, not its baseline.
-  // 'alphabetic' sits noticeably lower (roughly where a lowercase letter
-  // without descenders rests), which is exactly the vertical drift between
-  // the preview and the generated image this fixes.
-  ctx.textBaseline = 'middle'
-  ctx.fillStyle = name.color
-  ctx.font = `${nameFont.bold ? 'bold ' : ''}${fittedNameSize}px ${nameFontFamily}`
-  ctx.textAlign = 'center'
-  ctx.fillText(studentName, (name.xPct / 100) * canvas.width, (name.yPct / 100) * canvas.height)
 
   const idText = `ID: ${certCode}`
-  const idSize = resolveBoxSize(id, canvas.width, canvas.height, 10)
-  const fittedIdSize = fitFontSize({
-    text: idText,
+  await drawTextField(ctx, idText, id, canvas.width, canvas.height, {
+    centered: false,
     fontFamily: 'Helvetica, Arial, sans-serif',
-    bold: true,
-    startSize: id.fontSize,
-    maxWidthPx: boxWidthPx(idSize.widthPct, canvas.width),
-    maxHeightPx: boxHeightPx(idSize.heightPct, canvas.height),
-    ctx,
+    widthFactor: 10,
   })
-  ctx.fillStyle = id.color
-  ctx.font = `bold ${fittedIdSize}px Helvetica, Arial, sans-serif`
-  ctx.textAlign = 'left'
-  ctx.fillText(idText, (id.xPct / 100) * canvas.width, (id.yPct / 100) * canvas.height)
 
   // Optional dynamic fields (manual "Issue Certificate" flow only — the
   // automatic webinar flow never passes these). Centered on their point,
-  // same convention as the Name box — must match CertPositionEditor.jsx's
-  // preview exactly (translate(-50%,-50%) there, textAlign 'center' here).
+  // same convention as the Name box.
   for (const field of customFields || []) {
     const value = field.value?.trim()
     if (!value) continue
-    const font = CERTIFICATE_FONTS.find(f => f.css === field.fontFamily) || CERTIFICATE_FONTS[0]
-    const fieldFontFamily = field.fontFamily || DEFAULT_CERT_FONT
-    await ensureFontLoaded(field.fontFamily, field.fontSize)
-    const fieldSize = resolveBoxSize({ ...field, fontSize: field.fontSize || 28 }, canvas.width, canvas.height, 12)
-    const fittedFieldSize = fitFontSize({
-      text: value,
-      fontFamily: fieldFontFamily,
-      bold: font.bold,
-      startSize: field.fontSize || 28,
-      maxWidthPx: boxWidthPx(fieldSize.widthPct, canvas.width),
-      maxHeightPx: boxHeightPx(fieldSize.heightPct, canvas.height),
-      ctx,
+    await drawTextField(ctx, value, { ...field, fontSize: field.fontSize || 28, color: field.color || '#1a1a1a' }, canvas.width, canvas.height, {
+      centered: true,
+      widthFactor: 12,
     })
-    ctx.fillStyle = field.color || '#1a1a1a'
-    ctx.font = `${font.bold ? 'bold ' : ''}${fittedFieldSize}px ${fieldFontFamily}`
-    ctx.textAlign = 'center'
-    ctx.fillText(value, ((field.xPct ?? 50) / 100) * canvas.width, ((field.yPct ?? 50) / 100) * canvas.height)
   }
 
   return canvas
