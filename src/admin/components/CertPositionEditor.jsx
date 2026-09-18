@@ -70,11 +70,16 @@ export default function CertPositionEditor({ imageUrl, namePos, idPos, onChange,
 
   // resolveBoxSize() is the exact function drawTextField() (and, through
   // it, certificateGenerator.js) uses internally for the same purpose — a
-  // box with no saved widthPct/heightPct yet gets the identical fallback
-  // size here (for sizing the drag handle) and at generation time (for
-  // sizing the auto-shrink-to-fit box), so the two can never disagree.
-  const nameBoxSize = resolveBoxSize(name, naturalSize.width, naturalSize.height, 12)
-  const idBoxSize = resolveBoxSize(id, naturalSize.width, naturalSize.height, 10)
+  // box with no saved widthPct/heightPct yet gets the identical
+  // text-measured fallback size here (for sizing the drag handle) and at
+  // generation time (for sizing the auto-shrink-to-fit box), so the two can
+  // never disagree. Passing the actual text (not just fontSize) matters: a
+  // fontSize-only estimate badly overshoots for large sizes on short text,
+  // producing an oversized box that — since dragging is bounds-clamped to
+  // stay inside the image — leaves almost no room to actually move it away
+  // from center.
+  const nameBoxSize = resolveBoxSize(name, naturalSize.width, naturalSize.height, 12, nameSample)
+  const idBoxSize = resolveBoxSize(id, naturalSize.width, naturalSize.height, 10, idText, undefined, 'Helvetica, Arial, sans-serif', true)
 
   // The actual text is drawn on the <canvas> below via drawTextField() —
   // the SAME function certificateGenerator.js calls to composite the real
@@ -168,7 +173,8 @@ export default function CertPositionEditor({ imageUrl, namePos, idPos, onChange,
         {/* Custom field boxes — centered on their point, same convention as Name */}
         {fields.map(f => {
           const pos = { ...DEFAULT_CUSTOM_FIELD_POS, ...f }
-          const fieldBoxSize = resolveBoxSize(pos, naturalSize.width, naturalSize.height, 12)
+          const text = f.value?.trim() || f.label?.trim() || 'Custom Field'
+          const fieldBoxSize = resolveBoxSize(pos, naturalSize.width, naturalSize.height, 12, text)
           const widthPct = fieldBoxSize.widthPct
           const heightPct = fieldBoxSize.heightPct
           return (

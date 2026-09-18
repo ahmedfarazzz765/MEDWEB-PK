@@ -58,23 +58,41 @@ export function fitFontSize({ text, fontFamily, bold, startSize, maxWidthPx, max
 }
 
 // A box with no saved widthPct/heightPct yet (every position saved before
-// resizable boxes existed) needs SOME size — derived from its own fontSize
-// relative to the image, not an arbitrary flat number, so it roughly
-// matches the text it already contains.
-function defaultBoxSizePct(fontSize, naturalWidth, naturalHeight, widthFactor) {
+// resizable boxes existed) needs SOME size. Measured from the ACTUAL text at
+// its actual font — not a flat "fontSize × widthFactor" guess. That guess
+// badly overestimates width for large font sizes on short text (e.g. a
+// 106px name could compute to 90% of the image width), and since the drag
+// box is bounds-clamped to stay inside the image, an oversized box leaves
+// almost no room to drag it away from center — it LOOKS draggable but barely
+// moves, which reads as "positioning is ignored" even though xPct/yPct are
+// saved and used correctly. widthFactor/ctx-less fallback (30%) only kicks
+// in before the template image has loaded, when there's nothing to measure
+// yet and no canvas context to measure with.
+function defaultBoxSizePct(pos, text, naturalWidth, naturalHeight, widthFactor, ctx, fontFamily, bold) {
+  if (text && naturalWidth > 1) {
+    const context = ctx || getMeasureCtx()
+    context.font = `${bold ? 'bold ' : ''}${pos.fontSize}px ${fontFamily || pos.fontFamily || 'Helvetica, Arial, sans-serif'}`
+    const measuredWidthPx = context.measureText(text).width
+    return {
+      widthPct: Math.min(95, Math.max(4, (measuredWidthPx * 1.15 / naturalWidth) * 100)),
+      heightPct: naturalHeight ? Math.max(4, (pos.fontSize * 1.7 / naturalHeight) * 100) : 8,
+    }
+  }
   return {
-    widthPct: naturalWidth ? Math.min(90, (fontSize * widthFactor / naturalWidth) * 100) : 30,
-    heightPct: naturalHeight ? Math.max(4, (fontSize * 1.7 / naturalHeight) * 100) : 8,
+    widthPct: naturalWidth ? Math.min(90, (pos.fontSize * widthFactor / naturalWidth) * 100) : 30,
+    heightPct: naturalHeight ? Math.max(4, (pos.fontSize * 1.7 / naturalHeight) * 100) : 8,
   }
 }
 
 // THE single place "does this box have an explicit size, or do we need a
 // fallback" gets decided. Both CertPositionEditor.jsx (live preview) and
-// certificateGenerator.js (real generation) call this with the same
-// arguments before doing anything else with a position — never boxWidthPx/
-// boxHeightPx directly on a raw, unresolved position.
-export function resolveBoxSize(pos, naturalWidth, naturalHeight, widthFactor = 12) {
-  const fallback = defaultBoxSizePct(pos.fontSize, naturalWidth, naturalHeight, widthFactor)
+// certificateGenerator.js/drawTextField() (real generation) call this with
+// the same arguments before doing anything else with a position — never
+// boxWidthPx/boxHeightPx directly on a raw, unresolved position. `text` is
+// optional (older/other call sites without it get the coarser fontSize-only
+// fallback) but every current caller passes the real text being drawn.
+export function resolveBoxSize(pos, naturalWidth, naturalHeight, widthFactor = 12, text, ctx, fontFamily, bold) {
+  const fallback = defaultBoxSizePct(pos, text, naturalWidth, naturalHeight, widthFactor, ctx, fontFamily, bold)
   return {
     widthPct: pos.widthPct ?? fallback.widthPct,
     heightPct: pos.heightPct ?? fallback.heightPct,
@@ -130,7 +148,7 @@ export async function drawTextField(ctx, text, pos, naturalWidth, naturalHeight,
   const fontFamily = fontFamilyOverride || pos.fontFamily || 'Helvetica, Arial, sans-serif'
   const bold = boldOverride ?? ((CERTIFICATE_FONTS.find(f => f.css === fontFamily) || CERTIFICATE_FONTS[0]).bold)
   await ensureFontLoaded(fontFamily, pos.fontSize, bold)
-  const boxSize = resolveBoxSize(pos, naturalWidth, naturalHeight, widthFactor)
+  const boxSize = resolveBoxSize(pos, naturalWidth, naturalHeight, widthFactor, text, ctx, fontFamily, bold)
   const maxW = boxWidthPx(boxSize.widthPct, naturalWidth)
   const maxH = boxHeightPx(boxSize.heightPct, naturalHeight)
 
