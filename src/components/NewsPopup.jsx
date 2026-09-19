@@ -4,23 +4,17 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { X, Newspaper } from 'lucide-react'
 import { newsService } from '../firebase/services'
 
-const DISMISS_KEY = 'medweb_news_popup_dismissed'
-
 // Bottom-right teaser for the latest published Medical News item — shows the
-// full (uncropped) thumbnail + title, after a short delay, sliding/fading in
-// (distinct from WebinarAnnouncementPopup's centered-modal pattern, which
-// this codebase has no bottom-right/session-dismissed precedent for — see
-// that file's own comment: "no dismissal persistence"). Dismissing (X)
-// hides it for the rest of THIS browser session (sessionStorage) — it does
-// not force it back open on every route change within the same visit, but
-// clears naturally on a fresh visit/tab.
+// full (uncropped) thumbnail + title, after a short delay, sliding/fading in.
+// Shows on every fresh page load/refresh (matching WebinarAnnouncementPopup).
 export default function NewsPopup() {
   const navigate = useNavigate()
   const [item, setItem] = useState(null)
   const [show, setShow] = useState(false)
 
   useEffect(() => {
-    if (sessionStorage.getItem(DISMISS_KEY) === '1') return
+    // Clear legacy dismissal flag so refresh always displays the popup
+    try { sessionStorage.removeItem('medweb_news_popup_dismissed') } catch {}
     newsService.getLatest(1)
       .then(rows => setItem(rows[0] || null))
       .catch(err => console.error('NewsPopup: failed to load latest news:', err))
@@ -28,14 +22,12 @@ export default function NewsPopup() {
 
   useEffect(() => {
     if (!item) return
-    if (sessionStorage.getItem(DISMISS_KEY) === '1') return
     const t = setTimeout(() => setShow(true), 2200)
     return () => clearTimeout(t)
   }, [item])
 
   const dismiss = () => {
     setShow(false)
-    try { sessionStorage.setItem(DISMISS_KEY, '1') } catch { /* private mode, etc — safe to ignore */ }
   }
 
   const handleClick = () => {
