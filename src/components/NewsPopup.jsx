@@ -23,7 +23,7 @@ export default function NewsPopup() {
     if (sessionStorage.getItem(DISMISS_KEY) === '1') return
     newsService.getLatest(1)
       .then(rows => setItem(rows[0] || null))
-      .catch(() => {})
+      .catch(err => console.error('NewsPopup: failed to load latest news:', err))
   }, [])
 
   useEffect(() => {

@@ -344,8 +344,30 @@ export const blogCategoriesService = {
 // medical content.
 export const newsService = {
   getAll: () => getAll('news', orderBy('createdAt', 'desc')),
-  getPublished: () => getAll('news', where('status', '==', 'Published'), orderBy('createdAt', 'desc')),
-  getLatest: n => getAll('news', where('status', '==', 'Published'), orderBy('createdAt', 'desc'), limit(n || 1)),
+  getPublished: async () => {
+    try {
+      return await getAll('news', where('status', '==', 'Published'), orderBy('createdAt', 'desc'))
+    } catch (err) {
+      if (err?.code === 'failed-precondition') {
+        console.warn('Composite index missing for news, falling back to client-side filter:', err)
+        const all = await getAll('news', orderBy('createdAt', 'desc'))
+        return all.filter(r => r.status === 'Published')
+      }
+      throw err
+    }
+  },
+  getLatest: async n => {
+    try {
+      return await getAll('news', where('status', '==', 'Published'), orderBy('createdAt', 'desc'), limit(n || 1))
+    } catch (err) {
+      if (err?.code === 'failed-precondition') {
+        console.warn('Composite index missing for news, falling back to client-side filter:', err)
+        const all = await getAll('news', orderBy('createdAt', 'desc'))
+        return all.filter(r => r.status === 'Published').slice(0, n || 1)
+      }
+      throw err
+    }
+  },
   getOne: id => getOne('news', id),
   getBySlug: async slug => {
     const rows = await getAll('news', where('slug', '==', slug), limit(1))
