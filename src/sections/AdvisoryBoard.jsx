@@ -87,7 +87,7 @@ export default function AdvisoryBoard() {
             pauseOnHover
             showNav
             gap={20}
-            itemClassName="w-[240px] sm:w-[280px]"
+            itemClassName="w-[min(85vw,320px)] sm:w-[280px]"
             keyFn={(member, i) => member.id || i}
             renderItem={member => <AdvisorCard member={member} />}
           />

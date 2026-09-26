@@ -118,7 +118,7 @@ export default function CoursesHighlight() {
             pauseOnHover
             showNav
             gap={20}
-            itemClassName="w-[260px] sm:w-[300px]"
+            itemClassName="w-[min(85vw,320px)] sm:w-[300px]"
             keyFn={(c, i) => c.id || i}
             renderItem={(c, i) => <CourseCard c={c} i={i} />}
           />

@@ -102,7 +102,7 @@ export default function Testimonials() {
             </div>
             <div className="sm:hidden flex gap-4 overflow-hidden">
               {Array.from({ length: 2 }).map((_, i) => (
-                <Skeleton key={i} className="flex-shrink-0 w-[300px] h-52" />
+                <Skeleton key={i} className="flex-shrink-0 w-[min(85vw,320px)] h-52" />
               ))}
             </div>
           </>
@@ -138,7 +138,7 @@ export default function Testimonials() {
                 pauseOnHover
                 pxPerSecond={50}
                 gap={16}
-                itemClassName="w-[300px]"
+                itemClassName="w-[min(85vw,320px)]"
                 keyFn={(t, i) => t.id || i}
                 renderItem={t => <ReviewCard t={t} />}
               />

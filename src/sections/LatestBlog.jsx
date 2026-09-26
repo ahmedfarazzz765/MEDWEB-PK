@@ -83,7 +83,7 @@ export default function LatestBlog() {
             pauseOnHover
             showNav
             gap={24}
-            itemClassName="w-[300px] sm:w-[340px]"
+            itemClassName="w-[min(85vw,320px)] sm:w-[340px]"
             keyFn={(post, i) => post.id || i}
             renderItem={(post, i) => <BlogCard post={post} i={i} />}
           />

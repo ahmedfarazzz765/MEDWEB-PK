@@ -238,7 +238,7 @@ export default function WebinarsSlider() {
             pauseOnHover
             showNav
             gap={24}
-            itemClassName="w-[300px] sm:w-[340px]"
+            itemClassName="w-[min(85vw,320px)] sm:w-[340px]"
             keyFn={(w, i) => w.id || i}
             renderItem={w => <WebinarCard webinar={w} onRegister={handleRegister} />}
           />

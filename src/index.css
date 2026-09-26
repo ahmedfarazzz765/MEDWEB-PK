@@ -31,6 +31,12 @@ body {
 .blog-content strong { font-weight: 700; }
 .blog-content em { font-style: italic; }
 .blog-content u { text-decoration: underline; }
+/* Safety net for rich-text content pasted from elsewhere (e.g. a Word/Docs
+   table) that the editor toolbar itself never produces but the sanitizer
+   still allows through — without this, one wide pasted element can force
+   horizontal scroll on the whole article at mobile widths. */
+.blog-content { overflow-wrap: break-word; }
+.blog-content table { display: block; max-width: 100%; overflow-x: auto; }
 
 /* Rich-text Ambassador Letter body (Tiptap output) — shared between the
    admin editor's editable area (LetterBodyRichEditor.jsx), the draggable
@@ -121,13 +127,20 @@ body {
     to   { transform: translateY(-50%); }
   }
   .animate-marquee-up { animation: marquee-up linear infinite; }
-  .marquee-pause-hover:hover .animate-marquee-up { animation-play-state: paused; }
   @keyframes marquee-x {
     from { transform: translateX(0); }
     to   { transform: translateX(-50%); }
   }
   .animate-marquee-x { animation: marquee-x linear infinite; }
-  .marquee-pause-hover:hover .animate-marquee-x { animation-play-state: paused; }
+  /* Pause-on-hover only makes sense on devices with a real pointer — bound to
+     (hover: hover) so a tap on a touch screen (which has no "leave" event)
+     can't leave the marquee stuck paused forever. Without this guard,
+     touching a marquee once (e.g. Testimonials on mobile) silently killed
+     its auto-scroll for the rest of the visit. */
+  @media (hover: hover) {
+    .marquee-pause-hover:hover .animate-marquee-up { animation-play-state: paused; }
+    .marquee-pause-hover:hover .animate-marquee-x { animation-play-state: paused; }
+  }
   .section-padding { padding: 80px 0; }
   .section-title {
     font-size: 2.2rem;

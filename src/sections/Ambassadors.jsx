@@ -142,7 +142,7 @@ export default function Ambassadors() {
               pauseOnHover
               showNav
               gap={20}
-              itemClassName="w-[240px] sm:w-[280px]"
+              itemClassName="w-[min(85vw,320px)] sm:w-[280px]"
               keyFn={(a, i) => a.id || i}
               renderItem={a => <AmbassadorCard a={a} />}
             />

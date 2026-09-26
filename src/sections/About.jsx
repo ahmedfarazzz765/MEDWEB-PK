@@ -265,7 +265,7 @@ export default function Team() {
             pauseOnHover
             showNav
             gap={24}
-            itemClassName="w-[260px] sm:w-[300px]"
+            itemClassName="w-[min(85vw,320px)] sm:w-[300px]"
             keyFn={(cat, i) => cat.id || cat.name || i}
             renderItem={cat => {
               const count = team.filter(m => (m.category || 'Chief Executive').toLowerCase() === cat.name.toLowerCase()).length

@@ -100,27 +100,32 @@ export default function FounderMessage() {
     <section className="py-8 sm:py-10 md:py-12 px-3 sm:px-4 relative overflow-hidden">
       <BrandWatermark seed={1} />
       <div className="max-w-6xl mx-auto relative z-10">
-        {/* Two-column layout at every breakpoint — text left, photo right.
-            The photo column has no intrinsic height of its own (its only
-            content is absolutely-positioned) — it's purely a consequence of
-            the grid stretching it to match the text column's height. The
-            photo then fills that box exactly via absolute+object-cover, so
-            the card's bottom edge is always the box's edge, never wherever
-            the uploaded photo's own aspect ratio happens to end. This is
-            what keeps it gap-free for ANY future photo, regardless of its
-            dimensions or how much dead space is baked into the source file —
-            object-cover always crops to fill, it never leaves a remainder. */}
+        {/* Two-column layout at sm+ — text left, photo right. Below sm it
+            stacks to a single column (photo on top as a banner, text below)
+            since the side-by-side grid has no room to breathe at phone
+            widths; sm and up are untouched from the original design.
+            The photo column has no intrinsic height of its own at sm+ (its
+            only content is absolutely-positioned) — it's purely a
+            consequence of the grid stretching it to match the text column's
+            height. The photo then fills that box exactly via
+            absolute+object-cover, so the card's bottom edge is always the
+            box's edge, never wherever the uploaded photo's own aspect ratio
+            happens to end. This is what keeps it gap-free for ANY future
+            photo, regardless of its dimensions or how much dead space is
+            baked into the source file — object-cover always crops to fill,
+            it never leaves a remainder. Below sm the photo gets an explicit
+            height instead, since there's no row to stretch against. */}
         <motion.div
-          className="grid grid-cols-[1fr_1.1fr] rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl"
+          className="grid grid-cols-1 sm:grid-cols-[1fr_1.1fr] rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl"
           style={{ background: PANEL_BG }}
           initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
         >
-          <div className="relative z-10 p-3 sm:p-5 md:p-8 lg:p-12 xl:p-16 flex flex-col justify-center min-w-0">
+          <div className="relative z-10 p-3 sm:p-5 md:p-8 lg:p-12 xl:p-16 flex flex-col justify-center min-w-0 order-2 sm:order-1">
             <FounderBody navigate={navigate} d={d} />
             <FounderCaption initials={initials} name={d.founderName} designation={d.founderDesignation} />
           </div>
 
-          <div className="relative overflow-hidden">
+          <div className="relative overflow-hidden h-48 sm:h-auto order-1 sm:order-2">
             <CoverImage
               src={img}
               alt={d.founderName}
@@ -128,8 +133,9 @@ export default function FounderMessage() {
               className="absolute inset-0 w-full h-full photo-fade-bottom"
               onError={e => { e.target.src = founderFallback }}
             />
-            {/* Blends the photo's left edge into the panel — no visible seam */}
-            <div className="absolute inset-y-0 left-0 w-1/4 pointer-events-none" style={{ background: 'linear-gradient(to right, #0B1220, transparent)' }} />
+            {/* Blends the photo's left edge into the panel — only relevant
+                once photo and text sit side-by-side, i.e. sm and up */}
+            <div className="absolute inset-y-0 left-0 w-1/4 pointer-events-none hidden sm:block" style={{ background: 'linear-gradient(to right, #0B1220, transparent)' }} />
           </div>
         </motion.div>
       </div>
