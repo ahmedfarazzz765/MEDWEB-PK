@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Calendar, Clock, User, CheckCircle, ArrowLeft } from 'lucide-react'
+import { Calendar, Clock, User, CheckCircle, ArrowLeft, Star } from 'lucide-react'
 import { webinarsService, formsService, settingsService, studentsDbService, DEFAULT_WEBINAR_FORM_FIELDS } from '../firebase/services'
 import { sendWebinarConfirmation } from '../firebase/email'
 import { uploadToCloudinary } from '../firebase/cloudinary'
@@ -105,6 +105,16 @@ export default function WebinarRegister() {
             <input type="file" onChange={e => handleFile(f.key, e.target.files?.[0])} className="text-sm" />
             {values[f.key + '__uploading'] && <p className="text-xs text-[#1655c3] mt-1">Uploading…</p>}
             {values[f.key] && !values[f.key + '__uploading'] && <p className="text-xs text-green-600 mt-1">Uploaded ✓</p>}
+          </div>
+        )
+      case 'rating':
+        return (
+          <div className="flex items-center gap-1">
+            {[1, 2, 3, 4, 5].map(n => (
+              <button key={n} type="button" onClick={() => setField(f.key, n)} className="p-0.5">
+                <Star size={26} className={n <= (Number(v) || 0) ? 'text-amber-400 fill-amber-400' : 'text-gray-200 fill-gray-200'} />
+              </button>
+            ))}
           </div>
         )
       default:

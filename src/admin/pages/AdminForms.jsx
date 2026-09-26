@@ -20,6 +20,7 @@ const FIELD_TYPES = [
   { type: 'qualification', label: 'Qualification' },
   { type: 'semester',      label: 'Semester' },
   { type: 'file',          label: 'File Upload' },
+  { type: 'rating',        label: 'Rating' },
 ]
 
 const uid = () => Math.random().toString(36).slice(2, 8)
