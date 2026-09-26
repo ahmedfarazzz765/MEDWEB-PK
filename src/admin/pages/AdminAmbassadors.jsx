@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Megaphone, Users, Trophy, MapPin, Star, Linkedin, Instagram, Facebook, MessageCircle } from 'lucide-react'
+import { Megaphone, Users, Trophy, MapPin, Star, Linkedin, Instagram, Facebook, MessageCircle, Mail, Copy, CheckCircle, X } from 'lucide-react'
 import StatCard    from '../components/StatCard'
 import DataTable   from '../components/DataTable'
 import Modal       from '../components/Modal'
@@ -10,7 +10,8 @@ import ActionButtons from '../components/ActionButtons'
 import AmbassadorLetterSettings from '../components/AmbassadorLetterSettings'
 import CoverImage from '../../components/CoverImage'
 import SortableGrid, { SortableItem } from '../components/SortableGrid'
-import { ambassadorsService, settingsService, formsService, studentsDbService } from '../../firebase/services'
+import { ambassadorsService, settingsService, formsService, studentsDbService, ambassadorInvitesService, ambassadorRanksService, webinarsService } from '../../firebase/services'
+import { computeAmbassadorRank, DEFAULT_RANK_THRESHOLDS } from '../../lib/ambassadorRank'
 import {
   sendAmbassadorWelcomeEmail, sendAmbassadorPointsUpdateEmail,
   sendAmbassadorRemovedEmail, sendAmbassadorUpdatedEmail,
@@ -74,7 +75,7 @@ const LEGACY_ROLE_TO_RANK = {
 }
 
 const emptyForm = () => ({
-  name: '', university: '', city: '',
+  name: '', university: '', city: '', gender: '',
   rank: '', status: 'Active', students: 0, points: 0, imageUrl: '', cnic: '',
   email: '', phone: '',
   ambCode: '',
@@ -96,20 +97,43 @@ function StarPicker({ value, onChange }) {
   )
 }
 
-function makeColumns(openEdit, handleDelete) {
+function makeColumns(openEdit, handleDelete, rankThresholds, onIssueLogin, issuingLogin, onViewReferrals) {
   return [
     { key: 'imageUrl',   label: '',           render: v => v ? <CoverImage src={v} bias="center 25%" className="w-8 h-8 rounded-full" /> : <div className="w-8 h-8 rounded-full bg-blue-50" /> },
     { key: 'name',       label: 'Name',        render: v => <span className="font-semibold text-[#1a1a1a]">{v}</span> },
     { key: 'university', label: 'University',  render: v => <span className="text-gray-500 text-xs">{v}</span> },
     { key: 'city',       label: 'City' },
+    { key: 'gender',     label: 'Gender',      render: v => v ? <span className="text-xs text-gray-500 capitalize">{v}</span> : <span className="text-xs text-gray-300 italic">—</span> },
     { key: 'rank',       label: 'Rank',        render: v => v
       ? <span className="text-xs font-bold px-2 py-0.5 rounded-full border" style={{ background: rankBg[v], color: rankColors[v], borderColor: `${rankColors[v]}33` }}>{v}</span>
       : <span className="text-xs text-gray-300 italic">Unassigned</span> },
     { key: 'students',   label: 'Referred',    render: v => <span className="font-bold text-[#64ac37]">{v || 0}</span> },
-    { key: 'points',     label: 'Points',      render: v => <span className="font-bold text-[#1655c3]">{(v || 0).toLocaleString()}</span> },
+    { key: 'points',     label: 'Points',      render: (v, row) => {
+      const { rank } = computeAmbassadorRank(v || 0, row.gender, rankThresholds)
+      return (
+        <div>
+          <span className="font-bold text-[#1655c3]">{(v || 0).toLocaleString()}</span>
+          <div className="text-[10px] text-gray-400">{rank}</div>
+        </div>
+      )
+    }},
     { key: 'status',     label: 'Status',      render: v => <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${v === 'Active' ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-500'}`}>{v}</span> },
+    { key: 'hasLogin',   label: 'Login',       render: v => v
+      ? <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-50 text-green-600">Active</span>
+      : <span className="text-xs text-gray-300 italic">Not set up</span> },
     { key: 'id',         label: 'Actions',     render: (v, row) => (
-      <ActionButtons onEdit={() => openEdit(row)} onDelete={() => handleDelete(v)} />
+      <div className="flex items-center gap-1">
+        <ActionButtons onEdit={() => openEdit(row)} onDelete={() => handleDelete(v)} />
+        <button onClick={() => onViewReferrals(row)} title="View referrals" className="p-1.5 rounded-lg hover:bg-blue-50 text-[#1655c3] transition-colors">
+          <Users size={14} />
+        </button>
+        {!row.hasLogin && (
+          <button onClick={() => onIssueLogin(row)} disabled={issuingLogin === row.id} title="Issue Login"
+            className="p-1.5 rounded-lg hover:bg-blue-50 text-[#1655c3] transition-colors disabled:opacity-40">
+            <Mail size={14} />
+          </button>
+        )}
+      </div>
     )},
   ]
 }
@@ -126,8 +150,18 @@ export default function AdminAmbassadors() {
   const [applyCfg, setApplyCfg] = useState({ ambassadorApplyEnabled: true, ambassadorApplyFormId: '', ambassadorApplyLink: '' })
   const [applySaved, setApplySaved] = useState(false)
 
+  // Ambassador Login / Referral additions
+  const [justInvited, setJustInvited] = useState(null) // { name, link }
+  const [copiedInvite, setCopiedInvite] = useState(false)
+  const [issuingLogin, setIssuingLogin] = useState(null) // ambassador id currently issuing
+  const [rankThresholds, setRankThresholds] = useState(DEFAULT_RANK_THRESHOLDS)
+  const [thresholdsSaved, setThresholdsSaved] = useState(false)
+  const [referralsFor, setReferralsFor] = useState(null) // ambassador row
+  const [referralRows, setReferralRows] = useState(null) // null = loading
+
   useEffect(() => {
     const uf = formsService.listen(rows => setForms(rows))
+    const ur = ambassadorRanksService.listen(t => { if (t) setRankThresholds(t) })
     settingsService.get().then(s => {
       if (s) setApplyCfg(p => ({
         ambassadorApplyEnabled: typeof s.ambassadorApplyEnabled === 'boolean' ? s.ambassadorApplyEnabled : true,
@@ -135,13 +169,49 @@ export default function AdminAmbassadors() {
         ambassadorApplyLink: s.ambassadorApplyLink || '',
       }))
     }).catch(() => {})
-    return () => uf()
+    return () => { uf(); ur() }
   }, [])
 
   const saveApplyCfg = async (next) => {
     setApplyCfg(next)
     try { await settingsService.update(next); setApplySaved(true); setTimeout(() => setApplySaved(false), 1500) } catch (e) { alert(e.message) }
   }
+
+  const saveRankThresholds = async (next) => {
+    setRankThresholds(next)
+    try { await ambassadorRanksService.update(next); setThresholdsSaved(true); setTimeout(() => setThresholdsSaved(false), 1500) } catch (e) { alert(e.message) }
+  }
+  const setThreshold = (gender, tier) => e => {
+    const val = parseInt(e.target.value) || 0
+    saveRankThresholds({ ...rankThresholds, [gender]: { ...(rankThresholds[gender] || {}), [tier]: val } })
+  }
+
+  const handleIssueLogin = async row => {
+    if (!row.email) { alert('This ambassador needs an email on file before a login can be issued.'); return }
+    setIssuingLogin(row.id)
+    try {
+      const token = await ambassadorInvitesService.create({ ambassadorId: row.id, name: row.name, email: row.email })
+      const link = `${window.location.origin}/ambassador/invite/${token}`
+      setJustInvited({ name: row.name, link })
+    } catch (e) { alert('Error: ' + e.message) }
+    finally { setIssuingLogin(null) }
+  }
+  const copyInviteLink = () => {
+    navigator.clipboard?.writeText(justInvited.link)
+    setCopiedInvite(true)
+    setTimeout(() => setCopiedInvite(false), 1500)
+  }
+
+  const openReferrals = async row => {
+    setReferralsFor(row)
+    setReferralRows(null)
+    if (!row.referralCode) { setReferralRows([]); return }
+    try {
+      const rows = await webinarsService.getRegistrationsByReferralCode(row.referralCode)
+      setReferralRows(rows)
+    } catch { setReferralRows([]) }
+  }
+  const closeReferrals = () => { setReferralsFor(null); setReferralRows(null) }
 
   useEffect(() => {
     const unsub = ambassadorsService.listen(rows => {
@@ -182,7 +252,7 @@ export default function AdminAmbassadors() {
   const openAdd  = () => { setForm(emptyForm()); setEditId(null); setModal('add') }
   const openEdit = row => {
     setForm({
-      name: row.name, university: row.university, city: row.city,
+      name: row.name, university: row.university, city: row.city, gender: row.gender || '',
       rank: row.rank || '', status: row.status, students: row.students || 0, points: row.points || 0,
       imageUrl: row.imageUrl || '', cnic: row.cnic || '',
       email: row.email || '', phone: row.phone || '',
@@ -251,13 +321,57 @@ export default function AdminAmbassadors() {
     } catch (e) { alert('Error: ' + e.message) }
   }
 
-  const columns  = makeColumns(openEdit, handleDelete)
+  const columns  = makeColumns(openEdit, handleDelete, rankThresholds, handleIssueLogin, issuingLogin, openReferrals)
   const active   = data.filter(a => a.status === 'Active').length
   const cities   = [...new Set(data.map(a => a.city))].length
   const referred = data.reduce((acc, a) => acc + (a.students || 0), 0)
 
   return (
     <div className="p-6 space-y-6">
+      {/* Ambassador Login invite link — shown once right after "Issue Login" */}
+      {justInvited && (
+        <div className="bg-green-50 border border-green-100 rounded-2xl px-5 py-4">
+          <div className="flex items-start gap-3">
+            <CheckCircle size={18} className="text-green-600 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-green-700 mb-1">Login invite created for {justInvited.name}</p>
+              <p className="text-xs text-green-700/80 mb-2">Send this link to them yourself (WhatsApp, email, etc.) — they'll set their own password and get a referral code when they open it. The link only works once.</p>
+              <div className="bg-white rounded-xl border border-green-200 px-4 py-2.5 font-mono text-xs text-[#1a1a1a] flex items-center justify-between gap-3">
+                <span className="truncate">{justInvited.link}</span>
+                <button onClick={copyInviteLink} className="shrink-0 flex items-center gap-1 text-[11px] font-bold text-[#1655c3] hover:underline">
+                  <Copy size={12} /> {copiedInvite ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+            </div>
+            <button onClick={() => setJustInvited(null)} className="text-green-400 hover:text-green-600 shrink-0"><X size={16} /></button>
+          </div>
+        </div>
+      )}
+
+      {/* Referral Rank Thresholds */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-black text-[#1a1a1a] text-sm">Referral Rank Thresholds</h3>
+          {thresholdsSaved && <span className="text-xs font-bold text-green-600">Saved ✓</span>}
+        </div>
+        <p className="text-xs text-gray-500 mb-4">Points needed to reach each rank on an ambassador's own dashboard, separately for each gender. Below "Regional" = Ambassador.</p>
+        <div className="grid sm:grid-cols-2 gap-4">
+          {['male', 'female'].map(gender => (
+            <div key={gender} className="rounded-xl border border-gray-100 p-4">
+              <p className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-3 capitalize">{gender}</p>
+              <div className="grid grid-cols-2 gap-3">
+                <FormField label="Regional Ambassador at">
+                  <input type="number" className={inputCls} value={rankThresholds[gender]?.regional ?? 0} onChange={setThreshold(gender, 'regional')} />
+                </FormField>
+                <FormField label="Head Ambassador at">
+                  <input type="number" className={inputCls} value={rankThresholds[gender]?.head ?? 0} onChange={setThreshold(gender, 'head')} />
+                </FormField>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Ambassador Apply Form settings */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
         <div className="flex items-center justify-between mb-3">
@@ -353,6 +467,13 @@ export default function AdminAmbassadors() {
                 <input className={inputCls} value={form.city} onChange={set('city')} placeholder="Islamabad" />
               </FormField>
             </div>
+            <FormField label="Gender (used for referral rank thresholds)">
+              <select className={inputCls} value={form.gender} onChange={set('gender')}>
+                <option value="">Not set</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+              </select>
+            </FormField>
             <FormField label="University">
               <input className={inputCls} value={form.university} onChange={set('university')} placeholder="NUST Islamabad" />
             </FormField>
@@ -433,6 +554,45 @@ export default function AdminAmbassadors() {
                 {saving ? 'Saving…' : modal === 'add' ? 'Add' : 'Save'}
               </AdminButton>
             </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Full-detail referrals view — unlike the ambassador's own dashboard,
+          this shows every field on the registration, not just name+university */}
+      {referralsFor && (
+        <Modal title={`Referrals — ${referralsFor.name}`} onClose={closeReferrals} wide>
+          <div className="space-y-3">
+            <p className="text-xs text-gray-500">
+              Referral code: <span className="font-mono font-bold text-[#1655c3]">{referralsFor.referralCode || 'Not issued yet'}</span>
+              {' · '}<span className="font-bold text-[#1655c3]">{referralRows?.length ?? 0}</span> referral{referralRows?.length === 1 ? '' : 's'}
+            </p>
+            {referralRows === null ? (
+              <p className="text-sm text-gray-400 text-center py-8">Loading…</p>
+            ) : referralRows.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-8">No referrals yet.</p>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-gray-100 max-h-[400px] overflow-y-auto">
+                <table className="min-w-full text-xs">
+                  <thead>
+                    <tr className="bg-gray-50 text-left text-gray-500 sticky top-0">
+                      {['Webinar', 'Name', 'University', 'Email', 'WhatsApp'].map(h => <th key={h} className="px-3 py-2.5 font-semibold whitespace-nowrap">{h}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {referralRows.map(r => (
+                      <tr key={r.id} className="border-t border-gray-100">
+                        <td className="px-3 py-2.5 text-gray-700 max-w-[160px] truncate">{r.webinarTopic}</td>
+                        <td className="px-3 py-2.5 text-gray-700">{r.name}</td>
+                        <td className="px-3 py-2.5 text-gray-500">{r.university || '—'}</td>
+                        <td className="px-3 py-2.5 text-gray-500">{r.email}</td>
+                        <td className="px-3 py-2.5 text-gray-500">{r.whatsapp}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </Modal>
       )}

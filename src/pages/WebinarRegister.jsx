@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Calendar, Clock, User, CheckCircle, ArrowLeft, Star } from 'lucide-react'
-import { webinarsService, formsService, settingsService, studentsDbService, DEFAULT_WEBINAR_FORM_FIELDS } from '../firebase/services'
+import { webinarsService, formsService, settingsService, studentsDbService, ambassadorsService, DEFAULT_WEBINAR_FORM_FIELDS } from '../firebase/services'
 import { sendWebinarConfirmation } from '../firebase/email'
 import { uploadToCloudinary } from '../firebase/cloudinary'
-import { applyNameTitleCase } from '../lib/formFieldResolve'
+import { applyNameTitleCase, resolveFormField } from '../lib/formFieldResolve'
 import FormSuccessLinks from '../components/FormSuccessLinks'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
@@ -17,13 +17,21 @@ const inputCls =
 export default function WebinarRegister() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const refCode = searchParams.get('ref')
   const [webinar, setWebinar] = useState(null)
+  const [referrer, setReferrer] = useState(null) // ambassador doc matching ?ref=, if any
   const [fields, setFields] = useState(DEFAULT_WEBINAR_FORM_FIELDS)
   const [successConfig, setSuccessConfig] = useState({ message: '', links: [] })
   const [loading, setLoading] = useState(true)
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState('')
   const [values, setValues] = useState({})
+
+  useEffect(() => {
+    if (!refCode) return
+    ambassadorsService.getByReferralCode(refCode).then(a => setReferrer(a)).catch(() => {})
+  }, [refCode])
 
   useEffect(() => {
     let mounted = true
@@ -137,13 +145,21 @@ export default function WebinarRegister() {
       Object.keys(values).forEach(k => { if (!k.endsWith('__uploading')) clean[k] = values[k] })
       clean = applyNameTitleCase(fields, clean)
       const webinarTitle = webinar?.topic || webinar?.title || ''
+      const university = resolveFormField(fields, clean, { labelRegex: /university|institute|college/i, flatKeys: ['university', 'institute'] })
       await webinarsService.addRegistration({
         webinarId: id,
         webinarTopic: webinarTitle,
         speaker: webinar?.speakers?.[0]?.name || '',
         ...clean,
+        university,
+        // Referral attribution — `referredByUid` (set only once the
+        // ambassador has claimed a login) is what the Firestore rule checks
+        // for the ambassador's own restricted dashboard read;
+        // `referredBy` (the human-readable code) is for admin display.
+        ...(referrer ? { referredBy: referrer.referralCode, referredByUid: referrer.authUid || null } : {}),
         registeredAt: new Date().toISOString(),
       })
+      if (referrer) ambassadorsService.addReferralPoint(referrer.id).catch(() => {})
       if (webinar && !webinar.isStatic) {
         await webinarsService.register(id).catch(() => {})
       }

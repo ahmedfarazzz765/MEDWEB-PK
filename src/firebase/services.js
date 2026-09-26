@@ -104,6 +104,14 @@ export const webinarsService = {
   addRegistration: data => add('webinarRegistrations', data),
   getRegistrations: webinarId => getAll('webinarRegistrations', where('webinarId', '==', webinarId), orderBy('createdAt', 'desc')),
   getAllRegistrations: () => getAll('webinarRegistrations', orderBy('createdAt', 'desc')),
+  // Ambassador dashboard's own restricted read — filtered by the resolved
+  // ambassador's Firebase Auth UID (stored as `referredByUid` at
+  // registration time, see WebinarRegister.jsx), not by referral code, so
+  // the Firestore rule can check `resource.data.referredByUid == auth.uid`
+  // without needing a second lookup.
+  getRegistrationsByReferrerUid: uid => getAll('webinarRegistrations', where('referredByUid', '==', uid), orderBy('createdAt', 'desc')),
+  // Admin's full-detail view of everyone a given ambassador referred.
+  getRegistrationsByReferralCode: code => getAll('webinarRegistrations', where('referredBy', '==', code), orderBy('createdAt', 'desc')),
   // Used by the client-side certificate generator (src/lib/certificateGenerator.js)
   // to find which webinar a just-submitted feedback form belongs to.
   getByFeedbackFormId: async formId => {
@@ -202,6 +210,76 @@ export const ambassadorsService = {
     snap => cb(applyManualOrder(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
     err => console.error("Firebase listen error:", err)
   ),
+  // ── Ambassador Login / Referral additions ──
+  getByReferralCode: async code => {
+    if (!code) return null
+    const rows = await getAll(COLS.ambassadors, where('referralCode', '==', code), limit(1))
+    return rows[0] || null
+  },
+  // Looks up which ambassador doc belongs to the signed-in Firebase Auth
+  // user — set once, at AmbassadorAcceptInvite.jsx time. Used by
+  // RequireAmbassadorAuth.jsx (dashboard gate) and by RequireAuth.jsx (admin
+  // gate) to explicitly exclude ambassador accounts from the admin
+  // "no adminUsers doc = Super Admin" bootstrap fallback — see the comment
+  // on that rule above adminUsersService.
+  getByAuthUid: async uid => {
+    if (!uid) return null
+    const rows = await getAll(COLS.ambassadors, where('authUid', '==', uid), limit(1))
+    return rows[0] || null
+  },
+  // Assigns a referral code the first time one is needed (when an admin
+  // issues a login) — reuses the existing Ambassador Code if it looks
+  // usable, otherwise mints a short random slug. Never overwrites an
+  // existing referralCode.
+  ensureReferralCode: async (id) => {
+    const row = await getOne(COLS.ambassadors, id)
+    if (!row) throw new Error('Ambassador not found')
+    if (row.referralCode) return row.referralCode
+    const fromCode = String(row.ambCode || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
+    const code = fromCode.length >= 4 ? fromCode : Math.random().toString(36).slice(2, 8).toUpperCase()
+    await update(COLS.ambassadors, id, { referralCode: code })
+    return code
+  },
+  // +1 point and +1 referred-student count per successful referred
+  // registration (see WebinarRegister.jsx's ?ref= handling).
+  addReferralPoint: id => update(COLS.ambassadors, id, { points: increment(1), students: increment(1) }),
+}
+
+// ─── AMBASSADOR INVITES (mirrors adminInvitesService — see the comment
+// there for why account creation must happen in the invitee's own browser,
+// not the admin's) ────────────────────────────────────────────────────────
+// Doc ID = the token. `ambassadorId` ties the claimed Firebase Auth account
+// back to a specific existing ambassadors/{id} doc (unlike admin invites,
+// which create a brand new adminUsers doc — an ambassador doc already
+// exists before the invite is ever issued).
+export const ambassadorInvitesService = {
+  create: async ({ ambassadorId, name, email }) => {
+    const token = crypto.randomUUID().replace(/-/g, '')
+    await setDoc(doc(db, 'ambassadorInvites', token), {
+      ambassadorId,
+      name,
+      email: email.trim().toLowerCase(),
+      claimed: false,
+      createdAt: serverTimestamp(),
+    })
+    return token
+  },
+  getByToken: token => getOne('ambassadorInvites', token),
+  claim: token => update('ambassadorInvites', token, { claimed: true, claimedAt: serverTimestamp() }),
+}
+
+// ─── AMBASSADOR REFERRAL RANK THRESHOLDS (settings/ambassadorRanks) ───────
+// Same single-doc-in-the-settings-collection pattern as settingsService
+// ('site'), youtubeReviewFetch, etc. Shape: { male: {regional, head},
+// female: {regional, head} }. See src/lib/ambassadorRank.js for how these
+// are applied. Firestore rule needed: settings/{docId} should already allow
+// public read + admin-only write for every doc in this collection — confirm
+// that wildcard covers 'ambassadorRanks' too (no per-doc-id rule exists to
+// contradict it as of this writing).
+export const ambassadorRanksService = {
+  get: () => getOne('settings', 'ambassadorRanks'),
+  update: data => setDoc(doc(db, 'settings', 'ambassadorRanks'), { ...data, updatedAt: serverTimestamp() }, { merge: true }),
+  listen: cb => onSnapshot(doc(db, 'settings', 'ambassadorRanks'), snap => cb(snap.exists() ? snap.data() : null), err => console.error('Firebase ambassadorRanks listen error:', err)),
 }
 
 // ─── ANNOUNCEMENTS (general-purpose homepage promo banner) ───────────────────

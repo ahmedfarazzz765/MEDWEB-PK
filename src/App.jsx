@@ -28,6 +28,10 @@ import NewsletterUnsubscribe from './pages/NewsletterUnsubscribe'
 import AdminLogin        from './admin/AdminLogin'
 import AdminPanel        from './admin/AdminPanel'
 import RequireAuth       from './admin/RequireAuth'
+import AmbassadorAcceptInvite from './pages/AmbassadorAcceptInvite'
+import AmbassadorLogin   from './pages/AmbassadorLogin'
+import AmbassadorDashboard from './pages/AmbassadorDashboard'
+import RequireAmbassadorAuth from './ambassador/RequireAmbassadorAuth'
 import WebinarAnnouncementPopup from './components/WebinarAnnouncementPopup'
 import NewsPopup from './components/NewsPopup'
 
@@ -67,6 +71,9 @@ function App() {
         <Route path="/admin/login"            element={<AdminLogin />} />
         <Route path="/admin"                  element={<RequireAuth><AdminPanel /></RequireAuth>} />
         <Route path="/admin/*"                element={<RequireAuth><AdminPanel /></RequireAuth>} />
+        <Route path="/ambassador/invite/:token" element={<AmbassadorAcceptInvite />} />
+        <Route path="/ambassador/login"       element={<AmbassadorLogin />} />
+        <Route path="/ambassador/dashboard"   element={<RequireAmbassadorAuth><AmbassadorDashboard /></RequireAmbassadorAuth>} />
       </Routes>
     </Router>
   )
