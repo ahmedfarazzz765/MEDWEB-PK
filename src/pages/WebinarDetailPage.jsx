@@ -180,6 +180,11 @@ export default function WebinarDetailPage() {
                   style={{ background: color }}>
                   <Play size={16} fill="currentColor" /> Watch Now
                 </button>
+              ) : webinar.registrationEnabled === false ? (
+                <button disabled
+                  className="flex-1 py-3.5 rounded-xl font-bold text-sm text-gray-400 bg-gray-100 cursor-not-allowed">
+                  Registration Closed
+                </button>
               ) : (
                 <button onClick={handleRegister}
                   className="flex-1 py-3.5 rounded-xl font-bold text-sm text-white transition-all hover:opacity-90 active:scale-95"

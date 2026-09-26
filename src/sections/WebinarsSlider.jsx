@@ -172,6 +172,11 @@ export function WebinarCard({ webinar, onRegister }) {
             style={{ background: color }}>
             <Play size={13} fill="currentColor" /> Watch Now
           </button>
+        ) : webinar.registrationEnabled === false ? (
+          <button disabled
+            className="mt-auto w-full py-2.5 rounded-xl font-bold text-xs text-gray-400 bg-gray-100 cursor-not-allowed">
+            Registration Closed
+          </button>
         ) : (
           <button onClick={() => onRegister(webinar)}
             className="mt-auto w-full py-2.5 rounded-xl font-bold text-xs text-white transition-all hover:opacity-90 active:scale-95"

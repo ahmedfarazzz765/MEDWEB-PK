@@ -19,7 +19,7 @@ const emptyForm = () => ({
   type: 'Free', status: 'Upcoming', registered: 0, attended: 0,
   description: '', highlights: '',
   webinarImage: '', speakers: [emptySpeaker()],
-  youtubeLink: '', registrationLink: '', registrationFormId: '',
+  youtubeLink: '', registrationEnabled: true, registrationLink: '', registrationFormId: '',
   feedbackEnabled: false, feedbackLink: '', feedbackFormId: '', feedbackButtonEnabled: true,
   certTemplate: null,
 })
@@ -231,15 +231,28 @@ export default function AdminWebinars() {
               <FormField label="YouTube / Live Link (used by 'Watch Now')">
                 <input className={inputCls} value={form.youtubeLink} onChange={set('youtubeLink')} placeholder="https://youtube.com/live/..." />
               </FormField>
-              <FormField label="Registration — attach a custom form (optional)">
-                <select className={inputCls} value={form.registrationFormId} onChange={set('registrationFormId')}>
-                  <option value="">Default built-in registration form</option>
-                  {forms.map(f => <option key={f.id} value={f.id}>{f.title}</option>)}
-                </select>
-              </FormField>
-              <FormField label="Or external registration link (optional)">
-                <input className={inputCls} value={form.registrationLink} onChange={set('registrationLink')} placeholder="https://forms.gle/... (overrides built-in page)" />
-              </FormField>
+              <label className="flex items-center gap-3 cursor-pointer select-none pt-1">
+                <input type="checkbox" checked={form.registrationEnabled} onChange={set('registrationEnabled')} className="w-4 h-4 accent-[#1655c3]" />
+                <span className="text-sm font-semibold text-gray-700">Activate registration for this webinar</span>
+              </label>
+              {!form.registrationEnabled && (
+                <p className="text-[11px] text-gray-500 -mt-1">
+                  Registration is closed — the card and detail page will show "Registration Closed" instead of a Register Now button, regardless of status.
+                </p>
+              )}
+              {form.registrationEnabled && (
+                <>
+                  <FormField label="Registration — attach a custom form (optional)">
+                    <select className={inputCls} value={form.registrationFormId} onChange={set('registrationFormId')}>
+                      <option value="">Default built-in registration form</option>
+                      {forms.map(f => <option key={f.id} value={f.id}>{f.title}</option>)}
+                    </select>
+                  </FormField>
+                  <FormField label="Or external registration link (optional)">
+                    <input className={inputCls} value={form.registrationLink} onChange={set('registrationLink')} placeholder="https://forms.gle/... (overrides built-in page)" />
+                  </FormField>
+                </>
+              )}
             </div>
 
             {/* FEEDBACK SYSTEM */}
