@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import HomePage          from './pages/HomePage'
 import WebinarRegister   from './pages/WebinarRegister'
+import WebinarDetailPage from './pages/WebinarDetailPage'
 import FounderMessagePage from './pages/FounderMessagePage'
 import AboutPage          from './pages/AboutPage'
 import CertificatePage    from './pages/CertificatePage'
@@ -57,6 +58,7 @@ function App() {
         <Route path="/privacy-policy"         element={<PrivacyPolicyPage />} />
         <Route path="/terms-of-service"       element={<TermsOfServicePage />} />
         <Route path="/refund-policy"          element={<RefundPolicyPage />} />
+        <Route path="/webinar/:id"            element={<WebinarDetailPage />} />
         <Route path="/webinar/:id/register"   element={<WebinarRegister />} />
         <Route path="/webinar/static/register" element={<WebinarRegister />} />
         <Route path="/form/:id"               element={<DynamicForm />} />

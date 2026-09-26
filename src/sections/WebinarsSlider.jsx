@@ -102,9 +102,16 @@ export function WebinarCard({ webinar, onRegister }) {
       </div>
 
       <div className="p-5 flex flex-col gap-3 flex-1">
-        {/* WEBINAR NAME */}
+        {/* WEBINAR NAME — links to the full detail page; the card's own
+            action button below keeps its separate register/watch behavior */}
         <h3 className="font-bold text-[#1a1a1a] text-[15px] leading-snug line-clamp-2 min-h-[44px]">
-          {webinar.topic || webinar.title}
+          {webinar.id && !webinar.isStatic ? (
+            <Link to={`/webinar/${webinar.id}`} className="hover:text-[#1655c3] transition-colors">
+              {webinar.topic || webinar.title}
+            </Link>
+          ) : (
+            webinar.topic || webinar.title
+          )}
         </h3>
 
         {/* SPEAKER ROW: picture(s) + name + qualification in front.

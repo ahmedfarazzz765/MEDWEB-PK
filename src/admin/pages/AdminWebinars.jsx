@@ -8,6 +8,7 @@ import ImageUpload from '../components/ImageUpload'
 import AdminButton from '../components/AdminButton'
 import ActionButtons from '../components/ActionButtons'
 import CertPositionEditor from '../components/CertPositionEditor'
+import RichTextEditor from '../components/RichTextEditor'
 import CoverImage from '../../components/CoverImage'
 import { webinarsService, formsService, settingsService, ensureDefaultWebinarForm } from '../../firebase/services'
 
@@ -16,7 +17,7 @@ const emptySpeaker = () => ({ image: '', name: '', qualification: '' })
 const emptyForm = () => ({
   topic: '', date: '', time: '',
   type: 'Free', status: 'Upcoming', registered: 0, attended: 0,
-  description: '',
+  description: '', highlights: '',
   webinarImage: '', speakers: [emptySpeaker()],
   youtubeLink: '', registrationLink: '', registrationFormId: '',
   feedbackEnabled: false, feedbackLink: '', feedbackFormId: '', feedbackButtonEnabled: true,
@@ -163,8 +164,17 @@ export default function AdminWebinars() {
             <FormField label="Webinar Title">
               <input className={inputCls} value={form.topic} onChange={set('topic')} placeholder="Webinar topic" />
             </FormField>
-            <FormField label="Description">
-              <textarea rows={3} className={inputCls} value={form.description} onChange={set('description')} placeholder="Short description of the webinar" />
+            <FormField label="Short Description">
+              <textarea rows={3} className={inputCls} value={form.description} onChange={set('description')} placeholder="Short description of the webinar (used as a plain-text fallback if no full write-up below)" />
+            </FormField>
+
+            <FormField label="Full Write-up / Highlights (shown on the webinar's detail page)">
+              <RichTextEditor
+                value={form.highlights}
+                onChange={v => setVal('highlights', v)}
+                folder="medweb/webinars/content"
+                contentHeightClass="max-h-[300px] overflow-y-auto"
+              />
             </FormField>
 
             {/* SPEAKERS — repeatable list, mirrors the Lectures pattern in AdminCourses.jsx */}
