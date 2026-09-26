@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Inbox, Download, Video, FileText, Mail } from 'lucide-react'
+import { Inbox, Download, Video, FileText, Mail, ChevronLeft, ChevronRight } from 'lucide-react'
 import StatCard from '../components/StatCard'
 import { inputCls } from '../components/FormField'
 import AdminButton from '../components/AdminButton'
@@ -10,11 +10,18 @@ const formatDateStr = (dateVal) => {
   return str ? str.split('T')[0] : '-'
 }
 
+// Matches DataTable.jsx's page size — this page can't use DataTable
+// directly (it needs a type-filter bar, a multi-field search, and a CSV
+// export button, none of which DataTable's single-searchKey UI supports),
+// so it reimplements the same page-size-8 pagination pattern manually.
+const PAGE_SIZE = 8
+
 export default function AdminSubmissions() {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState('All')
+  const [page, setPage] = useState(1)
 
   useEffect(() => {
     const unsub = submissionsService.listen(data => { setRows(data); setLoading(false) })
@@ -26,6 +33,12 @@ export default function AdminSubmissions() {
     if (!q) return true
     return [r.refName || '', r.name || '', r.email || '', r.whatsapp || ''].join(' ').toLowerCase().includes(q.toLowerCase())
   })
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+
+  const setFilterAndResetPage = t => { setFilter(t); setPage(1) }
+  const setQAndResetPage = v => { setQ(v); setPage(1) }
 
   const exportCsv = () => {
     const header = ['Type', 'Webinar/Event', 'Name', 'Email', 'WhatsApp', 'Date']
@@ -49,12 +62,12 @@ export default function AdminSubmissions() {
         <div className="flex flex-col sm:flex-row gap-3 sm:items-center justify-between mb-4">
           <div className="flex gap-2">
             {['All', 'Webinar', 'Form', 'Newsletter'].map(t => (
-              <button key={t} onClick={() => setFilter(t)}
+              <button key={t} onClick={() => setFilterAndResetPage(t)}
                 className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${filter === t ? 'text-white bg-[#1655c3]' : 'text-gray-500 bg-gray-100 hover:bg-gray-200'}`}>{t}</button>
             ))}
           </div>
           <div className="flex gap-2">
-            <input className={`${inputCls} sm:w-56`} placeholder="Search…" value={q} onChange={e => setQ(e.target.value)} />
+            <input className={`${inputCls} sm:w-56`} placeholder="Search…" value={q} onChange={e => setQAndResetPage(e.target.value)} />
             <AdminButton size="sm" onClick={exportCsv} disabled={!filtered.length}>
               <Download size={13} className="mr-1.5" /> Export CSV
             </AdminButton>
@@ -80,7 +93,7 @@ export default function AdminSubmissions() {
                     <span className="text-sm font-medium">No submissions yet</span>
                   </div>
                 </td></tr>
-              ) : filtered.map(r => (
+              ) : pageRows.map(r => (
                 <tr key={r.id} className="border-t border-gray-100">
                   <td className="px-3 py-2.5"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${r.type === 'Webinar' ? 'bg-blue-50 text-[#1655c3]' : r.type === 'Newsletter' ? 'bg-amber-50 text-amber-600' : 'bg-green-50 text-green-600'}`}>{r.type}</span></td>
                   <td className="px-3 py-2.5 text-gray-700 max-w-[180px] truncate">{r.refName}</td>
@@ -93,6 +106,35 @@ export default function AdminSubmissions() {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination — same page-size-8 pattern as DataTable.jsx */}
+        {!loading && filtered.length > 0 && (
+          <div className="flex items-center justify-between px-1 py-3">
+            <span className="text-xs text-gray-500">
+              Showing {Math.min((page - 1) * PAGE_SIZE + 1, filtered.length)}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
+            </span>
+            <div className="flex items-center gap-1">
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                className="w-7 h-7 rounded-lg flex items-center justify-center border border-gray-200 hover:border-[#1655c3] hover:text-[#1655c3] disabled:opacity-40 transition-all">
+                <ChevronLeft size={13} />
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                <button key={p} onClick={() => setPage(p)}
+                  className="w-7 h-7 rounded-lg text-xs font-semibold border transition-all"
+                  style={p === page
+                    ? { background: '#1655c3', color: 'white', borderColor: '#1655c3' }
+                    : { background: 'white', color: '#6b7280', borderColor: '#e5e7eb' }
+                  }>
+                  {p}
+                </button>
+              ))}
+              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+                className="w-7 h-7 rounded-lg flex items-center justify-center border border-gray-200 hover:border-[#1655c3] hover:text-[#1655c3] disabled:opacity-40 transition-all">
+                <ChevronRight size={13} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

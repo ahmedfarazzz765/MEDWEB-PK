@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Users, Video, BookOpen, Award, Megaphone, TrendingUp, Star, UserPlus, CalendarClock } from 'lucide-react'
 import StatCard from '../components/StatCard'
 import CoverImage from '../../components/CoverImage'
-import { getDashboardStats, studentsDbService, webinarsService, ambassadorsService } from '../../firebase/services'
+import { getDashboardStats, studentsDbService, webinarsService, ambassadorsService, testimonialsService } from '../../firebase/services'
 
 const rankColors = { Platinum:'#0369a1', Gold:'#b45309', Silver:'#475569', Bronze:'#9a3412' }
 
@@ -31,6 +31,7 @@ export default function AdminDashboard() {
   const [students,   setStudents]   = useState([])
   const [webinars,   setWebinars]   = useState([])
   const [ambassadors,setAmbassadors]= useState([])
+  const [testimonials,setTestimonials]= useState([])
   const [loading,    setLoading]    = useState(true)
 
   useEffect(() => {
@@ -38,17 +39,30 @@ export default function AdminDashboard() {
     const u1 = studentsDbService.listen(r  => setStudents(r.slice(0,5)))
     const u2 = webinarsService.listen(r  => setWebinars(r))
     const u3 = ambassadorsService.listen(r=> setAmbassadors(r))
-    return () => { u1(); u2(); u3() }
+    const u4 = testimonialsService.listen(r=> setTestimonials(r))
+    return () => { u1(); u2(); u3(); u4() }
   }, [])
 
+  // Real counts, not marketing copy: distinct ambassador cities (same
+  // source the public Ambassadors section already uses for "Cities
+  // Represented") and the average of actual submitted testimonial ratings.
+  const citiesReached = new Set(ambassadors.map(a => a.city).filter(Boolean)).size
+  const ratedTestimonials = testimonials.filter(t => (t.status || 'Approved') === 'Approved')
+  const avgRating = ratedTestimonials.length
+    ? (ratedTestimonials.reduce((sum, t) => sum + (t.stars || 5), 0) / ratedTestimonials.length).toFixed(1)
+    : null
+
+  // No trend arrows anywhere on this dashboard — there's no historical
+  // snapshot to diff against, so a week-over-week % would be fabricated
+  // for every card, not just the two that used to have hardcoded values.
   const kpis = stats ? [
-    { icon:Users,      label:'Total Students',    value:stats.totalStudents,     sub:`${stats.activeStudents} active`,     trend:12 },
-    { icon:Video,      label:'Total Webinars',    value:stats.totalWebinars,     sub:`${stats.upcomingWebinars} upcoming`, trend:8  },
-    { icon:BookOpen,   label:'Active Courses',    value:stats.activeCourses,     sub:'programs live',                      trend:5  },
-    { icon:Award,      label:'Certificates',      value:stats.validCerts,        sub:'valid & issued',                     trend:18 },
-    { icon:Megaphone,  label:'Ambassadors',       value:stats.activeAmbassadors, sub:'active reps',                        trend:3  },
-    { icon:TrendingUp, label:'Cities Reached',    value:'50+',                   sub:'across Pakistan' },
-    { icon:Star,       label:'Avg Rating',        value:'4.75',                  sub:'out of 5.0',                         trend:2  },
+    { icon:Users,      label:'Total Students',    value:stats.totalStudents,     sub:`${stats.activeStudents} active` },
+    { icon:Video,      label:'Total Webinars',    value:stats.totalWebinars,     sub:`${stats.upcomingWebinars} upcoming` },
+    { icon:BookOpen,   label:'Active Courses',    value:stats.activeCourses,     sub:'programs live' },
+    { icon:Award,      label:'Certificates',      value:stats.validCerts,        sub:'valid & issued' },
+    { icon:Megaphone,  label:'Ambassadors',       value:stats.activeAmbassadors, sub:'active reps' },
+    { icon:TrendingUp, label:'Cities Reached',    value:citiesReached > 0 ? String(citiesReached) : '—', sub:'from active ambassadors' },
+    { icon:Star,       label:'Avg Rating',        value:avgRating || '—',        sub:avgRating ? 'out of 5.0' : 'no reviews yet' },
   ].map((k, i) => ({ ...k, ...ACCENTS[i % ACCENTS.length] })) : []
 
   if (loading) return (
