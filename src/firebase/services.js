@@ -73,12 +73,28 @@ function reorderCollection(colName, items) {
   return Promise.all(items.map((item, i) => update(colName, item.id, { order: i })))
 }
 
+// Old webinar docs stored a single speaker as three flat fields
+// (speakerImage/speaker/role). New docs store a `speakers` array of
+// { image, name, qualification } so a webinar can have several. Every read
+// path below normalizes on the way out so callers can always assume
+// `speakers` is an array, without a manual data migration.
+function normalizeWebinarSpeakers(w) {
+  if (Array.isArray(w.speakers)) return w
+  const hasLegacySpeaker = w.speaker || w.speakerImage || w.role
+  return {
+    ...w,
+    speakers: hasLegacySpeaker
+      ? [{ image: w.speakerImage || '', name: w.speaker || '', qualification: w.role || '' }]
+      : [],
+  }
+}
+
 // ─── WEBINARS ────────────────────────────────────────────────────────────────
 export const webinarsService = {
-  getAll: () => getAll(COLS.webinars, orderBy('createdAt', 'desc')),
-  getUpcoming: () => getAll(COLS.webinars, where('status', '==', 'Upcoming'), orderBy('date')),
-  getLive: () => getAll(COLS.webinars, where('status', '==', 'Live')),
-  getOne: id => getOne(COLS.webinars, id),
+  getAll: () => getAll(COLS.webinars, orderBy('createdAt', 'desc')).then(rows => rows.map(normalizeWebinarSpeakers)),
+  getUpcoming: () => getAll(COLS.webinars, where('status', '==', 'Upcoming'), orderBy('date')).then(rows => rows.map(normalizeWebinarSpeakers)),
+  getLive: () => getAll(COLS.webinars, where('status', '==', 'Live')).then(rows => rows.map(normalizeWebinarSpeakers)),
+  getOne: id => getOne(COLS.webinars, id).then(w => w ? normalizeWebinarSpeakers(w) : w),
   add: data => add(COLS.webinars, { ...data, registered: 0, attended: 0 }),
   update: (id, data) => update(COLS.webinars, id, data),
   delete: id => remove(COLS.webinars, id),
@@ -92,11 +108,11 @@ export const webinarsService = {
   // to find which webinar a just-submitted feedback form belongs to.
   getByFeedbackFormId: async formId => {
     const rows = await getAll(COLS.webinars, where('feedbackFormId', '==', formId), limit(1))
-    return rows[0] || null
+    return rows[0] ? normalizeWebinarSpeakers(rows[0]) : null
   },
   listen: cb => onSnapshot(
     query(col(COLS.webinars), orderBy('createdAt', 'desc')),
-    snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+    snap => cb(snap.docs.map(d => normalizeWebinarSpeakers({ id: d.id, ...d.data() }))),
     err => console.error("Firebase listen error:", err)
   ),
 }

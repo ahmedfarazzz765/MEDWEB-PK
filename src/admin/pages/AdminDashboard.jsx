@@ -98,7 +98,7 @@ export default function AdminDashboard() {
             {upcoming.slice(0,4).map((w,i)=>(
               <div key={i} className="flex items-start gap-3 px-5 py-3 hover:bg-gray-50 transition-colors">
                 <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-black shrink-0" style={{background:w.type==='Free'?'#64ac37':'#1655c3'}}>{w.type==='Free'?'F':'P'}</div>
-                <div className="flex-1 min-w-0"><div className="text-sm font-semibold text-[#1a1a1a] truncate">{w.topic}</div><div className="text-[11px] text-gray-400">{w.speaker} · {w.date}</div></div>
+                <div className="flex-1 min-w-0"><div className="text-sm font-semibold text-[#1a1a1a] truncate">{w.topic}</div><div className="text-[11px] text-gray-400">{w.speakers?.[0]?.name} · {w.date}</div></div>
                 <div className="text-[11px] font-bold text-[#1655c3] whitespace-nowrap">{w.registered||0} reg.</div>
               </div>
             ))}

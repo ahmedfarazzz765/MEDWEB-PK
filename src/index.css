@@ -145,4 +145,17 @@ body {
     to   { opacity: 1; transform: translateY(0); }
   }
   .animate-page-fade-in { animation: page-fade-in 0.25s ease-out; }
+
+  /* Blue-to-green neon glow for "Upcoming" webinar cards only — the
+     gradient ring comes from the wrapper's background showing through a
+     thin padding gap (see .webinar-neon-border usage in WebinarsSlider),
+     this class just handles the pulsing outer glow. */
+  @keyframes webinar-neon-pulse {
+    0%, 100% { box-shadow: 0 0 8px 1px rgba(22,85,195,0.45), 0 0 16px 3px rgba(100,172,55,0.3); }
+    50%      { box-shadow: 0 0 14px 3px rgba(22,85,195,0.65), 0 0 26px 6px rgba(100,172,55,0.5); }
+  }
+  .webinar-neon-border {
+    background: linear-gradient(135deg, #1655c3, #64ac37);
+    animation: webinar-neon-pulse 2.4s ease-in-out infinite;
+  }
 }

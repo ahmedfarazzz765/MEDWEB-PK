@@ -9,6 +9,7 @@ import { applyNameTitleCase } from '../lib/formFieldResolve'
 import FormSuccessLinks from '../components/FormSuccessLinks'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
+import CoverImage from '../components/CoverImage'
 
 const inputCls =
   'w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#1655c3]/30 focus:border-[#1655c3] transition-all placeholder:text-gray-400 bg-gray-50'
@@ -129,7 +130,7 @@ export default function WebinarRegister() {
       await webinarsService.addRegistration({
         webinarId: id,
         webinarTopic: webinarTitle,
-        speaker: webinar?.speaker || '',
+        speaker: webinar?.speakers?.[0]?.name || '',
         ...clean,
         registeredAt: new Date().toISOString(),
       })
@@ -210,12 +211,35 @@ export default function WebinarRegister() {
               </h1>
               {webinar && (
                 <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-white/85 text-xs sm:text-sm mt-3">
-                  {webinar.speaker && <span className="flex items-center gap-1.5"><User size={12} />{webinar.speaker}</span>}
                   {webinar.date && <span className="flex items-center gap-1.5"><Calendar size={12} />{webinar.date}</span>}
                   {webinar.time && <span className="flex items-center gap-1.5"><Clock size={12} />{webinar.time}</span>}
                 </div>
               )}
             </div>
+
+            {/* SPEAKERS — full roster, one card per speaker */}
+            {Array.isArray(webinar?.speakers) && webinar.speakers.length > 0 && (
+              <div className="px-6 sm:px-10 pt-6">
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                  {webinar.speakers.length > 1 ? 'Speakers' : 'Speaker'}
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {webinar.speakers.map((s, i) => (
+                    <div key={i} className="flex items-center gap-3 bg-gray-50 rounded-xl p-3">
+                      <div className="w-14 h-14 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-white shadow-sm" style={{ background: '#eef2f7' }}>
+                        {s.image
+                          ? <CoverImage src={s.image} alt={s.name} bias="center 25%" className="w-full h-full" />
+                          : <div className="w-full h-full flex items-center justify-center text-white font-bold text-sm bg-[#1655c3]"><User size={18} /></div>}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-bold text-sm text-[#1a1a1a] truncate">{s.name}</div>
+                        <div className="text-xs text-gray-400 truncate">{s.qualification}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Form — rendered from the resolved Form Builder document */}
             <div className="px-6 sm:px-10 py-8 space-y-5">

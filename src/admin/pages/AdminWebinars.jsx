@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Video, Users, CheckCircle, Clock } from 'lucide-react'
+import { Video, Users, CheckCircle, Clock, Plus, X } from 'lucide-react'
 import StatCard   from '../components/StatCard'
 import DataTable  from '../components/DataTable'
 import Modal      from '../components/Modal'
@@ -11,11 +11,13 @@ import CertPositionEditor from '../components/CertPositionEditor'
 import CoverImage from '../../components/CoverImage'
 import { webinarsService, formsService, settingsService, ensureDefaultWebinarForm } from '../../firebase/services'
 
+const emptySpeaker = () => ({ image: '', name: '', qualification: '' })
+
 const emptyForm = () => ({
-  topic: '', speaker: '', role: '', date: '', time: '',
+  topic: '', date: '', time: '',
   type: 'Free', status: 'Upcoming', registered: 0, attended: 0,
   description: '',
-  webinarImage: '', speakerImage: '',
+  webinarImage: '', speakers: [emptySpeaker()],
   youtubeLink: '', registrationLink: '', registrationFormId: '',
   feedbackEnabled: false, feedbackLink: '', feedbackFormId: '', feedbackButtonEnabled: true,
   certTemplate: null,
@@ -28,7 +30,11 @@ function makeColumns(openEdit, handleDelete) {
         : <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center"><Video size={14} className="text-gray-300" /></div>
     )},
     { key: 'topic',      label: 'Topic',      render: v => <span className="font-semibold text-[#1a1a1a] text-xs max-w-[180px] block truncate">{v}</span> },
-    { key: 'speaker',    label: 'Speaker',    render: v => <span className="text-gray-600 text-xs">{v}</span> },
+    { key: 'speakers',   label: 'Speaker',    render: (v, row) => {
+      const list = Array.isArray(v) ? v : []
+      const label = list[0]?.name || ''
+      return <span className="text-gray-600 text-xs">{label}{list.length > 1 ? ` +${list.length - 1} more` : ''}</span>
+    }},
     { key: 'date',       label: 'Date' },
     { key: 'type',       label: 'Type',       render: v => <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: v === 'Free' ? '#dcfce7' : '#dbeafe', color: v === 'Free' ? '#16a34a' : '#1655c3' }}>{v}</span> },
     { key: 'registered', label: 'Reg.', render: v => <span className="font-bold text-[#1655c3]">{v || 0}</span> },
@@ -76,19 +82,29 @@ export default function AdminWebinars() {
 
   const openAdd  = () => { setForm(emptyForm()); setEditId(null); setModal('add') }
   const openEdit = row => {
-    setForm({ ...emptyForm(), ...row })
+    const speakers = Array.isArray(row.speakers) && row.speakers.length ? row.speakers : [emptySpeaker()]
+    setForm({ ...emptyForm(), ...row, speakers })
     setEditId(row.id); setModal('edit')
   }
   const closeModal = () => { setModal(false); setEditId(null) }
   const set = field => e => setForm(prev => ({ ...prev, [field]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }))
   const setVal = (field, val) => setForm(prev => ({ ...prev, [field]: val }))
 
+  const addSpeaker = () => setForm(prev => ({ ...prev, speakers: [...prev.speakers, emptySpeaker()] }))
+  const removeSpeaker = i => setForm(prev => ({ ...prev, speakers: prev.speakers.filter((_, idx) => idx !== i) }))
+  const setSpeaker = (i, field) => valueOrEvent => setForm(prev => ({
+    ...prev,
+    speakers: prev.speakers.map((s, idx) => idx === i ? { ...s, [field]: typeof valueOrEvent === 'string' ? valueOrEvent : valueOrEvent.target.value } : s),
+  }))
+
   const handleSave = async () => {
     if (!form.topic.trim()) return
     setSaving(true)
     try {
-      if (modal === 'add') await webinarsService.add(form)
-      else                 await webinarsService.update(editId, form)
+      const speakers = form.speakers.filter(s => s.image.trim() || s.name.trim() || s.qualification.trim())
+      const payload = { ...form, speakers }
+      if (modal === 'add') await webinarsService.add(payload)
+      else                 await webinarsService.update(editId, payload)
       closeModal()
     } catch (e) { alert('Error: ' + e.message) }
     finally { setSaving(false) }
@@ -141,11 +157,8 @@ export default function AdminWebinars() {
         <Modal title={modal === 'add' ? 'Schedule Webinar' : 'Edit Webinar'} onClose={closeModal}>
           <div className="space-y-4">
 
-            {/* Images */}
-            <div className="grid sm:grid-cols-2 gap-4">
-              <ImageUpload label="Webinar Poster / Image" folder="medweb/webinars" value={form.webinarImage} onChange={v => setVal('webinarImage', v)} />
-              <ImageUpload label="Speaker Image" folder="medweb/speakers" value={form.speakerImage} onChange={v => setVal('speakerImage', v)} />
-            </div>
+            {/* Webinar poster */}
+            <ImageUpload label="Webinar Poster / Image" folder="medweb/webinars" value={form.webinarImage} onChange={v => setVal('webinarImage', v)} />
 
             <FormField label="Webinar Title">
               <input className={inputCls} value={form.topic} onChange={set('topic')} placeholder="Webinar topic" />
@@ -153,14 +166,31 @@ export default function AdminWebinars() {
             <FormField label="Description">
               <textarea rows={3} className={inputCls} value={form.description} onChange={set('description')} placeholder="Short description of the webinar" />
             </FormField>
-            <div className="grid grid-cols-2 gap-4">
-              <FormField label="Speaker Name">
-                <input className={inputCls} value={form.speaker} onChange={set('speaker')} placeholder="Dr. Name" />
-              </FormField>
-              <FormField label="Speaker Qualification">
-                <input className={inputCls} value={form.role} onChange={set('role')} placeholder="Clinical Pharmacist" />
-              </FormField>
+
+            {/* SPEAKERS — repeatable list, mirrors the Lectures pattern in AdminCourses.jsx */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-gray-600">Speakers</span>
+                <button type="button" onClick={addSpeaker} className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-dashed border-[#1655c3]/40 text-[#1655c3] hover:bg-blue-50">
+                  <Plus size={13} /> Add Speaker
+                </button>
+              </div>
+              <div className="space-y-3">
+                {form.speakers.map((s, i) => (
+                  <div key={i} className="flex items-start gap-2 bg-gray-50 rounded-lg p-3">
+                    <div className="flex-1 space-y-2">
+                      <ImageUpload label={`Speaker ${i + 1} Image`} folder="medweb/speakers" value={s.image} onChange={v => setSpeaker(i, 'image')(v)} />
+                      <div className="grid grid-cols-2 gap-2">
+                        <input className={inputCls} value={s.name} onChange={setSpeaker(i, 'name')} placeholder="Dr. Name" />
+                        <input className={inputCls} value={s.qualification} onChange={setSpeaker(i, 'qualification')} placeholder="Clinical Pharmacist" />
+                      </div>
+                    </div>
+                    <button type="button" onClick={() => removeSpeaker(i)} className="p-1.5 rounded-lg hover:bg-red-50 text-red-400 shrink-0"><X size={14} /></button>
+                  </div>
+                ))}
+              </div>
             </div>
+
             <div className="grid grid-cols-2 gap-4">
               <FormField label="Date">
                 <input className={inputCls} value={form.date} onChange={set('date')} placeholder="June 12, 2026" />

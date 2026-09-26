@@ -128,6 +128,7 @@ export async function sendEmail({ to_name, to_email, subject, htmlContent, messa
 // Webinar registration confirmation
 export async function sendWebinarConfirmation({ name, email, webinar }) {
   const topic = webinar?.topic || webinar?.title || 'MEDWEB Webinar'
+  const speakerNames = (Array.isArray(webinar?.speakers) ? webinar.speakers : []).map(s => s.name).filter(Boolean).join(', ')
   return sendEmail({
     to_name: name,
     to_email: email,
@@ -137,7 +138,7 @@ export async function sendWebinarConfirmation({ name, email, webinar }) {
       <p style="color:#555;margin:0 0 20px;">Hi <strong>${name}</strong>, your seat for the webinar below is confirmed.</p>
       <div style="background:#f7f9fc;border-radius:12px;padding:20px;margin-bottom:24px;">
         <p style="margin:0 0 6px;font-weight:700;color:#1655c3;font-size:15px;">${topic}</p>
-        ${webinar?.speaker ? `<p style="margin:0 0 4px;color:#666;font-size:13px;">🎤 ${webinar.speaker}</p>` : ''}
+        ${speakerNames ? `<p style="margin:0 0 4px;color:#666;font-size:13px;">🎤 ${speakerNames}</p>` : ''}
         ${webinar?.date   ? `<p style="margin:0 0 4px;color:#666;font-size:13px;">📅 ${webinar.date}</p>` : ''}
         ${webinar?.time   ? `<p style="margin:0;color:#666;font-size:13px;">🕐 ${webinar.time}</p>` : ''}
       </div>

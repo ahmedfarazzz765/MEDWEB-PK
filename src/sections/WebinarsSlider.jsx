@@ -50,6 +50,7 @@ export function WebinarCard({ webinar, onRegister }) {
   const color = webinar.color || '#1655c3'
   const isLive = webinar.status === 'Live'
   const isCompleted = webinar.status === 'Completed'
+  const isUpcomingStatus = webinar.status === 'Upcoming'
   const statusStyle = STATUS_STYLES[webinar.status] || STATUS_STYLES.Upcoming
   const youtube = webinar.youtubeLink || webinar.youtube || ''
   const poster = webinar.webinarImage || webinar.poster
@@ -65,7 +66,11 @@ export function WebinarCard({ webinar, onRegister }) {
   }
 
   return (
-    <div className={`bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col h-full overflow-hidden hover:shadow-lg transition-shadow duration-300 w-full max-w-[340px] mx-auto ${isCompleted ? 'opacity-80' : ''}`}>
+    // Neon blue-green glow ring — "Upcoming" status only. The gradient
+    // wrapper's background peeks through a 2px padding gap to form the
+    // border; other statuses render the plain gray border as before.
+    <div className={`w-full max-w-[340px] mx-auto rounded-2xl h-full ${isUpcomingStatus ? 'webinar-neon-border p-[2px]' : ''}`}>
+      <div className={`bg-white rounded-2xl shadow-sm ${isUpcomingStatus ? '' : 'border border-gray-100'} flex flex-col h-full overflow-hidden hover:shadow-lg transition-shadow duration-300 w-full ${isCompleted ? 'opacity-80' : ''}`}>
       {/* WEBINAR POSTER (top) — fixed height keeps every card identical */}
       <div className="relative w-full aspect-video bg-gray-100 overflow-hidden">
         {poster ? (
@@ -102,18 +107,40 @@ export function WebinarCard({ webinar, onRegister }) {
           {webinar.topic || webinar.title}
         </h3>
 
-        {/* SPEAKER ROW: picture + name + qualification in front */}
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-white shadow-sm" style={{ background: '#eef2f7' }}>
-            {webinar.speakerImage
-              ? <CoverImage src={webinar.speakerImage} alt={webinar.speaker} bias="center 25%" className="w-full h-full" onError={e => { e.target.replaceWith(Object.assign(document.createElement('div'),{className:'w-full h-full'})); }} />
-              : <Initials name={webinar.speaker} />}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="font-bold text-sm text-[#1a1a1a] truncate">{webinar.speaker}</div>
-            <div className="text-xs text-gray-400 truncate">{webinar.role || webinar.qualification}</div>
-          </div>
-        </div>
+        {/* SPEAKER ROW: picture(s) + name + qualification in front.
+            Single-speaker webinars render identically to before (one photo,
+            same layout); multiple speakers add overlapping avatars behind
+            the primary one plus a "+N more" hint, without growing the card. */}
+        {(() => {
+          const speakers = Array.isArray(webinar.speakers) ? webinar.speakers : []
+          const primary = speakers[0] || { image: webinar.speakerImage, name: webinar.speaker, qualification: webinar.role || webinar.qualification }
+          const extra = speakers.slice(1, 3)
+          return (
+            <div className="flex items-center gap-3">
+              <div className="flex items-center flex-shrink-0">
+                <div className="w-12 h-12 rounded-full overflow-hidden ring-2 ring-white shadow-sm relative z-10" style={{ background: '#eef2f7' }}>
+                  {primary.image
+                    ? <CoverImage src={primary.image} alt={primary.name} bias="center 25%" className="w-full h-full" onError={e => { e.target.replaceWith(Object.assign(document.createElement('div'),{className:'w-full h-full'})); }} />
+                    : <Initials name={primary.name} />}
+                </div>
+                {extra.map((s, i) => (
+                  <div key={i} className="w-12 h-12 rounded-full overflow-hidden ring-2 ring-white shadow-sm flex-shrink-0"
+                    style={{ background: '#eef2f7', marginLeft: '-18px', zIndex: 10 - (i + 1) }}>
+                    {s.image
+                      ? <CoverImage src={s.image} alt={s.name} bias="center 25%" className="w-full h-full" onError={e => { e.target.replaceWith(Object.assign(document.createElement('div'),{className:'w-full h-full'})); }} />
+                      : <Initials name={s.name} />}
+                  </div>
+                ))}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-bold text-sm text-[#1a1a1a] truncate">
+                  {primary.name}{speakers.length > 1 ? <span className="text-gray-400 font-semibold"> +{speakers.length - 1} more</span> : ''}
+                </div>
+                <div className="text-xs text-gray-400 truncate">{primary.qualification}</div>
+              </div>
+            </div>
+          )
+        })()}
 
         {/* DATE & TIME */}
         <div className="flex flex-wrap gap-x-4 gap-y-1.5 pt-1">
@@ -153,6 +180,7 @@ export function WebinarCard({ webinar, onRegister }) {
             <MessageCircle size={13} /> Give Feedback
           </button>
         )}
+      </div>
       </div>
     </div>
   )
