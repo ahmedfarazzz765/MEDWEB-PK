@@ -27,15 +27,22 @@ function thresholdsFor(gender, thresholds) {
   return thresholds?.[key] || DEFAULT_RANK_THRESHOLDS[key]
 }
 
-// Returns { rank, nextRank, pointsToNext } — nextRank/pointsToNext are null
-// once the ambassador has hit the top tier (Head Ambassador).
+// Returns { rank, nextRank, pointsToNext, progressPct } — nextRank/
+// pointsToNext are null once the ambassador has hit the top tier (Head
+// Ambassador), and progressPct is 100 there. progressPct is the ambassador's
+// position between the current tier's own floor and the next tier's
+// threshold (not 0-total-points-ever), so the bar always has real headroom
+// to fill within the tier the ambassador is actually in.
 export function computeAmbassadorRank(points, gender, thresholds = DEFAULT_RANK_THRESHOLDS) {
   const p = Number(points) || 0
   const t = thresholdsFor(gender, thresholds)
   const tier = p >= t.head ? 'head' : p >= t.regional ? 'regional' : 'ambassador'
   const tierIdx = TIERS.indexOf(tier)
   const nextTier = TIERS[tierIdx + 1]
-  if (!nextTier) return { rank: TIER_LABELS[tier], nextRank: null, pointsToNext: null }
+  const floor = tier === 'head' ? t.head : tier === 'regional' ? t.regional : 0
+  if (!nextTier) return { rank: TIER_LABELS[tier], nextRank: null, pointsToNext: null, progressPct: 100 }
   const nextThreshold = nextTier === 'regional' ? t.regional : t.head
-  return { rank: TIER_LABELS[tier], nextRank: TIER_LABELS[nextTier], pointsToNext: Math.max(0, nextThreshold - p) }
+  const span = Math.max(1, nextThreshold - floor)
+  const progressPct = Math.min(100, Math.max(0, Math.round(((p - floor) / span) * 100)))
+  return { rank: TIER_LABELS[tier], nextRank: TIER_LABELS[nextTier], pointsToNext: Math.max(0, nextThreshold - p), progressPct }
 }

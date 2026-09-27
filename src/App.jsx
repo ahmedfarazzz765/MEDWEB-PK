@@ -33,6 +33,7 @@ import AmbassadorAcceptInvite from './pages/AmbassadorAcceptInvite'
 import AmbassadorLogin   from './pages/AmbassadorLogin'
 import AmbassadorDashboard from './pages/AmbassadorDashboard'
 import RequireAmbassadorAuth from './ambassador/RequireAmbassadorAuth'
+import ComingSoonPage from './ambassador/ComingSoonPage'
 import WebinarAnnouncementPopup from './components/WebinarAnnouncementPopup'
 import NewsPopup from './components/NewsPopup'
 
@@ -91,6 +92,12 @@ function App() {
         <Route path="/ambassador/invite/:token" element={<AmbassadorAcceptInvite />} />
         <Route path="/ambassador/login"       element={<AmbassadorLogin />} />
         <Route path="/ambassador/dashboard"   element={<RequireAmbassadorAuth><AmbassadorDashboard /></RequireAmbassadorAuth>} />
+        <Route path="/ambassador/profile"        element={<RequireAmbassadorAuth><ComingSoonPage navKey="profile" /></RequireAmbassadorAuth>} />
+        <Route path="/ambassador/card"           element={<RequireAmbassadorAuth><ComingSoonPage navKey="card" /></RequireAmbassadorAuth>} />
+        <Route path="/ambassador/referral-link"  element={<RequireAmbassadorAuth><ComingSoonPage navKey="referral-link" /></RequireAmbassadorAuth>} />
+        <Route path="/ambassador/referrals"      element={<RequireAmbassadorAuth><ComingSoonPage navKey="referrals" /></RequireAmbassadorAuth>} />
+        <Route path="/ambassador/rewards"        element={<RequireAmbassadorAuth><ComingSoonPage navKey="rewards" /></RequireAmbassadorAuth>} />
+        <Route path="/ambassador/help"           element={<RequireAmbassadorAuth><ComingSoonPage navKey="help" /></RequireAmbassadorAuth>} />
       </Routes>
     </Router>
   )
