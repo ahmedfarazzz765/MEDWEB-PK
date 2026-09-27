@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom'
 import HomePage          from './pages/HomePage'
 import WebinarRegister   from './pages/WebinarRegister'
 import WebinarDetailPage from './pages/WebinarDetailPage'
@@ -35,11 +35,26 @@ import RequireAmbassadorAuth from './ambassador/RequireAmbassadorAuth'
 import WebinarAnnouncementPopup from './components/WebinarAnnouncementPopup'
 import NewsPopup from './components/NewsPopup'
 
+// Marketing popups belong on the public site only — mounting them
+// unconditionally at the Router root meant refreshing any /admin page
+// (including while signed in) showed the same webinar/news popup a
+// regular visitor would see. Gated here instead of inside each popup so
+// their own Firestore listeners never even start on admin routes.
+function PublicSitePopups() {
+  const location = useLocation()
+  if (location.pathname.startsWith('/admin')) return null
+  return (
+    <>
+      <WebinarAnnouncementPopup />
+      <NewsPopup />
+    </>
+  )
+}
+
 function App() {
   return (
     <Router>
-      <WebinarAnnouncementPopup />
-      <NewsPopup />
+      <PublicSitePopups />
       <Routes>
         <Route path="/"                       element={<HomePage />} />
         <Route path="/founder-message"        element={<FounderMessagePage />} />

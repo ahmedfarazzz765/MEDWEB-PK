@@ -49,6 +49,14 @@ export default function WebinarAnnouncementPopup() {
 
   const handleRegister = (w) => {
     setShow(false)
+    // "Give Feedback" flows through this same handler (WebinarCard calls
+    // onRegister with _feedbackMode set) — without this check first, it fell
+    // through to the registration-form branches below and opened the
+    // registration form instead of the feedback form.
+    if (w._feedbackMode && w.feedbackFormId) {
+      navigate(`/form/${w.feedbackFormId}`)
+      return
+    }
     if (w.registrationLink) {
       window.open(w.registrationLink, '_blank', 'noopener,noreferrer')
       return
