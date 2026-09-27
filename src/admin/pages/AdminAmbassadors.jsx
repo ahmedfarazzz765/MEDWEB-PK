@@ -15,6 +15,7 @@ import { computeAmbassadorRank, DEFAULT_RANK_THRESHOLDS } from '../../lib/ambass
 import {
   sendAmbassadorWelcomeEmail, sendAmbassadorPointsUpdateEmail,
   sendAmbassadorRemovedEmail, sendAmbassadorUpdatedEmail,
+  sendAmbassadorLoginInviteEmail,
 } from '../../firebase/email'
 
 // Which fields trigger the generic "profile updated" email when changed,
@@ -118,8 +119,10 @@ function makeColumns(openEdit, handleDelete, rankThresholds, onIssueLogin, issui
       )
     }},
     { key: 'status',     label: 'Status',      render: v => <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${v === 'Active' ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-500'}`}>{v}</span> },
-    { key: 'hasLogin',   label: 'Login',       render: v => v
+    { key: 'hasLogin',   label: 'Login',       render: (v, row) => v
       ? <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-50 text-green-600">Active</span>
+      : row.inviteSentAt
+      ? <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-600">Invite Sent</span>
       : <span className="text-xs text-gray-300 italic">Not set up</span> },
     { key: 'id',         label: 'Actions',     render: (v, row) => (
       <div className="flex items-center gap-1">
@@ -128,8 +131,9 @@ function makeColumns(openEdit, handleDelete, rankThresholds, onIssueLogin, issui
           <Users size={14} />
         </button>
         {!row.hasLogin && (
-          <button onClick={() => onIssueLogin(row)} disabled={issuingLogin === row.id} title="Issue Login"
-            className="p-1.5 rounded-lg hover:bg-blue-50 text-[#1655c3] transition-colors disabled:opacity-40">
+          <button onClick={() => onIssueLogin(row)} disabled={issuingLogin === row.id || !!row.inviteSentAt}
+            title={row.inviteSentAt ? 'Invite already sent' : 'Issue Login'}
+            className="p-1.5 rounded-lg hover:bg-blue-50 text-[#1655c3] transition-colors disabled:opacity-30 disabled:hover:bg-transparent">
             <Mail size={14} />
           </button>
         )}
@@ -192,7 +196,15 @@ export default function AdminAmbassadors() {
     try {
       const token = await ambassadorInvitesService.create({ ambassadorId: row.id, name: row.name, email: row.email })
       const link = `${window.location.origin}/ambassador/invite/${token}`
-      setJustInvited({ name: row.name, link })
+      // The actual notification the ambassador needs — a dedicated invite
+      // template, never sendAmbassadorUpdatedEmail (that one fires from
+      // handleSave below on unrelated profile edits and has no login link).
+      const result = await sendAmbassadorLoginInviteEmail({ name: row.name, email: row.email, link })
+      // Denormalized onto the ambassador doc (not just local state) so the
+      // "Invite Sent" button state survives a page reload and isn't lost if
+      // the admin navigates away before claiming.
+      await ambassadorsService.update(row.id, { inviteSentAt: new Date().toISOString() })
+      setJustInvited({ name: row.name, link, emailSent: result?.sent !== false && !result?.skipped })
     } catch (e) { alert('Error: ' + e.message) }
     finally { setIssuingLogin(null) }
   }
@@ -335,7 +347,11 @@ export default function AdminAmbassadors() {
             <CheckCircle size={18} className="text-green-600 shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold text-green-700 mb-1">Login invite created for {justInvited.name}</p>
-              <p className="text-xs text-green-700/80 mb-2">Send this link to them yourself (WhatsApp, email, etc.) — they'll set their own password and get a referral code when they open it. The link only works once.</p>
+              <p className="text-xs text-green-700/80 mb-2">
+                {justInvited.emailSent
+                  ? "We've emailed them this link — they'll set their own password and get a referral code when they open it. You can also forward it yourself (WhatsApp, etc.) if needed. The link only works once."
+                  : "Email sending isn't configured (see Email Settings), so this wasn't emailed automatically — send this link to them yourself (WhatsApp, email, etc.). The link only works once."}
+              </p>
               <div className="bg-white rounded-xl border border-green-200 px-4 py-2.5 font-mono text-xs text-[#1a1a1a] flex items-center justify-between gap-3">
                 <span className="truncate">{justInvited.link}</span>
                 <button onClick={copyInviteLink} className="shrink-0 flex items-center gap-1 text-[11px] font-bold text-[#1655c3] hover:underline">

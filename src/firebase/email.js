@@ -267,6 +267,35 @@ export async function sendAmbassadorWelcomeEmail({ name, email, ambCode, univers
   })
 }
 
+// Ambassador Login invite — distinct from sendAmbassadorUpdatedEmail below;
+// must never be triggered by a plain profile edit, only by AdminAmbassadors.jsx's
+// "Issue Login" action creating a fresh ambassadorInvites/{token} doc.
+export async function sendAmbassadorLoginInviteEmail({ name, email, link }) {
+  return sendEmail({
+    to_name: name,
+    to_email: email,
+    subject: `Set Up Your MEDWEB Ambassador Login`,
+    htmlContent: wrapHtml(`
+      <h2 style="margin:0 0 8px;color:#1a1a1a;">You're invited, ${name}! 🔐</h2>
+      <p style="color:#555;margin:0 0 20px;line-height:1.7;">
+        The MEDWEB team has set up your own Ambassador dashboard — track your referrals,
+        points, and rank in real time. Set up your password to get started.
+      </p>
+      <div style="text-align:center;margin-bottom:24px;">
+        <a href="${link}"
+           style="display:inline-block;background:linear-gradient(135deg,#1655c3,#64ac37);color:#fff;text-decoration:none;padding:14px 32px;border-radius:10px;font-weight:700;font-size:14px;">
+          Set Up Your Login →
+        </a>
+      </div>
+      <p style="color:#aaa;font-size:12px;margin:0 0 20px;text-align:center;">
+        Or paste this link in your browser: <a href="${link}" style="color:#1655c3;">${link}</a>
+      </p>
+      <p style="color:#888;font-size:13px;margin:0;">This link is one-time use and works only for your account. If you weren't expecting this, you can safely ignore it.</p>
+      <br><p style="color:#888;font-size:13px;margin:0;">— MEDWEB Team</p>
+    `),
+  })
+}
+
 // Ambassador points updated
 export async function sendAmbassadorPointsUpdateEmail({ name, email, points }) {
   return sendEmail({
