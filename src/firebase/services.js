@@ -172,10 +172,19 @@ export const certificatesService = {
     const results = await getAll(COLS.certificates, where('certCode', '==', certId))
     return results.length > 0 ? results[0] : null
   },
-  // All certificates for one student — used by the public Portfolio page
-  // (PortfolioPage.jsx). Same collection/field certificatesService.add()
-  // already writes `email` to, and the same public-read trust level
-  // getByCode above already relies on.
+  // All certificates for one student, keyed by PHONE — the primary lookup
+  // for the public Portfolio page (PortfolioPage.jsx) now (see the
+  // STUDENT DATABASE section below for why: names collide, email isn't
+  // always captured, phone is the one reliable identity field). Certificates
+  // issued before phone was captured on the cert doc simply have no `phone`
+  // field and won't match here — PortfolioPage.jsx falls back to a
+  // case/whitespace-tolerant email scan for those.
+  getByPhone: phone => {
+    const p = normalizePhone(phone)
+    return p ? getAll(COLS.certificates, where('phone', '==', p), orderBy('issuedAt', 'desc')) : Promise.resolve([])
+  },
+  // Legacy/fallback lookup by exact email match — kept for
+  // CertificatePage.jsx's best-effort "View Full Portfolio" discovery link.
   getByEmail: email => getAll(COLS.certificates, where('email', '==', String(email || '').trim().toLowerCase()), orderBy('issuedAt', 'desc')),
   // Fully random certificate ID — deliberately carries no relationship to
   // the webinar/course title or to any other certificate (unlike the old
@@ -330,15 +339,35 @@ export const announcementsService = {
   ),
 }
 
-// ─── STUDENT DATABASE (aggregated, deduped-by-email) ─────────────────────────
-// One doc per unique email, doc ID = the email itself (URL-encoded so it's a
-// valid Firestore doc ID). Fed from 3 places only — webinar registrations,
-// webinar feedback submissions, and ambassador registrations — never
-// overwritten wholesale, always merged via a transaction so concurrent
-// upserts (e.g. two webinars registering the same email at once) can't
-// clobber each other's registrations/certificates arrays.
+// ─── STUDENT DATABASE (aggregated, deduped-by-PHONE) ──────────────────────────
+// One doc per unique person, doc ID = their normalized phone number — NOT
+// email or name. Names collide across different students, and email isn't
+// captured consistently by every form, but a phone number is collected by
+// every registration/feedback/ambassador flow and is genuinely unique per
+// person. Falls back to an email-keyed doc (the OLD scheme, unprefixed —
+// see studentDocIdFromEmail below) only on the rare upsert that truly has no
+// phone at all, so every pre-existing record from before this change stays
+// reachable at its same doc ID. Fed from 4 places — webinar registrations,
+// webinar feedback submissions, certificate issuance, and ambassador
+// registrations — never overwritten wholesale, always merged via a
+// transaction so concurrent upserts for the same person can't clobber each
+// other's registrations/certificates arrays.
 const STUDENT_DB_COL = 'studentDatabase'
-const studentDocId = email => encodeURIComponent(String(email).trim().toLowerCase())
+
+// Canonical form: digits only, Pakistani local numbers (leading 0, 11
+// digits) normalized to their 92-country-code form so "0329-1692899",
+// "+92 329 1692899" and "923291692899" all resolve to the same key.
+// Returns '' if nothing usable was given.
+function normalizePhone(raw) {
+  let digits = String(raw || '').replace(/[^0-9]/g, '')
+  if (!digits) return ''
+  if (digits.length === 11 && digits.startsWith('0')) digits = '92' + digits.slice(1)
+  else if (digits.length === 10 && digits.startsWith('3')) digits = '92' + digits
+  return digits
+}
+// The OLD doc-ID scheme (pre-phone-keying) — kept byte-for-byte identical so
+// it still resolves every record created before this change.
+const studentDocIdFromEmail = email => encodeURIComponent(String(email || '').trim().toLowerCase())
 
 // URL-safe, random 8-char code for the public /portfolio/:slug route
 // (PortfolioPage.jsx) — no collision check (unlike certificatesService's
@@ -354,21 +383,28 @@ function generatePortfolioSlug() {
   return slug
 }
 
-async function upsertStudent(email, patch) {
-  if (!email?.trim()) return
-  const ref = doc(db, STUDENT_DB_COL, studentDocId(email))
+async function upsertStudent({ phone, email }, patch) {
+  const normPhone = normalizePhone(phone)
+  const normEmail = String(email || '').trim().toLowerCase()
+  const key = normPhone || (normEmail ? studentDocIdFromEmail(normEmail) : '')
+  if (!key) return
+  const ref = doc(db, STUDENT_DB_COL, key)
   await runTransaction(db, async tx => {
     const snap = await tx.get(ref)
     const base = snap.exists() ? snap.data() : {
-      name: '', email: email.trim().toLowerCase(), phone: '', university: '', degree: '',
+      name: '', email: normEmail, phone: normPhone, university: '', degree: '',
       registrations: [], certificates: [],
       createdAt: serverTimestamp(),
     }
     // Backfills a slug for any record that predates this feature, and
     // assigns one on first-ever aggregation for a brand new record — every
     // upsert path funnels through here, so no individual upsertFrom*
-    // method needs its own slug logic.
+    // method needs its own slug logic. Same for phone/email: an older
+    // record upserted again with a phone number it didn't have yet gets it
+    // filled in (still at its existing doc ID — this never re-keys a doc).
     if (!base.portfolioSlug) base.portfolioSlug = generatePortfolioSlug()
+    if (!base.phone && normPhone) base.phone = normPhone
+    if (!base.email && normEmail) base.email = normEmail
     tx.set(ref, { ...patch(base), updatedAt: serverTimestamp() }, { merge: true })
   })
 }
@@ -380,10 +416,12 @@ export const studentsDbService = {
     snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
     err => console.error('Firebase studentDatabase listen error:', err)
   ),
-  // Doc ID is deterministic from the email, so this is a direct get, not a
-  // query — used by CertificatePage.jsx to find that certificate's
-  // portfolioSlug for the "View Full Portfolio" link.
-  getByEmail: email => getOne(STUDENT_DB_COL, studentDocId(email)),
+  // Primary identity lookup now — doc ID is deterministic from the
+  // normalized phone number, so this is a direct get, not a query.
+  getByPhone: phone => { const p = normalizePhone(phone); return p ? getOne(STUDENT_DB_COL, p) : Promise.resolve(null) },
+  // Legacy/fallback lookup — only ever finds a record that was created
+  // before phone-keying (or upserted with no phone at all).
+  getByEmail: email => { const e = String(email || '').trim().toLowerCase(); return e ? getOne(STUDENT_DB_COL, studentDocIdFromEmail(e)) : Promise.resolve(null) },
   // Public lookup for PortfolioPage.jsx (/portfolio/:slug) — same trust
   // level as blogService.getBySlug/announcementsService.getBySlug.
   getBySlug: async slug => {
@@ -393,12 +431,11 @@ export const studentsDbService = {
 
   // Webinar Registration submission — one entry per distinct webinarId.
   upsertFromRegistration: ({ email, name, phone, university, degree, webinarId, webinarTitle, registeredAt }) =>
-    upsertStudent(email, base => {
+    upsertStudent({ phone, email }, base => {
       const already = (base.registrations || []).some(r => r.webinarId === webinarId)
       return {
         ...base,
         name: name?.trim() || base.name,
-        phone: phone?.trim() || base.phone,
         university: university?.trim() || base.university,
         degree: degree?.trim() || base.degree,
         registrations: already ? base.registrations : [
@@ -411,15 +448,14 @@ export const studentsDbService = {
   // Webinar Feedback submission — doesn't add a registration/certificate,
   // just ensures the student record exists and enriches contact details.
   upsertFromFeedback: ({ email, name, phone }) =>
-    upsertStudent(email, base => ({
+    upsertStudent({ phone, email }, base => ({
       ...base,
       name: name?.trim() || base.name,
-      phone: phone?.trim() || base.phone,
     })),
 
   // Certificate issuance — one entry per distinct certCode.
-  upsertFromCertificate: ({ email, name, webinarId, webinarTitle, certCode, issuedAt }) =>
-    upsertStudent(email, base => {
+  upsertFromCertificate: ({ email, phone, name, webinarId, webinarTitle, certCode, issuedAt }) =>
+    upsertStudent({ phone, email }, base => {
       const already = (base.certificates || []).some(c => c.certCode === certCode)
       return {
         ...base,
@@ -434,10 +470,9 @@ export const studentsDbService = {
   // Ambassador registration (public application form, or an admin manually
   // adding an ambassador) — enriches contact/university/degree only.
   upsertFromAmbassador: ({ email, name, phone, university, degree }) =>
-    upsertStudent(email, base => ({
+    upsertStudent({ phone, email }, base => ({
       ...base,
       name: name?.trim() || base.name,
-      phone: phone?.trim() || base.phone,
       university: university?.trim() || base.university,
       degree: degree?.trim() || base.degree,
     })),

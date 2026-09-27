@@ -113,7 +113,7 @@ function canvasToCompressedBlob(canvas, targetBytes = 350 * 1024) {
  * manual admin flow shows an alert.
  */
 async function compositeAndIssueCertificate({
-  templateUrl, namePos, idPos, rawName, email: rawEmail, title, body, sourceType, extra, customFields, elements,
+  templateUrl, namePos, idPos, rawName, email: rawEmail, phone: rawPhone, title, body, sourceType, extra, customFields, elements,
 }) {
   const studentName = toTitleCase(rawName)
   // Normalized once here so the stored certificate doc's `email` always
@@ -121,6 +121,13 @@ async function compositeAndIssueCertificate({
   // certificatesService.getByEmail() (PortfolioPage.jsx) silently misses
   // certificates whenever a visitor typed their email in mixed case.
   const email = String(rawEmail || '').trim().toLowerCase()
+  // Phone is the actual student-identity key now (see upsertStudent in
+  // services.js — names collide across students, email isn't always
+  // captured consistently, but every registration/feedback flow collects
+  // a phone number). Stored on the certificate doc itself so
+  // certificatesService.getByPhone() (PortfolioPage.jsx) can find it
+  // without going through email at all.
+  const phone = String(rawPhone || '').trim()
 
   const certCode = await certificatesService.generateUniqueCode()
 
@@ -145,6 +152,7 @@ async function compositeAndIssueCertificate({
     issued: new Date().toISOString().split('T')[0],
     studentName,
     email,
+    phone,
     certificateImageUrl,
     issuedAt: new Date().toISOString(),
     ...(customFields?.length ? { customFields } : {}),
@@ -152,7 +160,7 @@ async function compositeAndIssueCertificate({
   })
 
   studentsDbService.upsertFromCertificate({
-    email, name: studentName, webinarId: extra?.webinarId, webinarTitle: title, certCode,
+    email, phone, name: studentName, webinarId: extra?.webinarId, webinarTitle: title, certCode,
     issuedAt: new Date().toISOString(),
   }).catch(err => console.error('studentsDbService.upsertFromCertificate failed:', err))
 
@@ -168,7 +176,7 @@ async function compositeAndIssueCertificate({
  * (certificateStatus/certificateError) for an admin to notice later, not
  * surfaced to the student mid-form.
  */
-export async function generateAndIssueCertificate({ submissionId, webinar, rawName, email }) {
+export async function generateAndIssueCertificate({ submissionId, webinar, rawName, email, phone }) {
   const certTemplate = webinar.certTemplate
   if (!certTemplate?.imageUrl) return // no template configured — skip entirely, by design
 
@@ -190,6 +198,7 @@ export async function generateAndIssueCertificate({ submissionId, webinar, rawNa
       elements: certTemplate.elements,
       rawName,
       email,
+      phone,
       title: webinarTitle,
       body: 'has successfully attended and submitted feedback for this webinar.',
       sourceType: 'webinar',
@@ -224,7 +233,7 @@ export async function generateAndIssueCertificate({ submissionId, webinar, rawNa
  * throws on failure — there's no submission doc to silently record the
  * error on, so the admin UI needs a real exception to show.
  */
-export async function issueManualCertificate({ templateUrl, namePos, idPos, elements, recipientName, recipientEmail, description, customFields }) {
+export async function issueManualCertificate({ templateUrl, namePos, idPos, elements, recipientName, recipientEmail, recipientPhone, description, customFields }) {
   if (!templateUrl) throw new Error('A certificate template image is required')
   if (!recipientName?.trim()) throw new Error('Recipient name is required')
   if (!recipientEmail?.trim()) throw new Error('Recipient email is required')
@@ -238,6 +247,7 @@ export async function issueManualCertificate({ templateUrl, namePos, idPos, elem
     elements,
     rawName: recipientName,
     email: recipientEmail,
+    phone: recipientPhone,
     title: body,
     body,
     sourceType: 'manual',

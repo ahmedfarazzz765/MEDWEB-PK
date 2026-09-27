@@ -6,11 +6,14 @@ import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
 
 // Public, no-login credential page — the "verified student portfolio".
-// Looked up by portfolioSlug (never by email, never by the studentDatabase
-// doc ID), and only ever renders name + certificates + ambassador status:
-// no email/phone/CNIC surfaces here even though the underlying student doc
-// (fetched client-side, same trust model as AmbassadorProfilePage.jsx)
-// technically carries them.
+// Looked up by portfolioSlug (never by email, phone, or the studentDatabase
+// doc ID directly), and only ever renders name + certificates + ambassador
+// status: no email/phone/CNIC surfaces here even though the underlying
+// student doc (fetched client-side, same trust model as
+// AmbassadorProfilePage.jsx) technically carries them. Certificates are
+// matched to this student by phone number (see services.js) — the one
+// identity field every registration/certificate flow reliably collects and
+// that's actually unique per person, unlike name or email.
 export default function PortfolioPage() {
   const { slug } = useParams()
   const [student, setStudent] = useState(undefined) // undefined = loading, null = not found
@@ -24,10 +27,20 @@ export default function PortfolioPage() {
       if (!mounted) return
       setStudent(s || null)
       if (!s) return
-      const [certs, amb] = await Promise.all([
-        certificatesService.getByEmail(s.email).catch(() => []),
-        ambassadorsService.getByEmail(s.email).catch(() => null),
-      ])
+
+      // Phone is the primary match now (see services.js) — reliable and
+      // unique per person, unlike name or (inconsistently-captured) email.
+      let certs = s.phone ? await certificatesService.getByPhone(s.phone).catch(() => []) : []
+      // Falls back to a case/whitespace-tolerant email scan only when the
+      // phone match comes up empty — covers certificates issued before a
+      // `phone` field existed on the certificate doc, or a student record
+      // that predates phone-keying, without needing a data migration.
+      if (certs.length === 0 && s.email) {
+        const all = await certificatesService.getAll().catch(() => [])
+        certs = all.filter(c => String(c.email || '').trim().toLowerCase() === s.email)
+      }
+
+      const amb = await ambassadorsService.getByEmail(s.email).catch(() => null)
       if (!mounted) return
       setCertificates(certs)
       setAmbassador(amb)

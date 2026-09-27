@@ -64,7 +64,7 @@ const genCode = () => `CERT-MW-${new Date().getFullYear()}-${Math.random().toStr
 // + font picker, see CertPositionEditor), instead of the old
 // design-picker/signatory form below (kept only for editing legacy
 // records that don't have a certificateImageUrl).
-const emptyRecipient = () => ({ id: crypto.randomUUID(), name: '', email: '' })
+const emptyRecipient = () => ({ id: crypto.randomUUID(), name: '', email: '', phone: '' })
 
 const emptyIssueForm = () => ({
   imageUrl: '', namePos: null, idPos: null,
@@ -321,6 +321,7 @@ export default function AdminCertificates() {
           elements: issueForm.elements,
           recipientName: r.name,
           recipientEmail: r.email,
+          recipientPhone: r.phone,
           description: issueForm.description,
           customFields: issueForm.customFields,
         })
@@ -698,6 +699,7 @@ export default function AdminCertificates() {
                   <div key={r.id} className="flex gap-2 items-center">
                     <input className={`${inputCls} flex-1`} value={r.name} onChange={setRecipientField(r.id, 'name')} onFocus={() => setFocusedRecipientId(r.id)} placeholder="Recipient Name" />
                     <input className={`${inputCls} flex-1`} type="email" value={r.email} onChange={setRecipientField(r.id, 'email')} placeholder="name@email.com" />
+                    <input className={`${inputCls} flex-1`} value={r.phone} onChange={setRecipientField(r.id, 'phone')} placeholder="03XX-XXXXXXX" />
                     {issueForm.recipients.length > 1 && (
                       <button onClick={() => removeRecipient(r.id)} className="p-2 rounded-lg hover:bg-red-50 text-red-400 flex-shrink-0"><X size={16} /></button>
                     )}

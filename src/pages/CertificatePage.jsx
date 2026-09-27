@@ -26,10 +26,15 @@ export default function CertificatePage() {
       // "View Full Portfolio" discovery link — best-effort, never blocks
       // the certificate itself from rendering if the student record or
       // its slug isn't there yet (e.g. a pre-portfolio-feature record that
-      // hasn't been touched by any upsert since).
-      if (c.email) {
-        studentsDbService.getByEmail(c.email).then(s => { if (alive && s?.portfolioSlug) setPortfolioSlug(s.portfolioSlug) }).catch(() => {})
+      // hasn't been touched by any upsert since). Phone first (the primary
+      // identity key — see services.js), falling back to email for
+      // certificates issued before `phone` was captured on the cert doc.
+      const findPortfolio = async () => {
+        const byPhone = c.phone ? await studentsDbService.getByPhone(c.phone).catch(() => null) : null
+        const s = byPhone || (c.email ? await studentsDbService.getByEmail(c.email).catch(() => null) : null)
+        if (alive && s?.portfolioSlug) setPortfolioSlug(s.portfolioSlug)
       }
+      findPortfolio()
     }).catch(() => alive && setStatus('notfound'))
     return () => { alive = false }
   }, [code])

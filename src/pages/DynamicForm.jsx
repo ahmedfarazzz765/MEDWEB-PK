@@ -108,12 +108,19 @@ export default function DynamicForm() {
           (emailField && clean[emailField.key]) ||
           clean.email || clean.Email || clean.emailAddress || clean.email_address || ''
 
+        // Resolve PHONE — the primary student-identity key now (see
+        // studentsDbService/upsertStudent in services.js): unlike email,
+        // it's collected consistently across every form and doesn't
+        // collide across students the way names do. Same resolver used
+        // for the ambassador-application branch below.
+        const phone = resolveFormField(fields, clean, { type: 'phone', labelRegex: /phone|whatsapp|contact/i, flatKeys: ['phone', 'whatsapp', 'contact'] })
+
         // Ensures the student's record exists / gets enriched even when the
         // webinar has no certificate template configured (upsertFromCertificate
         // below only fires once a certificate is actually issued).
-        studentsDbService.upsertFromFeedback({ email, name: rawName, phone: clean.whatsapp || clean.phone || '' }).catch(() => {})
+        studentsDbService.upsertFromFeedback({ email, name: rawName, phone }).catch(() => {})
 
-        generateAndIssueCertificate({ submissionId, webinar, rawName, email }).catch(() => {})
+        generateAndIssueCertificate({ submissionId, webinar, rawName, email, phone }).catch(() => {})
       } else {
         // Not a webinar feedback form — check whether it's the Ambassador
         // Program's public application form, and if so feed it into the same
