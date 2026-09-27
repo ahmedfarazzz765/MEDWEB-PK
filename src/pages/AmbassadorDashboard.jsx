@@ -3,7 +3,17 @@ import { onAuthStateChanged, signOut } from 'firebase/auth'
 import { auth } from '../firebase/config'
 import { ambassadorsService, webinarsService, ambassadorRanksService } from '../firebase/services'
 import { computeAmbassadorRank, DEFAULT_RANK_THRESHOLDS } from '../lib/ambassadorRank'
-import { Megaphone, Trophy, Users, Copy, LogOut, GraduationCap, Check } from 'lucide-react'
+import { Trophy, Users, Copy, LogOut, GraduationCap, Check, Linkedin, Instagram, Facebook, MessageCircle } from 'lucide-react'
+import CoverImage from '../components/CoverImage'
+
+// Same shape/behavior as AmbassadorProfilePage.jsx's SOCIAL_PLATFORMS —
+// only platforms with a value are rendered.
+const SOCIAL_PLATFORMS = [
+  { key: 'linkedin',  Icon: Linkedin,      label: 'LinkedIn' },
+  { key: 'instagram', Icon: Instagram,     label: 'Instagram' },
+  { key: 'facebook',  Icon: Facebook,      label: 'Facebook' },
+  { key: 'whatsapp',  Icon: MessageCircle, label: 'WhatsApp' },
+]
 
 export default function AmbassadorDashboard() {
   const [ambassador, setAmbassador] = useState(undefined) // undefined = loading
@@ -51,25 +61,52 @@ export default function AmbassadorDashboard() {
   }
 
   const handleLogout = () => signOut(auth)
+  const filledSocials = SOCIAL_PLATFORMS.filter(p => ambassador.socialLinks?.[p.key])
 
   return (
     <div className="min-h-screen bg-[#f7f9fc] font-poppins">
-      <div className="px-4 pt-8 pb-16 sm:pt-10 sm:pb-20" style={{ background: 'linear-gradient(135deg, #1655c3, #64ac37)' }}>
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-white/20 flex items-center justify-center"><Megaphone size={20} className="text-white" /></div>
-            <div>
-              <div className="text-white font-black text-lg leading-tight">{ambassador.name}</div>
-              <div className="text-white/75 text-xs">{ambassador.university}</div>
+      <div className="max-w-4xl mx-auto px-4 pt-6 sm:pt-10 pb-16 space-y-6">
+
+        {/* Profile — same fields AdminAmbassadors.jsx lets admin edit,
+            same card style as the rest of this page (and the same photo/
+            rank/code/social pattern as AmbassadorProfilePage.jsx) */}
+        <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.06)] p-5 sm:p-6 relative">
+          <button onClick={handleLogout} title="Sign Out"
+            className="absolute top-4 right-4 sm:top-5 sm:right-5 p-2 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">
+            <LogOut size={17} />
+          </button>
+
+          <div className="flex items-center gap-4 pr-10">
+            {ambassador.imageUrl
+              ? <CoverImage src={ambassador.imageUrl} alt={ambassador.name} bias="center 25%" className="w-16 h-16 sm:w-20 sm:h-20 rounded-full ring-4 ring-white shadow-md shrink-0" />
+              : <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-[#1655c3] flex items-center justify-center text-white font-bold text-xl sm:text-2xl ring-4 ring-white shadow-md shrink-0">{ambassador.name?.charAt(0)}</div>}
+            <div className="min-w-0">
+              <div className="font-black text-[#1a1a1a] text-lg sm:text-xl truncate">{ambassador.name}</div>
+              {ambassador.university && (
+                <div className="text-xs sm:text-sm text-gray-500 truncate flex items-center gap-1.5 mt-0.5">
+                  <GraduationCap size={13} className="shrink-0" /> {ambassador.university}
+                </div>
+              )}
+              <div className="flex items-center gap-2 flex-wrap mt-2">
+                <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-blue-50 text-[#1655c3]">{ambassador.rank || 'Ambassador'}</span>
+                {ambassador.ambCode && <span className="text-xs font-mono text-gray-400">{ambassador.ambCode}</span>}
+                {ambassador.gender && <span className="text-xs text-gray-400 capitalize">{ambassador.gender}</span>}
+              </div>
             </div>
           </div>
-          <button onClick={handleLogout} className="flex items-center gap-1.5 text-xs font-semibold text-white/80 hover:text-white transition-colors">
-            <LogOut size={14} /> Sign Out
-          </button>
-        </div>
-      </div>
 
-      <div className="max-w-4xl mx-auto px-4 -mt-10 sm:-mt-12 pb-16 space-y-6">
+          {filledSocials.length > 0 && (
+            <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-100">
+              {filledSocials.map(({ key, Icon, label }) => (
+                <a key={key} href={ambassador.socialLinks[key]} target="_blank" rel="noopener noreferrer" aria-label={label}
+                  className="w-9 h-9 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center text-gray-500 hover:text-[#1655c3] hover:border-[#1655c3] transition-colors">
+                  <Icon size={15} />
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Points + Rank */}
         <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.06)] p-6 grid sm:grid-cols-2 gap-6">
           <div className="flex items-center gap-4">
