@@ -163,6 +163,11 @@ export const certificatesService = {
     const results = await getAll(COLS.certificates, where('certCode', '==', certId))
     return results.length > 0 ? results[0] : null
   },
+  // All certificates for one student — used by the public Portfolio page
+  // (PortfolioPage.jsx). Same collection/field certificatesService.add()
+  // already writes `email` to, and the same public-read trust level
+  // getByCode above already relies on.
+  getByEmail: email => getAll(COLS.certificates, where('email', '==', String(email || '').trim().toLowerCase()), orderBy('issuedAt', 'desc')),
   // Fully random certificate ID — deliberately carries no relationship to
   // the webinar/course title or to any other certificate (unlike the old
   // MEDWEB-{shortCode}-{seq} scheme). Also sidesteps a real permission
@@ -211,6 +216,14 @@ export const ambassadorsService = {
     err => console.error("Firebase listen error:", err)
   ),
   // ── Ambassador Login / Referral additions ──
+  // Cross-reference for PortfolioPage.jsx's "Ambassador" badge — same
+  // public-read trust level as getOne/listen, already used unauthenticated
+  // by the public Ambassadors section and AmbassadorProfilePage.jsx.
+  getByEmail: async email => {
+    if (!email) return null
+    const rows = await getAll(COLS.ambassadors, where('email', '==', String(email).trim().toLowerCase()), limit(1))
+    return rows[0] || null
+  },
   getByReferralCode: async code => {
     if (!code) return null
     const rows = await getAll(COLS.ambassadors, where('referralCode', '==', code), limit(1))
@@ -318,6 +331,20 @@ export const announcementsService = {
 const STUDENT_DB_COL = 'studentDatabase'
 const studentDocId = email => encodeURIComponent(String(email).trim().toLowerCase())
 
+// URL-safe, random 8-char code for the public /portfolio/:slug route
+// (PortfolioPage.jsx) — no collision check (unlike certificatesService's
+// code generator): at this app's scale, 36^8 combinations makes a clash
+// negligible, and a slug is looked up by query, not relied on as a unique
+// key the way a doc ID would be.
+function generatePortfolioSlug() {
+  const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789'
+  const bytes = new Uint8Array(8)
+  crypto.getRandomValues(bytes)
+  let slug = ''
+  for (let i = 0; i < bytes.length; i++) slug += alphabet[bytes[i] % alphabet.length]
+  return slug
+}
+
 async function upsertStudent(email, patch) {
   if (!email?.trim()) return
   const ref = doc(db, STUDENT_DB_COL, studentDocId(email))
@@ -328,6 +355,11 @@ async function upsertStudent(email, patch) {
       registrations: [], certificates: [],
       createdAt: serverTimestamp(),
     }
+    // Backfills a slug for any record that predates this feature, and
+    // assigns one on first-ever aggregation for a brand new record — every
+    // upsert path funnels through here, so no individual upsertFrom*
+    // method needs its own slug logic.
+    if (!base.portfolioSlug) base.portfolioSlug = generatePortfolioSlug()
     tx.set(ref, { ...patch(base), updatedAt: serverTimestamp() }, { merge: true })
   })
 }
@@ -339,6 +371,16 @@ export const studentsDbService = {
     snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
     err => console.error('Firebase studentDatabase listen error:', err)
   ),
+  // Doc ID is deterministic from the email, so this is a direct get, not a
+  // query — used by CertificatePage.jsx to find that certificate's
+  // portfolioSlug for the "View Full Portfolio" link.
+  getByEmail: email => getOne(STUDENT_DB_COL, studentDocId(email)),
+  // Public lookup for PortfolioPage.jsx (/portfolio/:slug) — same trust
+  // level as blogService.getBySlug/announcementsService.getBySlug.
+  getBySlug: async slug => {
+    const rows = await getAll(STUDENT_DB_COL, where('portfolioSlug', '==', slug), limit(1))
+    return rows[0] || null
+  },
 
   // Webinar Registration submission — one entry per distinct webinarId.
   upsertFromRegistration: ({ email, name, phone, university, degree, webinarId, webinarTitle, registeredAt }) =>

@@ -5,6 +5,7 @@ import WebinarDetailPage from './pages/WebinarDetailPage'
 import FounderMessagePage from './pages/FounderMessagePage'
 import AboutPage          from './pages/AboutPage'
 import CertificatePage    from './pages/CertificatePage'
+import PortfolioPage      from './pages/PortfolioPage'
 import CourseDetailPage   from './pages/CourseDetailPage'
 import AmbassadorProfilePage from './pages/AmbassadorProfilePage'
 import BlogPostPage       from './pages/BlogPostPage'
@@ -60,6 +61,7 @@ function App() {
         <Route path="/founder-message"        element={<FounderMessagePage />} />
         <Route path="/about"                  element={<AboutPage />} />
         <Route path="/certificate/:code"      element={<CertificatePage />} />
+        <Route path="/portfolio/:slug"        element={<PortfolioPage />} />
         <Route path="/webinars"               element={<WebinarsListPage />} />
         <Route path="/courses"                element={<CoursesListPage />} />
         <Route path="/courses/:id"            element={<CourseDetailPage />} />

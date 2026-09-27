@@ -291,31 +291,36 @@ export default function AdminAmbassadors() {
     if (!form.name.trim()) return
     setSaving(true)
     try {
+      // Lowercased so PortfolioPage.jsx's ambassadorsService.getByEmail()
+      // cross-reference (which normalizes to lowercase, matching every
+      // other email-keyed lookup in this app) reliably matches regardless
+      // of how the admin typed it here.
+      const payload = { ...form, email: form.email ? form.email.trim().toLowerCase() : form.email }
       if (modal === 'add') {
-        await ambassadorsService.add(form)
-        if (form.email) {
+        await ambassadorsService.add(payload)
+        if (payload.email) {
           sendAmbassadorWelcomeEmail({
-            name: form.name, email: form.email,
-            ambCode: form.ambCode, university: form.university, rank: form.rank,
+            name: payload.name, email: payload.email,
+            ambCode: payload.ambCode, university: payload.university, rank: payload.rank,
           }).catch(() => {})
           studentsDbService.upsertFromAmbassador({
-            email: form.email, name: form.name, phone: form.phone,
-            university: form.university, degree: form.degreeProgram,
+            email: payload.email, name: payload.name, phone: payload.phone,
+            university: payload.university, degree: payload.degreeProgram,
           }).catch(() => {})
         }
       } else {
-        await ambassadorsService.update(editId, form)
-        if (form.email) {
-          const becameInactive = form.status === 'Inactive' && editOriginal?.status !== 'Inactive'
-          const pointsChanged = Number(form.points) !== Number(editOriginal?.points || 0)
-          const otherChanges = diffAmbassadorFields(editOriginal, form)
+        await ambassadorsService.update(editId, payload)
+        if (payload.email) {
+          const becameInactive = payload.status === 'Inactive' && editOriginal?.status !== 'Inactive'
+          const pointsChanged = Number(payload.points) !== Number(editOriginal?.points || 0)
+          const otherChanges = diffAmbassadorFields(editOriginal, payload)
 
           if (becameInactive) {
-            sendAmbassadorRemovedEmail({ name: form.name, email: form.email }).catch(() => {})
+            sendAmbassadorRemovedEmail({ name: payload.name, email: payload.email }).catch(() => {})
           } else if (pointsChanged) {
-            sendAmbassadorPointsUpdateEmail({ name: form.name, email: form.email, points: form.points }).catch(() => {})
+            sendAmbassadorPointsUpdateEmail({ name: payload.name, email: payload.email, points: payload.points }).catch(() => {})
           } else if (otherChanges.length > 0) {
-            sendAmbassadorUpdatedEmail({ name: form.name, email: form.email, changes: otherChanges }).catch(() => {})
+            sendAmbassadorUpdatedEmail({ name: payload.name, email: payload.email, changes: otherChanges }).catch(() => {})
           }
         }
       }

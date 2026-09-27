@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef } from 'react'
-import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
-import { CheckCircle, XCircle, Download, ArrowLeft, ShieldCheck } from 'lucide-react'
+import { useParams, useSearchParams, useNavigate, Link } from 'react-router-dom'
+import { CheckCircle, XCircle, Download, ArrowLeft, ShieldCheck, User } from 'lucide-react'
 import CertificateTemplate from '../components/CertificateTemplate'
-import { certificatesService } from '../firebase/services'
+import { certificatesService, studentsDbService } from '../firebase/services'
 
 export default function CertificatePage() {
   const { code } = useParams()
@@ -11,6 +11,7 @@ export default function CertificatePage() {
   const [cert, setCert]       = useState(null)
   const [status, setStatus]   = useState('loading')   // loading | found | notfound | revoked
   const [scale, setScale]     = useState(1)
+  const [portfolioSlug, setPortfolioSlug] = useState('')
   const wrapRef = useRef(null)
 
   useEffect(() => {
@@ -22,6 +23,13 @@ export default function CertificatePage() {
       setStatus(c.status === 'Revoked' ? 'revoked' : 'found')
       // count a verification view (best-effort)
       certificatesService.verify(code).catch(() => {})
+      // "View Full Portfolio" discovery link — best-effort, never blocks
+      // the certificate itself from rendering if the student record or
+      // its slug isn't there yet (e.g. a pre-portfolio-feature record that
+      // hasn't been touched by any upsert since).
+      if (c.email) {
+        studentsDbService.getByEmail(c.email).then(s => { if (alive && s?.portfolioSlug) setPortfolioSlug(s.portfolioSlug) }).catch(() => {})
+      }
     }).catch(() => alive && setStatus('notfound'))
     return () => { alive = false }
   }, [code])
@@ -130,6 +138,12 @@ export default function CertificatePage() {
             className="px-7 py-3 rounded-xl text-sm font-bold text-[#1655c3] border-2 border-[#1655c3] hover:bg-blue-50">
             Share Link
           </button>
+          {portfolioSlug && (
+            <Link to={`/portfolio/${portfolioSlug}`}
+              className="flex items-center gap-2 px-7 py-3 rounded-xl text-sm font-bold text-[#64ac37] border-2 border-[#64ac37] hover:bg-green-50">
+              <User size={16} /> View Full Portfolio
+            </Link>
+          )}
         </div>
         {!cert.certificateImageUrl && (
           <p className="print:hidden text-center text-xs text-gray-400 mt-4">

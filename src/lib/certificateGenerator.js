@@ -113,9 +113,14 @@ function canvasToCompressedBlob(canvas, targetBytes = 350 * 1024) {
  * manual admin flow shows an alert.
  */
 async function compositeAndIssueCertificate({
-  templateUrl, namePos, idPos, rawName, email, title, body, sourceType, extra, customFields, elements,
+  templateUrl, namePos, idPos, rawName, email: rawEmail, title, body, sourceType, extra, customFields, elements,
 }) {
   const studentName = toTitleCase(rawName)
+  // Normalized once here so the stored certificate doc's `email` always
+  // matches studentsDbService's own lowercased key — otherwise
+  // certificatesService.getByEmail() (PortfolioPage.jsx) silently misses
+  // certificates whenever a visitor typed their email in mixed case.
+  const email = String(rawEmail || '').trim().toLowerCase()
 
   const certCode = await certificatesService.generateUniqueCode()
 
