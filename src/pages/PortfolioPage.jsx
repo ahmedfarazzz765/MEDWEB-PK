@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { Award, ArrowLeft, CheckCircle, Calendar, Linkedin, Megaphone } from 'lucide-react'
+import { Award, ArrowLeft, Megaphone } from 'lucide-react'
 import { studentsDbService, certificatesService, ambassadorsService } from '../firebase/services'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
+import CertificateCard from '../components/CertificateCard'
+import LinkedInShareButton from '../components/LinkedInShareButton'
 
 // Public, no-login credential page — the "verified student portfolio".
 // Looked up by portfolioSlug (never by email, phone, or the studentDatabase
@@ -74,9 +76,6 @@ export default function PortfolioPage() {
     )
   }
 
-  const shareUrl = window.location.href
-  const linkedInShareUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`
-
   return (
     <div className="font-poppins bg-[#f7f9fc] min-h-screen">
       <Navbar />
@@ -104,38 +103,20 @@ export default function PortfolioPage() {
       <div className="max-w-4xl mx-auto px-4 -mt-12 sm:-mt-16 pb-16">
         <div className="bg-white rounded-3xl shadow-[0_8px_40px_rgba(0,0,0,0.06)] overflow-hidden p-6 sm:p-10 space-y-8">
 
-          {/* Share to LinkedIn */}
+          {/* Share to LinkedIn — the whole portfolio, not a specific certificate */}
           <div className="flex justify-end">
-            <a href={linkedInShareUrl} target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 text-sm font-bold text-white px-5 py-2.5 rounded-full transition-colors"
-              style={{ background: '#0A66C2' }}>
-              <Linkedin size={16} /> Share to LinkedIn
-            </a>
+            <LinkedInShareButton certificateUrl={window.location.href} studentName={student.name} />
           </div>
 
-          {/* Certificates */}
+          {/* Certificates — real certificate thumbnails, each with its own
+              Download (PDF/JPG/PNG) and hover/tap "Share to LinkedIn". */}
           <div>
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Verified Certificates</p>
             {certificates.length === 0 ? (
               <p className="text-sm text-gray-400">No certificates issued yet.</p>
             ) : (
-              <div className="grid sm:grid-cols-2 gap-4">
-                {certificates.map(c => (
-                  <div key={c.id} className="bg-gray-50 rounded-2xl border border-gray-100 p-5 flex flex-col gap-2">
-                    <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
-                      <Award size={18} className="text-[#1655c3]" />
-                    </div>
-                    <div className="font-bold text-sm text-[#1a1a1a] leading-snug">{c.title || c.webinarTitle || 'MEDWEB Certificate'}</div>
-                    {c.issued && (
-                      <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                        <Calendar size={12} /> Issued {c.issued}
-                      </div>
-                    )}
-                    <Link to={`/certificate/${c.certCode}`} className="inline-flex items-center gap-1.5 text-xs font-bold text-[#64ac37] mt-1">
-                      <CheckCircle size={13} /> Verify
-                    </Link>
-                  </div>
-                ))}
+              <div className="grid sm:grid-cols-2 gap-5">
+                {certificates.map(c => <CertificateCard key={c.id} cert={c} />)}
               </div>
             )}
           </div>

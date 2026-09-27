@@ -1,8 +1,17 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useSearchParams, useNavigate, Link } from 'react-router-dom'
-import { CheckCircle, XCircle, Download, ArrowLeft, ShieldCheck, User } from 'lucide-react'
+import { CheckCircle, XCircle, Download, ArrowLeft, ShieldCheck, User, ChevronDown, ChevronUp } from 'lucide-react'
 import CertificateTemplate from '../components/CertificateTemplate'
+import LinkedInShareButton from '../components/LinkedInShareButton'
 import { certificatesService, studentsDbService } from '../firebase/services'
+import { downloadCertificateImage, downloadCertificatePdf } from '../lib/certificateDownload'
+import { setPageMeta } from '../lib/pageMeta'
+
+const DOWNLOAD_FORMATS = [
+  { key: 'pdf', label: 'PDF' },
+  { key: 'jpg', label: 'JPG' },
+  { key: 'png', label: 'PNG' },
+]
 
 export default function CertificatePage() {
   const { code } = useParams()
@@ -12,6 +21,8 @@ export default function CertificatePage() {
   const [status, setStatus]   = useState('loading')   // loading | found | notfound | revoked
   const [scale, setScale]     = useState(1)
   const [portfolioSlug, setPortfolioSlug] = useState('')
+  const [downloadOpen, setDownloadOpen] = useState(false)
+  const [downloading, setDownloading] = useState('')
   const wrapRef = useRef(null)
 
   useEffect(() => {
@@ -23,6 +34,20 @@ export default function CertificatePage() {
       setStatus(c.status === 'Revoked' ? 'revoked' : 'found')
       // count a verification view (best-effort)
       certificatesService.verify(code).catch(() => {})
+      // Best-effort per-certificate Open Graph tags — correct for a real
+      // visitor's tab title/description, and for any link-preview crawler
+      // that executes JS. NOT guaranteed for LinkedIn specifically: this is
+      // a static client-rendered SPA with no server-side rendering, and
+      // LinkedIn's own crawler fetches raw HTML without running JavaScript,
+      // so it will typically still show index.html's site-wide defaults
+      // instead. Fixing that for real needs a prerendering step or a
+      // small server-rendered endpoint for this route — out of scope here.
+      setPageMeta({
+        title: `${c.recipient || c.student || 'A student'} completed ${c.title || c.course || 'a MEDWEB program'} — verified by MEDWEB-PK`,
+        description: `Verified certificate from MEDWEB-PK, Pakistan's medical education platform founded by Dr. Shahroz Abbas — medical education, pharmacy, and healthcare training for students across Pakistan.`,
+        image: c.certificateImageUrl || `${window.location.origin}/favicon.png`,
+        url: window.location.href,
+      })
       // "View Full Portfolio" discovery link — best-effort, never blocks
       // the certificate itself from rendering if the student record or
       // its slug isn't there yet (e.g. a pre-portfolio-feature record that
@@ -57,6 +82,19 @@ export default function CertificatePage() {
       return () => clearTimeout(t)
     }
   }, [status, params])
+
+  const handleDownload = async (format) => {
+    setDownloadOpen(false)
+    setDownloading(format)
+    try {
+      if (format === 'pdf') await downloadCertificatePdf(cert)
+      else await downloadCertificateImage(cert, format)
+    } catch (e) {
+      alert('Download failed: ' + e.message)
+    } finally {
+      setDownloading('')
+    }
+  }
 
   if (status === 'loading') {
     return <div className="min-h-screen flex items-center justify-center text-gray-400 font-poppins">Loading certificate…</div>
@@ -126,19 +164,25 @@ export default function CertificatePage() {
 
         {/* actions — hidden when printing */}
         <div className="print:hidden mt-8 flex flex-wrap gap-3 justify-center">
-          {cert.certificateImageUrl ? (
-            <a href={cert.certificateImageUrl} download={`${cert.certCode}.png`}
-              className="flex items-center gap-2 px-7 py-3 rounded-xl text-sm font-bold text-white"
+          <div className="relative">
+            <button onClick={() => setDownloadOpen(o => !o)} disabled={!!downloading}
+              className="flex items-center gap-2 px-7 py-3 rounded-xl text-sm font-bold text-white disabled:opacity-60"
               style={{ background: 'linear-gradient(135deg,#1655c3,#64ac37)', boxShadow: '0 6px 20px rgba(22,85,195,0.3)' }}>
-              <Download size={16} /> Download Certificate
-            </a>
-          ) : (
-            <button onClick={() => window.print()}
-              className="flex items-center gap-2 px-7 py-3 rounded-xl text-sm font-bold text-white"
-              style={{ background: 'linear-gradient(135deg,#1655c3,#64ac37)', boxShadow: '0 6px 20px rgba(22,85,195,0.3)' }}>
-              <Download size={16} /> Download / Print PDF
+              <Download size={16} /> {downloading ? `Downloading ${downloading.toUpperCase()}…` : 'Download'}
+              {downloadOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
             </button>
-          )}
+            {downloadOpen && (
+              <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden z-20 min-w-[120px]">
+                {DOWNLOAD_FORMATS.map(f => (
+                  <button key={f.key} onClick={() => handleDownload(f.key)}
+                    className="w-full text-center px-4 py-2.5 text-sm font-bold text-gray-600 hover:bg-blue-50 hover:text-[#1655c3] transition-colors">
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <LinkedInShareButton certificateUrl={window.location.href} studentName={cert.recipient || cert.student} courseTitle={cert.title || cert.course} />
           <button onClick={() => { navigator.clipboard?.writeText(window.location.href); alert('Link copied!') }}
             className="px-7 py-3 rounded-xl text-sm font-bold text-[#1655c3] border-2 border-[#1655c3] hover:bg-blue-50">
             Share Link
@@ -150,11 +194,6 @@ export default function CertificatePage() {
             </Link>
           )}
         </div>
-        {!cert.certificateImageUrl && (
-          <p className="print:hidden text-center text-xs text-gray-400 mt-4">
-            Tip: in the print dialog, choose “Save as PDF” as the destination.
-          </p>
-        )}
       </div>
 
       {/* print styling: show only the certificate, landscape, full bleed */}
