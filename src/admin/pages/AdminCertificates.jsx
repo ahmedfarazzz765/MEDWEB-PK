@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react'
-import { Award, CheckCircle, XCircle, Eye, Edit2, Download, Copy, ExternalLink, FileText, Plus, X } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
+import * as XLSX from 'xlsx'
+import jsPDF from 'jspdf'
+import { Award, CheckCircle, XCircle, Eye, Edit2, Download, Copy, ExternalLink, FileText, Plus, X, Folder, ArrowLeft, FileSpreadsheet, FileType } from 'lucide-react'
 import StatCard   from '../components/StatCard'
 import DataTable  from '../components/DataTable'
 import Modal      from '../components/Modal'
@@ -12,6 +14,48 @@ import ResponsesModal from '../components/ResponsesModal'
 import { certificatesService, webinarsService, coursesService, formsService, settingsService } from '../../firebase/services'
 import { issueManualCertificate } from '../../lib/certificateGenerator'
 import { DEFAULT_CERT_FONT } from '../../constants/certificateFonts'
+
+// Groups the flat certificate list into "folders" by whatever already links
+// a certificate to its source: webinarId (auto-issued from a webinar's
+// feedback flow) takes priority, then sourceId+sourceType for
+// webinar/course records edited/created through the legacy source picker,
+// falling back to one shared "Manual / Other" folder for certificates with
+// no linkable source at all (issueManualCertificate's plain manual issuance).
+function folderKeyFor(cert) {
+  if (cert.webinarId) return `webinar:${cert.webinarId}`
+  if (cert.sourceId && (cert.sourceType === 'webinar' || cert.sourceType === 'course')) return `${cert.sourceType}:${cert.sourceId}`
+  return 'unassigned'
+}
+function folderLabelFor(cert) {
+  if (cert.webinarTitle) return cert.webinarTitle
+  if (cert.sourceType && cert.sourceType !== 'manual' && cert.title) return cert.title
+  return 'Manual / Other Certificates'
+}
+
+// Real feedback answers only — a certificate without a submissionId (manual
+// issuance, or an older record from before this field existed) simply
+// contributes no feedback columns, never a fabricated one. `subs`/`forms`
+// are the same already-loaded lists ResponsesModal uses for the single-cert
+// "View Submission" action, just applied across a whole folder at once.
+function buildFeedbackColumns(certs, subs, forms) {
+  const subMap = new Map(subs.map(s => [s.id, s]))
+  const labelByKey = new Map() // field key -> label, first-seen order
+  const perCert = new Map()    // cert.id -> { key: displayValue }
+  for (const c of certs) {
+    if (!c.submissionId) continue
+    const sub = subMap.get(c.submissionId)
+    if (!sub) continue
+    const form = forms.find(f => f.id === sub.formId)
+    const answers = {}
+    for (const [key, value] of Object.entries(sub.values || {})) {
+      if (key.endsWith('__uploading')) continue
+      if (!labelByKey.has(key)) labelByKey.set(key, form?.fields?.find(f => f.key === key)?.label || key)
+      answers[key] = Array.isArray(value) ? value.join(', ') : String(value ?? '')
+    }
+    perCert.set(c.id, answers)
+  }
+  return { keys: Array.from(labelByKey.keys()), labelByKey, perCert }
+}
 
 const genCode = () => `CERT-MW-${new Date().getFullYear()}-${Math.random().toString(36).substring(2,7).toUpperCase()}`
 
@@ -96,6 +140,9 @@ export default function AdminCertificates() {
   // Certificate" for the next recipient doesn't force a re-upload every
   // time. Persisted on settings/site, so it also carries across sessions.
   const [lastTemplate, setLastTemplate] = useState(null)
+  // Folder view — null = showing the folder grid; a key = showing that
+  // folder's own certificate list.
+  const [activeFolderKey, setActiveFolderKey] = useState(null)
 
   useEffect(() => {
     const u1 = certificatesService.listen(rows => { setData(rows); setLoading(false) })
@@ -109,6 +156,95 @@ export default function AdminCertificates() {
   useEffect(() => {
     settingsService.get().then(s => { if (s?.lastManualCertTemplate) setLastTemplate(s.lastManualCertTemplate) }).catch(() => {})
   }, [])
+
+  // One entry per webinar/course/manual-bucket — sorted most-recently-active
+  // first (by the latest issue date inside it) so the folders an admin
+  // actually cares about right now surface at the top.
+  const folders = useMemo(() => {
+    const map = new Map()
+    for (const c of data) {
+      const key = folderKeyFor(c)
+      if (!map.has(key)) map.set(key, { key, label: folderLabelFor(c), certs: [], latestIssued: '' })
+      const f = map.get(key)
+      f.certs.push(c)
+      if (c.issued && c.issued > f.latestIssued) f.latestIssued = c.issued
+    }
+    return Array.from(map.values()).sort((a, b) => b.latestIssued.localeCompare(a.latestIssued))
+  }, [data])
+  const activeFolder = folders.find(f => f.key === activeFolderKey) || null
+
+  const exportFolderExcel = (folder) => {
+    const { keys, labelByKey, perCert } = buildFeedbackColumns(folder.certs, subs, forms)
+    const rows = folder.certs.map(c => ({
+      'Recipient': c.recipient || c.student || '',
+      'Email': c.recipientEmail || c.email || '',
+      'Certificate ID': c.certCode || '',
+      'Issued': c.issued || '',
+      'Status': c.status || '',
+      ...Object.fromEntries(keys.map(k => [labelByKey.get(k), perCert.get(c.id)?.[k] || ''])),
+    }))
+    const ws = XLSX.utils.json_to_sheet(rows)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Certificates')
+    const safeName = folder.label.replace(/[^a-z0-9]+/gi, '_').slice(0, 40)
+    XLSX.writeFile(wb, `MEDWEB_${safeName}_Certificates.xlsx`)
+  }
+
+  const exportFolderPdf = (folder) => {
+    const { keys, labelByKey, perCert } = buildFeedbackColumns(folder.certs, subs, forms)
+    const shownKeys = keys.slice(0, 3)
+    const extraCount = keys.length - shownKeys.length
+    const headers = ['Recipient', 'Email', 'Certificate ID', 'Issued', ...shownKeys.map(k => labelByKey.get(k))]
+
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })
+    const marginX = 30
+    const pageWidth = doc.internal.pageSize.getWidth()
+    const pageHeight = doc.internal.pageSize.getHeight()
+    const colWidth = (pageWidth - marginX * 2) / headers.length
+    let y = 50
+
+    doc.setFontSize(14)
+    doc.setFont(undefined, 'bold')
+    doc.text(`${folder.label} — Certificates`, marginX, 30)
+
+    const drawHeader = () => {
+      doc.setFillColor(22, 85, 195)
+      doc.rect(marginX, y - 12, pageWidth - marginX * 2, 18, 'F')
+      doc.setTextColor(255, 255, 255)
+      doc.setFontSize(9)
+      doc.setFont(undefined, 'bold')
+      headers.forEach((h, i) => doc.text(String(h), marginX + i * colWidth + 4, y))
+      doc.setTextColor(30, 30, 30)
+      doc.setFont(undefined, 'normal')
+      y += 16
+    }
+    drawHeader()
+
+    folder.certs.forEach(c => {
+      if (y > pageHeight - 30) { doc.addPage(); y = 40; drawHeader() }
+      const answers = perCert.get(c.id) || {}
+      const rowVals = [
+        c.recipient || c.student || '', c.recipientEmail || c.email || '',
+        c.certCode || '', c.issued || '',
+        ...shownKeys.map(k => answers[k] || ''),
+      ]
+      rowVals.forEach((v, i) => {
+        const text = doc.splitTextToSize(String(v), colWidth - 6)[0] || ''
+        doc.text(text, marginX + i * colWidth + 4, y)
+      })
+      y += 16
+    })
+
+    if (extraCount > 0) {
+      y += 10
+      doc.setFontSize(8)
+      doc.setTextColor(120, 120, 120)
+      doc.text(`+ ${extraCount} more feedback question${extraCount > 1 ? 's' : ''} — see the Excel export for the full set of answers.`, marginX, y)
+    }
+
+    const safeName = folder.label.replace(/[^a-z0-9]+/gi, '_').slice(0, 40)
+    doc.save(`MEDWEB_${safeName}_Certificates.pdf`)
+  }
 
   // The submission a certificate was auto-issued from, plus the form that
   // defines its field labels (for ResponsesModal, reused as-is from Form
@@ -361,9 +497,58 @@ export default function AdminCertificates() {
         )}
       </div>
 
-      <DataTable title="All Certificates" columns={columns} data={data} searchKey="recipient" emptyMessage="No certificates yet — click Issue Certificate to create one"
-        actions={<AdminButton size="sm" onClick={openIssue}>+ Issue Certificate</AdminButton>}
-      />
+      {activeFolder ? (
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <button onClick={() => setActiveFolderKey(null)} className="flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-[#1655c3] transition-colors w-fit">
+              <ArrowLeft size={16} /> All Folders
+            </button>
+            <div className="flex items-center gap-2">
+              <AdminButton variant="ghost" size="sm" onClick={() => exportFolderExcel(activeFolder)}>
+                <FileSpreadsheet size={14} className="mr-1.5" /> Export to Excel
+              </AdminButton>
+              <AdminButton variant="ghost" size="sm" onClick={() => exportFolderPdf(activeFolder)}>
+                <FileType size={14} className="mr-1.5" /> Export to PDF
+              </AdminButton>
+            </div>
+          </div>
+          <DataTable title={activeFolder.label} columns={columns} data={activeFolder.certs} searchKey="recipient"
+            emptyMessage="No certificates in this folder"
+            actions={<AdminButton size="sm" onClick={openIssue}>+ Issue Certificate</AdminButton>}
+          />
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-bold text-[#1a1a1a] text-base">Certificate Folders</h3>
+            <AdminButton size="sm" onClick={openIssue}>+ Issue Certificate</AdminButton>
+          </div>
+          {folders.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 text-gray-400 py-14">
+              <div className="w-11 h-11 rounded-2xl bg-gray-50 flex items-center justify-center">
+                <Folder size={18} className="text-gray-300" />
+              </div>
+              <span className="text-sm font-medium">No certificates yet — click Issue Certificate to create one</span>
+            </div>
+          ) : (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {folders.map(f => (
+                <button key={f.key} onClick={() => setActiveFolderKey(f.key)}
+                  className="flex items-center gap-3 text-left p-4 rounded-2xl border border-gray-100 hover:border-[#1655c3]/40 hover:shadow-md transition-all duration-200 bg-gray-50/60 hover:bg-white">
+                  <div className="w-11 h-11 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
+                    <Folder size={20} className="text-[#1655c3]" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold text-sm text-[#1a1a1a] truncate">{f.label}</div>
+                    <div className="text-xs text-gray-400 mt-0.5">{f.latestIssued ? `Latest: ${f.latestIssued}` : 'No issue date'}</div>
+                  </div>
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-blue-50 text-[#1655c3] shrink-0">{f.certs.length}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* EDIT MODAL (legacy design-picker records only) with live preview */}
       {modal && (

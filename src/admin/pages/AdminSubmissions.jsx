@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { Inbox, Download, Video, FileText, Mail, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Inbox, Download, Video, FileText, Mail, Loader2 } from 'lucide-react'
 import StatCard from '../components/StatCard'
 import { inputCls } from '../components/FormField'
 import AdminButton from '../components/AdminButton'
@@ -10,10 +10,12 @@ const formatDateStr = (dateVal) => {
   return str ? str.split('T')[0] : '-'
 }
 
-// Matches DataTable.jsx's page size — this page can't use DataTable
-// directly (it needs a type-filter bar, a multi-field search, and a CSV
-// export button, none of which DataTable's single-searchKey UI supports),
-// so it reimplements the same page-size-8 pagination pattern manually.
+// Matches DataTable.jsx's infinite-scroll pattern (PAGE_SIZE-per-reveal,
+// IntersectionObserver sentinel) — this page can't use DataTable directly
+// (it needs a type-filter bar, a multi-field search, and a CSV export
+// button, none of which DataTable's single-searchKey UI supports), so it
+// reimplements that same pattern manually rather than the old numbered
+// pagination.
 const PAGE_SIZE = 8
 
 export default function AdminSubmissions() {
@@ -21,7 +23,8 @@ export default function AdminSubmissions() {
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState('All')
-  const [page, setPage] = useState(1)
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+  const sentinelRef = useRef(null)
 
   useEffect(() => {
     const unsub = submissionsService.listen(data => { setRows(data); setLoading(false) })
@@ -34,11 +37,21 @@ export default function AdminSubmissions() {
     return [r.refName || '', r.name || '', r.email || '', r.whatsapp || ''].join(' ').toLowerCase().includes(q.toLowerCase())
   })
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const pageRows = filtered.slice(0, visibleCount)
+  const hasMore = visibleCount < filtered.length
 
-  const setFilterAndResetPage = t => { setFilter(t); setPage(1) }
-  const setQAndResetPage = v => { setQ(v); setPage(1) }
+  const setFilterAndResetPage = t => { setFilter(t); setVisibleCount(PAGE_SIZE) }
+  const setQAndResetPage = v => { setQ(v); setVisibleCount(PAGE_SIZE) }
+
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el || !hasMore) return
+    const io = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting) setVisibleCount(c => c + PAGE_SIZE)
+    }, { rootMargin: '200px' })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [hasMore, pageRows.length])
 
   const exportCsv = () => {
     const header = ['Type', 'Webinar/Event', 'Name', 'Email', 'WhatsApp', 'Date']
@@ -107,32 +120,15 @@ export default function AdminSubmissions() {
           </table>
         </div>
 
-        {/* Pagination — same page-size-8 pattern as DataTable.jsx */}
+        {/* Infinite-scroll footer — same pattern as DataTable.jsx */}
         {!loading && filtered.length > 0 && (
           <div className="flex items-center justify-between px-1 py-3">
-            <span className="text-xs text-gray-500">
-              Showing {Math.min((page - 1) * PAGE_SIZE + 1, filtered.length)}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
-            </span>
-            <div className="flex items-center gap-1">
-              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-                className="w-7 h-7 rounded-lg flex items-center justify-center border border-gray-200 hover:border-[#1655c3] hover:text-[#1655c3] disabled:opacity-40 transition-all">
-                <ChevronLeft size={13} />
-              </button>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-                <button key={p} onClick={() => setPage(p)}
-                  className="w-7 h-7 rounded-lg text-xs font-semibold border transition-all"
-                  style={p === page
-                    ? { background: '#1655c3', color: 'white', borderColor: '#1655c3' }
-                    : { background: 'white', color: '#6b7280', borderColor: '#e5e7eb' }
-                  }>
-                  {p}
-                </button>
-              ))}
-              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-                className="w-7 h-7 rounded-lg flex items-center justify-center border border-gray-200 hover:border-[#1655c3] hover:text-[#1655c3] disabled:opacity-40 transition-all">
-                <ChevronRight size={13} />
-              </button>
-            </div>
+            <span className="text-xs text-gray-500">Showing {pageRows.length} of {filtered.length}</span>
+            {hasMore && (
+              <div ref={sentinelRef} className="flex items-center gap-1.5 text-xs text-gray-400">
+                <Loader2 size={13} className="animate-spin" /> Loading more…
+              </div>
+            )}
           </div>
         )}
       </div>

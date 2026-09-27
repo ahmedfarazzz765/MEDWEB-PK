@@ -1,33 +1,51 @@
-import { useState } from 'react'
-import { Search, ChevronLeft, ChevronRight, Inbox } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { Search, Inbox, Loader2 } from 'lucide-react'
 
 const PAGE_SIZE = 8
 
+// Infinite scroll (was numbered 1/2/3/4 pagination) — a sentinel row past
+// the last rendered row triggers revealing PAGE_SIZE more via
+// IntersectionObserver as it nears the viewport, same "keeps loading as you
+// scroll" pattern used everywhere else in admin now (AdminCertificates.jsx
+// folder view included, since it renders through this same component).
 export default function DataTable({ columns, data, searchKey = 'name', title, actions, emptyMessage = 'No records yet' }) {
-  const [query, setQuery]   = useState('')
-  const [page, setPage]     = useState(1)
+  const [query, setQuery]     = useState('')
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+  const sentinelRef = useRef(null)
 
   const filtered = data.filter(row => {
     const val = searchKey.split('.').reduce((o, k) => o?.[k], row) ?? ''
     return String(val).toLowerCase().includes(query.toLowerCase())
   })
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const rows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const rows = filtered.slice(0, visibleCount)
+  const hasMore = visibleCount < filtered.length
+
+  const onQueryChange = e => { setQuery(e.target.value); setVisibleCount(PAGE_SIZE) }
+
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el || !hasMore) return
+    const io = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting) setVisibleCount(c => c + PAGE_SIZE)
+    }, { rootMargin: '200px' })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [hasMore, rows.length])
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-shadow hover:shadow-md">
       {/* Table top bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-4 border-b border-gray-100">
         {title && <h3 className="font-bold text-[#1a1a1a] text-base">{title}</h3>}
         <div className="flex items-center gap-2 ml-auto">
-          <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
+          <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 focus-within:border-[#1655c3] focus-within:ring-2 focus-within:ring-blue-100 transition-all">
             <Search size={13} className="text-gray-400" />
             <input
               type="text"
               placeholder="Search..."
               value={query}
-              onChange={e => { setQuery(e.target.value); setPage(1) }}
+              onChange={onQueryChange}
               className="bg-transparent text-sm text-gray-600 outline-none w-32 placeholder-gray-400"
             />
           </div>
@@ -39,7 +57,7 @@ export default function DataTable({ columns, data, searchKey = 'name', title, ac
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
-            <tr className="bg-[#1655c3]">
+            <tr className="bg-gradient-to-r from-[#1655c3] to-[#123f8f]">
               {columns.map(col => (
                 <th key={col.key} className="text-left text-white text-xs font-semibold px-5 py-3 whitespace-nowrap">
                   {col.label}
@@ -61,7 +79,7 @@ export default function DataTable({ columns, data, searchKey = 'name', title, ac
               </tr>
             ) : rows.map((row, i) => (
               <tr key={i}
-                className={`border-b border-gray-50 hover:bg-blue-50/30 transition-colors ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/40'}`}>
+                className={`border-b border-gray-50 hover:bg-blue-50/40 transition-colors duration-150 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/40'}`}>
                 {columns.map(col => (
                   <td key={col.key} className="px-5 py-3.5 text-sm text-gray-700 whitespace-nowrap">
                     {col.render ? col.render(row[col.key], row) : row[col.key]}
@@ -73,32 +91,19 @@ export default function DataTable({ columns, data, searchKey = 'name', title, ac
         </table>
       </div>
 
-      {/* Pagination */}
-      <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-gray-50/50">
-        <span className="text-xs text-gray-500">
-          Showing {Math.min((page - 1) * PAGE_SIZE + 1, filtered.length)}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
-        </span>
-        <div className="flex items-center gap-1">
-          <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-            className="w-7 h-7 rounded-lg flex items-center justify-center border border-gray-200 hover:border-[#1655c3] hover:text-[#1655c3] disabled:opacity-40 transition-all">
-            <ChevronLeft size={13} />
-          </button>
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-            <button key={p} onClick={() => setPage(p)}
-              className="w-7 h-7 rounded-lg text-xs font-semibold border transition-all"
-              style={p === page
-                ? { background: '#1655c3', color: 'white', borderColor: '#1655c3' }
-                : { background: 'white', color: '#6b7280', borderColor: '#e5e7eb' }
-              }>
-              {p}
-            </button>
-          ))}
-          <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-            className="w-7 h-7 rounded-lg flex items-center justify-center border border-gray-200 hover:border-[#1655c3] hover:text-[#1655c3] disabled:opacity-40 transition-all">
-            <ChevronRight size={13} />
-          </button>
+      {/* Infinite-scroll footer */}
+      {rows.length > 0 && (
+        <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-gray-50/50">
+          <span className="text-xs text-gray-500">
+            Showing {rows.length} of {filtered.length}
+          </span>
+          {hasMore && (
+            <div ref={sentinelRef} className="flex items-center gap-1.5 text-xs text-gray-400">
+              <Loader2 size={13} className="animate-spin" /> Loading more…
+            </div>
+          )}
         </div>
-      </div>
+      )}
     </div>
   )
 }

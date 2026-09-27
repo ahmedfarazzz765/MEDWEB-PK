@@ -18,12 +18,12 @@ export default function Modal({ title, onClose, children, wide }) {
       onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}
     >
       <div
-        className="bg-white rounded-3xl shadow-2xl w-full overflow-hidden flex flex-col max-h-[90vh]"
+        className="bg-white rounded-3xl shadow-2xl w-full overflow-hidden flex flex-col max-h-[90vh] animate-page-fade-in"
         style={{ maxWidth: wide ? 720 : 520 }}
         // Stop clicks inside from bubbling to backdrop
         onMouseDown={e => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0 bg-[#1655c3]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0" style={{ background: 'linear-gradient(135deg, #1655c3, #123f8f)' }}>
           <h2 className="text-white font-black text-base">{title}</h2>
           <button
             onClick={onClose}

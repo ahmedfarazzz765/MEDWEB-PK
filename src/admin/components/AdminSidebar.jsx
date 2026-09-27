@@ -155,15 +155,12 @@ export default function AdminSidebar({ active, activeTab, onNav, permissions }) 
                 <button
                   key={label}
                   onClick={() => onNav(id, tab)}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 transition-all duration-200 relative group"
-                  style={{
-                    background: isActive ? 'rgba(255,255,255,0.15)' : 'transparent',
-                    borderRight: isActive ? '3px solid #95d348' : '3px solid transparent',
-                  }}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 transition-all duration-200 relative group border-r-[3px] ${
+                    isActive ? 'bg-white/15 border-[#95d348]' : 'bg-transparent border-transparent hover:bg-white/5'
+                  }`}
                 >
                   <div
-                    className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-all"
-                    style={{ background: isActive ? 'rgba(255,255,255,0.2)' : 'transparent' }}
+                    className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-all ${isActive ? 'bg-white/20' : 'bg-transparent group-hover:bg-white/10'}`}
                   >
                     <Icon size={16} className="transition-colors" style={{ color: isActive ? '#fff' : group.accent, opacity: isActive ? 1 : 0.75 }} />
                   </div>

@@ -1,7 +1,7 @@
 export default function StatCard({ icon: Icon, label, value, sub, color = '#1655c3', bg = '#eff6ff', trend }) {
   return (
-    <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex items-start gap-4 hover:shadow-md transition-shadow">
-      <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0" style={{ background: bg }}>
+    <div className="group bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex items-start gap-4 hover:shadow-md hover:-translate-y-0.5 hover:border-gray-200 transition-all duration-200">
+      <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105" style={{ background: bg }}>
         <Icon size={22} style={{ color }} />
       </div>
       <div className="flex-1 min-w-0">
