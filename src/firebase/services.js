@@ -149,10 +149,19 @@ export const certificatesService = {
   verify: async certId => {
     const results = await getAll(COLS.certificates, where('certCode', '==', certId))
     if (results.length > 0) {
-      // Increment verifications
-      await update(COLS.certificates, results[0].id, {
-        verifications: increment(1),
-      })
+      // Increment verifications — best-effort. Firestore rules reasonably
+      // restrict writes on this collection to admins (so a public visitor
+      // can't tamper with a certificate's data), but the read above just
+      // found this exact certificate, so an unauthenticated caller must
+      // still get it back. Previously this `update` was awaited, so its
+      // permission-denied rejection for a public (non-admin) caller threw
+      // out of the whole function — the certificate WAS found, but
+      // CertificateVerification.jsx's try/catch couldn't tell that apart
+      // from "not found" and reported the wrong thing. The admin's own
+      // Verify box never showed this because an authenticated admin's
+      // write always succeeds. Not awaited/re-thrown, so this can never
+      // again mask a successful lookup as a failed one.
+      update(COLS.certificates, results[0].id, { verifications: increment(1) }).catch(() => {})
       return results[0]
     }
     return null
