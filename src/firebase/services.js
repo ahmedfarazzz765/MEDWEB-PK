@@ -386,7 +386,19 @@ function generatePortfolioSlug() {
 async function upsertStudent({ phone, email }, patch) {
   const normPhone = normalizePhone(phone)
   const normEmail = String(email || '').trim().toLowerCase()
-  const key = normPhone || (normEmail ? studentDocIdFromEmail(normEmail) : '')
+  let key = normPhone || ''
+  if (!key && normEmail) {
+    // No phone on THIS submission (e.g. a webinar feedback form that only
+    // asks for name/email) — before falling back to the legacy email-keyed
+    // doc ID, check whether this person already has a phone-keyed record
+    // from an earlier registration/certificate under the same email. Without
+    // this, every phone-less submission would silently fork off a second,
+    // near-empty studentDatabase doc for someone who already has a real one
+    // (missing phone/university/degree, and looking like a fresh row in the
+    // admin Students table even though the real data lives elsewhere).
+    const existing = await getAll(STUDENT_DB_COL, where('email', '==', normEmail), limit(1)).catch(() => [])
+    key = existing[0]?.id || studentDocIdFromEmail(normEmail)
+  }
   if (!key) return
   const ref = doc(db, STUDENT_DB_COL, key)
   await runTransaction(db, async tx => {
@@ -447,10 +459,14 @@ export const studentsDbService = {
 
   // Webinar Feedback submission — doesn't add a registration/certificate,
   // just ensures the student record exists and enriches contact details.
-  upsertFromFeedback: ({ email, name, phone }) =>
+  // university/degree are optional here (not every feedback form asks for
+  // them again) — only overwritten when this submission actually has them.
+  upsertFromFeedback: ({ email, name, phone, university, degree }) =>
     upsertStudent({ phone, email }, base => ({
       ...base,
       name: name?.trim() || base.name,
+      university: university?.trim() || base.university,
+      degree: degree?.trim() || base.degree,
     })),
 
   // Certificate issuance — one entry per distinct certCode.

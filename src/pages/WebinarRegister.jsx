@@ -151,6 +151,11 @@ export default function WebinarRegister() {
       // Builder won't always key its phone field literally "whatsapp", so
       // this matters, not just the built-in default form.
       const resolvedPhone = resolveFormField(fields, clean, { type: 'phone', labelRegex: /phone|whatsapp|contact/i, flatKeys: ['phone', 'whatsapp', 'contact'] })
+      // Same reasoning as phone/university above — `clean.qualification` only
+      // matches the built-in default registration form's literal field key;
+      // a custom Form-Builder registration form (random uid keys) needs the
+      // same resolver, or Degree silently never gets captured.
+      const degree = resolveFormField(fields, clean, { type: 'qualification', labelRegex: /degree|qualification|program/i, flatKeys: ['degree', 'qualification', 'degreeProgram'] })
       await webinarsService.addRegistration({
         webinarId: id,
         webinarTopic: webinarTitle,
@@ -171,7 +176,7 @@ export default function WebinarRegister() {
       // Auto-email confirmation (silently skips if EmailJS not configured)
       sendWebinarConfirmation({ name: clean.name || values.name, email: clean.email || values.email, webinar }).catch(() => {})
       studentsDbService.upsertFromRegistration({
-        email: clean.email || values.email, name: clean.name || values.name, phone: resolvedPhone || clean.whatsapp, degree: clean.qualification,
+        email: clean.email || values.email, name: clean.name || values.name, phone: resolvedPhone || clean.whatsapp, degree,
         webinarId: id, webinarTitle, registeredAt: new Date().toISOString(),
       }).catch(() => {})
       setStatus('success')
