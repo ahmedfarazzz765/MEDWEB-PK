@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Inbox, Download, Video, FileText, Mail, Loader2 } from 'lucide-react'
+import { Inbox, Download, Video, Mail, Loader2 } from 'lucide-react'
 import StatCard from '../components/StatCard'
 import { inputCls } from '../components/FormField'
 import AdminButton from '../components/AdminButton'
@@ -64,17 +64,16 @@ export default function AdminSubmissions() {
 
   return (
     <div className="p-4 sm:p-6 space-y-6">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard icon={Inbox} label="Total Submissions" value={loading ? '…' : rows.length} color="#1655c3" bg="#eff6ff" />
         <StatCard icon={Video} label="Webinar Registrations" value={loading ? '…' : rows.filter(r => r.type === 'Webinar').length} color="#64ac37" bg="#f0fdf4" />
-        <StatCard icon={FileText} label="Form Submissions" value={loading ? '…' : rows.filter(r => r.type === 'Form').length} color="#1655c3" bg="#eff6ff" />
         <StatCard icon={Mail} label="Newsletter Signups" value={loading ? '…' : rows.filter(r => r.type === 'Newsletter').length} color="#64ac37" bg="#f0fdf4" />
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
         <div className="flex flex-col sm:flex-row gap-3 sm:items-center justify-between mb-4">
           <div className="flex gap-2">
-            {['All', 'Webinar', 'Form', 'Newsletter'].map(t => (
+            {['All', 'Webinar', 'Newsletter'].map(t => (
               <button key={t} onClick={() => setFilterAndResetPage(t)}
                 className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${filter === t ? 'text-white bg-[#1655c3]' : 'text-gray-500 bg-gray-100 hover:bg-gray-200'}`}>{t}</button>
             ))}
@@ -108,7 +107,7 @@ export default function AdminSubmissions() {
                 </td></tr>
               ) : pageRows.map(r => (
                 <tr key={r.id} className="border-t border-gray-100">
-                  <td className="px-3 py-2.5"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${r.type === 'Webinar' ? 'bg-blue-50 text-[#1655c3]' : r.type === 'Newsletter' ? 'bg-amber-50 text-amber-600' : 'bg-green-50 text-green-600'}`}>{r.type}</span></td>
+                  <td className="px-3 py-2.5"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${r.type === 'Webinar' ? 'bg-blue-50 text-[#1655c3]' : 'bg-amber-50 text-amber-600'}`}>{r.type}</span></td>
                   <td className="px-3 py-2.5 text-gray-700 max-w-[180px] truncate">{r.refName}</td>
                   <td className="px-3 py-2.5 text-gray-700">{r.name}</td>
                   <td className="px-3 py-2.5 text-gray-500">{r.email}</td>

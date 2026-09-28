@@ -940,25 +940,24 @@ export function toIsoString(val) {
   return String(val ?? '')
 }
 
-// ─── UNIFIED SUBMISSIONS (webinar registrations + custom form submissions) ─────
-// The admin "Submissions" page wants ONE feed of everything. This merges the two
-// collections and normalizes them into { type, refName, name, email, whatsapp, date }.
+// ─── UNIFIED SUBMISSIONS (webinar registrations + newsletter signups) ──────────
+// The admin "Submissions" page wants ONE feed of everything with no dedicated
+// view of its own elsewhere in the admin panel. Custom form submissions used
+// to be merged in here too, but that merge read `values.name`/`values.email`
+// directly — Form Builder fields carry random uid keys (see
+// resolveFormField in lib/formFieldResolve.js), so those columns were always
+// blank for real forms. AdminForms.jsx's own "Responses" modal already
+// resolves each form's fields correctly, so Form rows were dropped here
+// rather than fixed twice.
 export const submissionsService = {
   listen: cb => {
-    let regs = [], forms = [], newsletter = []
+    let regs = [], newsletter = []
     const emit = () => {
       const merged = [
         ...regs.map(r => ({
           id: 'reg_' + r.id, type: 'Webinar', refName: r.webinarTopic || r.webinarTitle || '-',
           name: r.name || '-', email: r.email || '-', whatsapp: r.whatsapp || '-',
           date: toIsoString(r.registeredAt || r.createdAt), raw: r,
-        })),
-        ...forms.map(f => ({
-          id: 'form_' + f.id, type: 'Form', refName: f.formTitle || '-',
-          name: f.values?.name || f.values?.fullName || '-',
-          email: f.values?.email || '-',
-          whatsapp: f.values?.whatsapp || f.values?.phone || '-',
-          date: toIsoString(f.submittedAt || f.createdAt), raw: f,
         })),
         ...newsletter.map(n => ({
           id: 'news_' + n.id, type: 'Newsletter', refName: 'Newsletter Signup',
@@ -971,12 +970,9 @@ export const submissionsService = {
     const u1 = onSnapshot(query(col('webinarRegistrations'), orderBy('createdAt', 'desc')),
       snap => { regs = snap.docs.map(d => ({ id: d.id, ...d.data() })); emit() },
       err => { console.error('webinarRegistrations snapshot error:', err); emit() })
-    const u2 = onSnapshot(query(col('formSubmissions'), orderBy('createdAt', 'desc')),
-      snap => { forms = snap.docs.map(d => ({ id: d.id, ...d.data() })); emit() },
-      err => { console.error('formSubmissions snapshot error:', err); emit() })
     const u3 = onSnapshot(query(col('newsletterSubscribers'), orderBy('createdAt', 'desc')),
       snap => { newsletter = snap.docs.map(d => ({ id: d.id, ...d.data() })); emit() },
       err => { console.error('newsletterSubscribers snapshot error:', err); emit() })
-    return () => { u1(); u2(); u3() }
+    return () => { u1(); u3() }
   },
 }

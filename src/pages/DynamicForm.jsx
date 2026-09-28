@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { CheckCircle, ArrowLeft, Star } from 'lucide-react'
-import { formsService, webinarsService, settingsService, studentsDbService } from '../firebase/services'
+import { CheckCircle, ArrowLeft, Star, AlertCircle } from 'lucide-react'
+import { formsService, webinarsService, settingsService, studentsDbService, certificatesService } from '../firebase/services'
 import { uploadToCloudinary } from '../firebase/cloudinary'
 import { generateAndIssueCertificate } from '../lib/certificateGenerator'
 import { resolveFormField, applyNameTitleCase } from '../lib/formFieldResolve'
@@ -22,6 +22,7 @@ export default function DynamicForm() {
   const [status, setStatus]   = useState('idle')
   const [error, setError]     = useState('')
   const [successMessage, setSuccessMessage] = useState('Thank you — your response has been recorded.')
+  const [existingCert, setExistingCert] = useState(null) // set when a duplicate submission is caught
 
   useEffect(() => {
     window.scrollTo(0, 0)
@@ -54,6 +55,69 @@ export default function DynamicForm() {
       // as "Shahroz Abbas" everywhere downstream (submission doc, Students
       // database, certificates), not just at certificate-render time.
       clean = applyNameTitleCase(form.fields, clean)
+
+      // Look up (once) whether this form is some webinar's feedback form —
+      // done BEFORE creating the submission now, so a duplicate resubmission
+      // (see below) can be caught before any new record — or certificate —
+      // ever gets created, not just checked after the fact.
+      const webinar = await webinarsService.getByFeedbackFormId(id).catch(() => null)
+
+      let rawName = '', email = '', phone = ''
+      if (webinar) {
+        // Field keys in a Form-Builder-built form are random uids, not
+        // semantic names — resolve name/email by searching the schema.
+        // Priority order: field type match → label contains keyword → key contains keyword → flat key fallback.
+        const fields = form.fields || []
+
+        // Resolve NAME field: prefer a non-email field whose label or key contains "name"
+        const nameField =
+          fields.find(f => f.type !== 'email' && /name/i.test(f.label || '')) ||
+          fields.find(f => f.type !== 'email' && /name/i.test(f.key || '')) ||
+          fields.find(f => f.type === 'text' && /full|student|participant/i.test(f.label || ''))
+        rawName =
+          (nameField && clean[nameField.key]) ||
+          clean.name || clean.fullName || clean.full_name ||
+          clean.Name || clean.FullName || clean.studentName || ''
+
+        // Resolve EMAIL field: prefer type=email, then label/key containing "email"
+        const emailField =
+          fields.find(f => f.type === 'email') ||
+          fields.find(f => /email/i.test(f.label || '')) ||
+          fields.find(f => /email/i.test(f.key || ''))
+        email =
+          (emailField && clean[emailField.key]) ||
+          clean.email || clean.Email || clean.emailAddress || clean.email_address || ''
+
+        // Resolve PHONE — the primary student-identity key now (see
+        // studentsDbService/upsertStudent in services.js): unlike email,
+        // it's collected consistently across every form and doesn't
+        // collide across students the way names do. Same resolver used
+        // for the ambassador-application branch below, and for detecting
+        // a duplicate resubmission just below.
+        phone = resolveFormField(fields, clean, { type: 'phone', labelRegex: /phone|whatsapp|contact/i, flatKeys: ['phone', 'whatsapp', 'contact'] })
+
+        // Duplicate guard — a student who fills this exact webinar's
+        // feedback form twice (e.g. double-tapping Submit, or reopening the
+        // link) must not get a second submission record or a second
+        // certificate. Matched by phone number against every prior
+        // submission to THIS form (a feedback form belongs to exactly one
+        // webinar), re-resolved with the same field logic since submissions
+        // don't store a normalized phone of their own.
+        if (phone) {
+          const priorSubmissions = await formsService.getSubmissions(id).catch(() => [])
+          const isDuplicate = priorSubmissions.some(s =>
+            resolveFormField(fields, s.values || {}, { type: 'phone', labelRegex: /phone|whatsapp|contact/i, flatKeys: ['phone', 'whatsapp', 'contact'] }) === phone
+          )
+          if (isDuplicate) {
+            const certs = await certificatesService.getByPhone(phone).catch(() => [])
+            setExistingCert(certs.find(c => c.webinarId === webinar.id) || null)
+            setStatus('duplicate')
+            window.scrollTo({ top: 0, behavior: 'smooth' })
+            return
+          }
+        }
+      }
+
       const submissionId = await formsService.addSubmission({
         formId: id,
         formTitle: form.title,
@@ -61,14 +125,6 @@ export default function DynamicForm() {
         submittedAt: new Date().toISOString(),
       })
 
-      // Look up (once) whether this form is some webinar's feedback form —
-      // and if so, whether that webinar has a certificate template — since
-      // this decides BOTH the success message wording below and whether to
-      // actually trigger generation. A single indexed query, awaited before
-      // the success screen renders so the message is never wrong; the
-      // certificate generation itself stays fire-and-forget below and can
-      // never block or fail this screen.
-      const webinar = await webinarsService.getByFeedbackFormId(id).catch(() => null)
       const hasCertTemplate = !!webinar?.certTemplate?.imageUrl
       const customMessage = form.successConfig?.message?.trim()
       setSuccessMessage(
@@ -84,37 +140,6 @@ export default function DynamicForm() {
       window.scrollTo({ top: 0, behavior: 'smooth' })
 
       if (webinar) {
-        // Field keys in a Form-Builder-built form are random uids, not
-        // semantic names — resolve name/email by searching the schema.
-        // Priority order: field type match → label contains keyword → key contains keyword → flat key fallback.
-        const fields = form.fields || []
-
-        // Resolve NAME field: prefer a non-email field whose label or key contains "name"
-        const nameField =
-          fields.find(f => f.type !== 'email' && /name/i.test(f.label || '')) ||
-          fields.find(f => f.type !== 'email' && /name/i.test(f.key || '')) ||
-          fields.find(f => f.type === 'text' && /full|student|participant/i.test(f.label || ''))
-        const rawName =
-          (nameField && clean[nameField.key]) ||
-          clean.name || clean.fullName || clean.full_name ||
-          clean.Name || clean.FullName || clean.studentName || ''
-
-        // Resolve EMAIL field: prefer type=email, then label/key containing "email"
-        const emailField =
-          fields.find(f => f.type === 'email') ||
-          fields.find(f => /email/i.test(f.label || '')) ||
-          fields.find(f => /email/i.test(f.key || ''))
-        const email =
-          (emailField && clean[emailField.key]) ||
-          clean.email || clean.Email || clean.emailAddress || clean.email_address || ''
-
-        // Resolve PHONE — the primary student-identity key now (see
-        // studentsDbService/upsertStudent in services.js): unlike email,
-        // it's collected consistently across every form and doesn't
-        // collide across students the way names do. Same resolver used
-        // for the ambassador-application branch below.
-        const phone = resolveFormField(fields, clean, { type: 'phone', labelRegex: /phone|whatsapp|contact/i, flatKeys: ['phone', 'whatsapp', 'contact'] })
-
         // Ensures the student's record exists / gets enriched even when the
         // webinar has no certificate template configured (upsertFromCertificate
         // below only fires once a certificate is actually issued).
@@ -211,6 +236,27 @@ export default function DynamicForm() {
           <div className="text-center py-20 text-gray-400">Loading form…</div>
         ) : !form ? (
           <div className="text-center py-20 text-gray-400">Form not found or no longer available.</div>
+        ) : status === 'duplicate' ? (
+          <motion.div className="bg-white rounded-3xl shadow-[0_8px_40px_rgba(0,0,0,0.06)] p-8 sm:p-12 text-center"
+            initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }}>
+            <div className="w-20 h-20 rounded-full bg-amber-50 flex items-center justify-center mx-auto mb-6">
+              <AlertCircle size={44} className="text-amber-500" />
+            </div>
+            <h1 className="text-2xl font-black text-[#1a1a1a] mb-2">Already Submitted</h1>
+            <p className="text-gray-500 mb-2">
+              You've already submitted this form for this webinar — your certificate has already been issued and won't be generated again.
+            </p>
+            {existingCert && (
+              <button onClick={() => navigate(`/certificate/${existingCert.certCode}`)}
+                className="mt-4 inline-block px-8 py-3 rounded-xl text-sm font-semibold text-white"
+                style={{ background: 'linear-gradient(135deg, #1655c3, #64ac37)' }}>
+                View Your Certificate
+              </button>
+            )}
+            <button onClick={() => navigate('/')} className="mt-4 block mx-auto px-8 py-3 rounded-xl text-sm font-semibold text-[#1655c3]">
+              Back to Home
+            </button>
+          </motion.div>
         ) : status === 'success' ? (
           <motion.div className="bg-white rounded-3xl shadow-[0_8px_40px_rgba(0,0,0,0.06)] p-8 sm:p-12 text-center"
             initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }}>
