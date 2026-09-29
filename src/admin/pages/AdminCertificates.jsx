@@ -173,6 +173,19 @@ export default function AdminCertificates() {
   }, [data])
   const activeFolder = folders.find(f => f.key === activeFolderKey) || null
 
+  // The webinar this folder is actually for (only "webinar:*" folders have
+  // one — "course:*" and "unassigned" don't carry a per-session template).
+  // Re-derived from activeFolder/webinars every render, so it's always
+  // whichever folder is currently open — never stale, never shared between
+  // folders. Its own certTemplate (already uploaded per-webinar in Admin >
+  // Webinars > Certificate Template) is the SAME field the automatic
+  // webinar-feedback flow reads — reused here rather than duplicated.
+  const activeFolderWebinar = useMemo(() => {
+    if (!activeFolder || !activeFolder.key.startsWith('webinar:')) return null
+    const webinarId = activeFolder.certs[0]?.webinarId
+    return webinarId ? webinars.find(w => w.id === webinarId) || null : null
+  }, [activeFolder, webinars])
+
   const exportFolderExcel = (folder) => {
     const { keys, labelByKey, perCert } = buildFeedbackColumns(folder.certs, subs, forms)
     const rows = folder.certs.map(c => ({
@@ -262,18 +275,27 @@ export default function AdminCertificates() {
   const set = field => e => setForm(p => ({ ...p, [field]: e.target.value }))
 
   // --- Manual "Issue Certificate" (rebuilt to match the automatic flow) ---
-  // Pre-fills the template/positions/fonts from the last-used template (if
-  // any) — only Recipient Name/Email/Description and custom field VALUES
-  // start blank, since those are naturally different per recipient.
+  // Folder-aware: opened from inside a webinar's own folder, this pre-fills
+  // THAT webinar's own certTemplate (image/positions/fonts) and a
+  // description mentioning its title — the admin only has to fill in
+  // recipient details. Opened at the top level (no folder, or a
+  // course/manual folder with no template of its own), it falls back to
+  // the last-used generic template exactly as before — this is what keeps
+  // #4 of the request true: top-level issuance is unchanged.
   const openIssue = () => {
-    const next = lastTemplate ? {
+    const sessionTemplate = activeFolderWebinar?.certTemplate?.imageUrl ? activeFolderWebinar.certTemplate : null
+    const base = sessionTemplate || lastTemplate
+    const next = base ? {
       ...emptyIssueForm(),
-      imageUrl: lastTemplate.imageUrl || '',
-      namePos: lastTemplate.namePos || null,
-      idPos: lastTemplate.idPos || null,
-      customFields: (lastTemplate.customFields || []).map(f => ({ ...f, value: '' })),
-      elements: lastTemplate.elements || [],
+      imageUrl: base.imageUrl || '',
+      namePos: base.namePos || null,
+      idPos: base.idPos || null,
+      customFields: (base.customFields || []).map(f => ({ ...f, value: '' })),
+      elements: base.elements || [],
     } : emptyIssueForm()
+    if (activeFolderWebinar) {
+      next.description = `For successfully completing "${activeFolderWebinar.topic || activeFolderWebinar.title || activeFolder.label}"`
+    }
     setIssueForm(next)
     setFocusedRecipientId(next.recipients[0].id)
     setIssueModal(true)
@@ -324,6 +346,12 @@ export default function AdminCertificates() {
           recipientPhone: r.phone,
           description: issueForm.description,
           customFields: issueForm.customFields,
+          // Files the new certificate into THIS folder (not "Manual /
+          // Other") and links it to the same webinar the folder is for.
+          ...(activeFolderWebinar ? {
+            webinarId: activeFolderWebinar.id,
+            webinarTitle: activeFolderWebinar.topic || activeFolderWebinar.title || '',
+          } : {}),
         })
         results.push({ ...r, success: true })
       } catch (e) {
@@ -332,15 +360,22 @@ export default function AdminCertificates() {
       setIssueProgress(p => ({ ...p, done: p.done + 1 }))
     }
 
-    const usedTemplate = {
-      imageUrl: issueForm.imageUrl,
-      namePos: issueForm.namePos,
-      idPos: issueForm.idPos,
-      customFields: issueForm.customFields.map(({ value, ...rest }) => rest),
-      elements: issueForm.elements,
+    // Only remembered as the generic "last used" template for the top-level
+    // Issue flow when this issuance WASN'T using a folder's own session
+    // template — otherwise one webinar's template would leak into the next
+    // unrelated manual issuance, which is exactly what per-folder isolation
+    // (point 3 of the request) rules out.
+    if (!activeFolderWebinar?.certTemplate?.imageUrl) {
+      const usedTemplate = {
+        imageUrl: issueForm.imageUrl,
+        namePos: issueForm.namePos,
+        idPos: issueForm.idPos,
+        customFields: issueForm.customFields.map(({ value, ...rest }) => rest),
+        elements: issueForm.elements,
+      }
+      setLastTemplate(usedTemplate)
+      settingsService.update({ lastManualCertTemplate: usedTemplate }).catch(() => {})
     }
-    setLastTemplate(usedTemplate)
-    settingsService.update({ lastManualCertTemplate: usedTemplate }).catch(() => {})
 
     setIssueSaving(false)
     setIssueProgress(null)
@@ -664,6 +699,14 @@ export default function AdminCertificates() {
       {issueModal && (
         <Modal title="Issue Certificate" onClose={closeIssue} wide>
           <div className="space-y-4">
+            {activeFolderWebinar && (
+              <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 text-xs text-[#1655c3] font-semibold flex items-center gap-2">
+                <Folder size={14} className="shrink-0" />
+                {activeFolderWebinar.certTemplate?.imageUrl
+                  ? <>Pre-filled with <b>{activeFolderWebinar.topic || activeFolderWebinar.title}</b>'s own certificate template — just add recipients below.</>
+                  : <>No certificate template is configured yet for <b>{activeFolderWebinar.topic || activeFolderWebinar.title}</b> (Admin → Webinars → Certificate Template) — using the default template for now.</>}
+              </div>
+            )}
             <div className="rounded-xl border border-gray-200 p-4 space-y-3">
               <p className="text-xs font-bold text-gray-600 uppercase tracking-wider">Certificate Template</p>
               <ImageUpload

@@ -233,7 +233,7 @@ export async function generateAndIssueCertificate({ submissionId, webinar, rawNa
  * throws on failure — there's no submission doc to silently record the
  * error on, so the admin UI needs a real exception to show.
  */
-export async function issueManualCertificate({ templateUrl, namePos, idPos, elements, recipientName, recipientEmail, recipientPhone, description, customFields }) {
+export async function issueManualCertificate({ templateUrl, namePos, idPos, elements, recipientName, recipientEmail, recipientPhone, description, customFields, webinarId, webinarTitle }) {
   if (!templateUrl) throw new Error('A certificate template image is required')
   if (!recipientName?.trim()) throw new Error('Recipient name is required')
   if (!recipientEmail?.trim()) throw new Error('Recipient email is required')
@@ -250,8 +250,13 @@ export async function issueManualCertificate({ templateUrl, namePos, idPos, elem
     phone: recipientPhone,
     title: body,
     body,
-    sourceType: 'manual',
-    extra: {},
+    // When issued from inside a webinar's own Certificates folder
+    // (AdminCertificates.jsx), tag the record the same way the automatic
+    // webinar-feedback flow does (sourceType 'webinar' + webinarId) so it
+    // files into that same folder afterward instead of "Manual / Other".
+    // Plain top-level issuance (no folder) keeps the old 'manual' shape.
+    sourceType: webinarId ? 'webinar' : 'manual',
+    extra: webinarId ? { sourceId: webinarId, webinarId, webinarTitle: webinarTitle || '' } : {},
     // Blank rows (no label typed yet) are dropped here rather than upstream
     // so the admin UI can freely have an in-progress empty row without it
     // ever reaching the canvas or the saved record.
