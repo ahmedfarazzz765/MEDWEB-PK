@@ -4,9 +4,19 @@ import { ArrowLeft, Calendar, ExternalLink, Link2 } from 'lucide-react'
 import DOMPurify from 'dompurify'
 import { motion } from 'framer-motion'
 import { newsService } from '../firebase/services'
+import { setPageMeta } from '../lib/pageMeta'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
 import CoverImage from '../components/CoverImage'
+
+// Fallback when an item has no metaDescription of its own (e.g. an
+// admin-authored item predating this field) — same strip-tags-and-truncate
+// approach AdminBlog.jsx already uses for its own newsletter excerpt
+// fallback, just inlined here since News has no excerpt field to check first.
+function fallbackDescription(html, max = 155) {
+  const text = String(html || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+  return text.length > max ? text.slice(0, max).trim() + '…' : text
+}
 
 // A small "More News" card used in the sidebar (desktop) / below the
 // article (mobile) — thumbnail + title only, same idea as a related-posts
@@ -47,6 +57,24 @@ export default function NewsPostPage() {
     newsService.getPublished()
       .then(rows => setOthers(rows.filter(r => r.id !== item.id).slice(0, 6)))
       .catch(() => setOthers([]))
+  }, [item])
+
+  // Per-article <title>/<meta> — metaTitle/metaDescription come from the
+  // automated draft pipeline (scripts/fetch-health-news.js) when present;
+  // an admin-authored item without them falls back to the title and a
+  // truncated plain-text version of the content, same idea as the
+  // AI-generated ones would produce. Same client-side-only limitation as
+  // CertificatePage.jsx's setPageMeta usage: correct for a real visitor's
+  // tab/description and any crawler that executes JS, not guaranteed for
+  // a crawler that fetches raw HTML (this is a static SPA, no SSR).
+  useEffect(() => {
+    if (!item) return
+    setPageMeta({
+      title: item.metaTitle || item.title,
+      description: item.metaDescription || fallbackDescription(item.content),
+      image: item.imageUrl,
+      url: window.location.href,
+    })
   }, [item])
 
   if (item === undefined) {
