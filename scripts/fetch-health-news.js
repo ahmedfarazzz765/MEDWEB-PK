@@ -29,13 +29,25 @@ import admin from 'firebase-admin'
 const NEWS_API_KEY = process.env.NEWS_API_KEY
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 const SERVICE_ACCOUNT_JSON = process.env.FIREBASE_SERVICE_ACCOUNT
-const GEMINI_MODEL = 'gemini-2.0-flash'
+// gemini-2.0-flash was retired by Google and 404s on every call — confirmed
+// from a real workflow run (18 headlines fetched fine, all 3 rewrite
+// attempts failed with "This model ... is no longer available ... use
+// models/gemini-3.8-flash"). Updated to the model name Google's own error
+// pointed at.
+const GEMINI_MODEL = 'gemini-3.8-flash'
 const MAX_ARTICLES_PER_RUN = 3 // keep the daily draft queue small and reviewable, not a flood
 
 function fail(message) {
   console.error(`❌ ${message}`)
   process.exit(1)
 }
+
+// Thrown specifically when Gemini 404s on the model itself — see
+// rewriteWithGemini() below. Kept distinct from a generic Error so main()
+// can react differently: retrying the same invalid model against the next
+// candidate would just 404 again, so the whole run stops after the first
+// one instead of burning through every candidate for an identical failure.
+class GeminiModelError extends Error {}
 
 if (!NEWS_API_KEY) fail('Missing NEWS_API_KEY environment variable')
 if (!GEMINI_API_KEY) fail('Missing GEMINI_API_KEY environment variable')
@@ -204,7 +216,24 @@ Source publication: ${article.source?.name || 'Unknown'}`
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
     }
   )
-  if (!res.ok) throw new Error(`Gemini request failed: HTTP ${res.status} — ${await res.text()}`)
+  if (!res.ok) {
+    const body = await res.text()
+    // A 404 here means the model itself is invalid/retired (as opposed to a
+    // transient/rate-limit/auth failure) — Google's own error body says so
+    // explicitly (e.g. "model ... is no longer available"). Distinguished
+    // with a dedicated error type so main() can stop the whole run after
+    // the first failure instead of repeating the same doomed request against
+    // every remaining candidate and creating zero drafts with three
+    // identical, easy-to-miss log lines.
+    if (res.status === 404) {
+      throw new GeminiModelError(
+        `Gemini model "${GEMINI_MODEL}" was rejected as not found (HTTP 404). ` +
+        `It's likely been retired/renamed by Google — update GEMINI_MODEL in ` +
+        `scripts/fetch-health-news.js to a currently valid model id. Google's response: ${body}`
+      )
+    }
+    throw new Error(`Gemini request failed: HTTP ${res.status} — ${body}`)
+  }
   const data = await res.json()
   const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
   // Gemini sometimes wraps JSON in ```json fences despite instructions — strip them defensively.
@@ -257,6 +286,7 @@ async function main() {
 
   let created = 0
   let failed = 0
+  let modelInvalid = false
   for (const article of candidates) {
     try {
       console.log(`→ Rewriting: "${article.title}" (${article.source?.name || 'unknown source'})`)
@@ -282,6 +312,14 @@ async function main() {
     } catch (e) {
       failed++
       console.error(`  ✗ Skipped "${article.title}": ${e.message}`)
+      if (e instanceof GeminiModelError) {
+        // Every remaining candidate would fail identically — stop here
+        // instead of repeating the same 404 for each one and burying the
+        // one actionable line in duplicate noise.
+        modelInvalid = true
+        console.error(`\n❌ Gemini model "${GEMINI_MODEL}" is invalid — stopping this run early instead of retrying it against every remaining candidate.`)
+        break
+      }
     }
   }
 
@@ -289,6 +327,12 @@ async function main() {
     `\nDone. Created ${created} draft(s), ${failed} failed, out of ${candidates.length} candidate(s) ` +
     `(${headlines.length} fetched, ${headlines.length - fresh.length} already existed as drafts/published).`
   )
+
+  // A bad model config (or every candidate failing outright) must surface
+  // as a failed Actions run, not a quiet green checkmark with zero drafts —
+  // that silent-3x-failure was exactly the reported bug.
+  if (modelInvalid) fail(`Gemini model "${GEMINI_MODEL}" is not available — update GEMINI_MODEL in scripts/fetch-health-news.js.`)
+  if (created === 0) fail('No drafts were created this run — see the errors above.')
 }
 
 main().catch(e => {
