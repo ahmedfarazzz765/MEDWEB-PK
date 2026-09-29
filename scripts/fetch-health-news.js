@@ -215,6 +215,22 @@ function sanitizeInternalLinks(html, validSlugs) {
   )
 }
 
+// Guarantees a working, correct link back to the original source article
+// exists — the same class of risk as internal links (an LLM can still
+// mistype or drop a URL despite being told to copy it verbatim), except
+// here there's no candidate list to validate against, so instead of
+// stripping a bad link, this checks whether the real article.url already
+// appears anywhere in the body and, if not, appends the exact attribution
+// line itself. Either way the final draft always has a real clickable
+// link to the original reporting, never something the LLM had to get
+// right unsupervised.
+function ensureSourceAttribution(html, article) {
+  if (!article.url) return html
+  if (html.includes(article.url)) return html
+  const sourceName = article.source?.name?.trim() || 'original source'
+  return `${html}<p>Source: <a href="${article.url}" target="_blank" rel="noopener noreferrer">${sourceName}</a></p>`
+}
+
 async function rewriteWithGemini(article, linkCandidates) {
   const internalLinksBlock = linkCandidates.length === 0 ? '' : `
 
@@ -236,27 +252,37 @@ Rules:
 - "title": a fresh, original headline (do not copy the source headline verbatim)
 - "metaTitle": a concise, keyword-relevant SEO title, 60 characters or fewer (can match "title" if it already fits)
 - "metaDescription": a natural 1-2 sentence summary of the article, 155 characters or fewer, written as a search-engine snippet — no clickbait, no quotation marks
-- "bodyHtml": the full article body as semantic HTML, structured like a real article, not one block of text:
-  - One intro <p> paragraph
-  - Then 2 to 4 <h2> subheadings, each followed by one or two short <p> paragraphs under it
-  - A <ul> of <li> items ONLY if the content genuinely has a list (e.g. symptoms, steps, tips) — never force one in
-  - One closing <p> paragraph
-  - Allowed tags ONLY: <p>, <h2>, <ul>, <li>, <strong>, <em>, and (only per the internal-linking rule below) <a href="/news/...">. No other tags, no inline styles, no class attributes.
+- "bodyHtml": the full article body as semantic HTML, structured like a real, substantial article, not a few short paragraphs restating the headline:
+  - Target length: roughly 5000 to 7000 words of genuine, substantial content — real depth, not padding or repetition. Expand with real context: background on the disease/topic/research area, relevant statistics and details drawn from or consistent with the source material, historical or comparative context, expert-style analysis of implications, and what plausibly happens next.
+  - One intro <p> paragraph, then as many <h2> subheadings as the content genuinely needs to stay organized at this length — typically 5 to 10 — each followed by two to four <p> paragraphs under it, then one closing <p> paragraph.
+  - A <ul> of <li> items where a list genuinely fits (e.g. symptoms, steps, key facts, timeline of events) — never force one in.
+  - Near the end, ONE clearly-marked source-attribution line in this exact pattern: <p>Source: <a href="${article.url}" target="_blank" rel="noopener noreferrer">${article.source?.name || 'original source'}</a></p> — use that exact URL and that exact source name, verbatim, nothing else. You may also naturally reference the source by name earlier in the prose (e.g. "according to ${article.source?.name || 'the original report'}") without a link there — only this one closing line needs the actual <a href>.
+  - Allowed tags ONLY: <p>, <h2>, <ul>, <li>, <strong>, <em>, and <a href="..."> (only for the source-attribution line above and, per the internal-linking rule below, MEDWEB's own /news/ links). No other tags, no inline styles, no class attributes.
   - Output REAL HTML tags exactly as characters like <h2> and <p> — do NOT escape them (never write &lt;h2&gt;), and do NOT use markdown (never write ## for a heading or **text** for bold).
-  - Example of the exact bodyHtml shape expected (structure only — write fresh content, don't reuse this wording): "<p>Intro paragraph summarizing the story.</p><h2>First subheading</h2><p>A short paragraph.</p><h2>Second subheading</h2><p>Another short paragraph.</p><p>Closing paragraph.</p>"${internalLinksBlock}
+  - Example of the exact bodyHtml shape expected (structure and length pattern only — write fresh, much longer content, don't reuse this wording): "<p>Intro paragraph summarizing the story.</p><h2>First subheading</h2><p>Paragraph.</p><p>Paragraph.</p><h2>Second subheading</h2><p>Paragraph.</p>...<p>Closing paragraph.</p><p>Source: <a href=\"https://example.com/article\" target=\"_blank\" rel=\"noopener noreferrer\">Example News</a></p>"${internalLinksBlock}
 
 SOURCE ARTICLE
 Title: ${article.title}
 Description: ${article.description || '(none provided)'}
 Content snippet: ${article.content || '(none provided)'}
-Source publication: ${article.source?.name || 'Unknown'}`
+Source publication: ${article.source?.name || 'Unknown'}
+Source URL: ${article.url}`
 
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+      // 5000-7000 words of body content alone is roughly 7000-9500 tokens
+      // (English averages ~0.75 words/token); the JSON wrapper, HTML tags,
+      // and metaTitle/metaDescription add more on top. maxOutputTokens
+      // defaults to a much smaller cap on most Gemini models, which would
+      // silently truncate a response this long mid-JSON — set generously
+      // high here rather than hitting that by surprise.
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { maxOutputTokens: 32768 },
+      }),
     }
   )
   if (!res.ok) {
@@ -286,6 +312,16 @@ Source publication: ${article.source?.name || 'Unknown'}`
   try {
     parsed = JSON.parse(cleaned)
   } catch (e) {
+    // A response this long is genuinely at risk of hitting the output-token
+    // cap mid-JSON — Gemini reports that explicitly via finishReason, so
+    // surface THAT as the actual cause instead of a generic parse error
+    // that just looks like a formatting fluke.
+    if (data.candidates?.[0]?.finishReason === 'MAX_TOKENS') {
+      throw new Error(
+        `Gemini's response was cut off at the maxOutputTokens limit (currently 32768) before finishing valid JSON — ` +
+        `the requested 5000-7000 word length may need a higher limit, or a shorter target. Raw output ended: …${cleaned.slice(-200)}`
+      )
+    }
     throw new Error(`Gemini returned non-JSON output: ${cleaned.slice(0, 300)}`)
   }
   if (!parsed.title?.trim() || !parsed.bodyHtml?.trim()) {
@@ -295,6 +331,7 @@ Source publication: ${article.source?.name || 'Unknown'}`
   parsed.bodyHtml = ensureHtmlStructure(parsed.bodyHtml)
   const validSlugs = new Set(linkCandidates.map(n => n.slug))
   parsed.bodyHtml = sanitizeInternalLinks(parsed.bodyHtml, validSlugs)
+  parsed.bodyHtml = ensureSourceAttribution(parsed.bodyHtml, article)
   return parsed
 }
 
@@ -340,9 +377,13 @@ async function main() {
       const imageUrl = buildImageUrl(keyword)
 
       // Printed so a workflow run's log is enough to catch a regression
-      // like the last one (image URL silently failing, or bodyHtml being
-      // JSON-escaped/plain text) without needing to open Firestore.
+      // like the last ones (image URL silently failing, bodyHtml being
+      // JSON-escaped/plain text, too-short output, or a missing source
+      // link) without needing to open Firestore.
+      const wordCount = rewritten.bodyHtml.replace(/<[^>]*>/g, ' ').trim().split(/\s+/).filter(Boolean).length
+      const hasSourceLink = rewritten.bodyHtml.includes(article.url)
       console.log(`  image: keyword="${keyword}" → ${imageUrl}`)
+      console.log(`  body: ~${wordCount} words, source link present: ${hasSourceLink}`)
       console.log(`  bodyHtml (first 300 chars): ${rewritten.bodyHtml.slice(0, 300)}${rewritten.bodyHtml.length > 300 ? '…' : ''}`)
 
       await db.collection('news').add({
