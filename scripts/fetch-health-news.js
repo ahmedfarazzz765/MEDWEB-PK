@@ -155,13 +155,52 @@ function pickImageKeyword(article, rewrittenTitle) {
 
 // Unsplash Source (source.unsplash.com) — the free, no-API-key endpoint the
 // original spec suggested — was discontinued by Unsplash in 2023 and no
-// longer resolves. LoremFlickr is the closest still-working equivalent:
-// free, keyless, and keyword-matched. Same idea either way — a reasonable
-// topical placeholder, not a final image; the admin can freely swap it
-// before publishing, same as they'd have had to do with a blank thumbnail.
+// longer resolves (verified: HTTP 503). LoremFlickr, used here previously,
+// turned out to ALSO no longer work at runtime — verified directly with a
+// plain curl request: it now returns HTTP 401 Unauthorized instead of an
+// image, which is exactly why the first real draft got no thumbnail.
+// Picsum Photos' seeded endpoint was verified working with a direct
+// request (HTTP 200, image/jpeg) and needs no key either. It isn't
+// keyword-SEARCHED the way a real stock-photo API would be — the keyword
+// only seeds which photo comes back — but it's deterministic per keyword
+// (the same topic always gets the same photo) and, critically, actually
+// resolves to a real image instead of silently failing. Still just a
+// placeholder either way; the admin swaps it before publishing.
 function buildImageUrl(keyword) {
-  const q = encodeURIComponent(keyword.replace(/\s+/g, ''))
-  return `https://loremflickr.com/1200/630/${q},health`
+  const seed = encodeURIComponent(keyword.replace(/\s+/g, '-'))
+  return `https://picsum.photos/seed/${seed}/1200/630`
+}
+
+// Defense-in-depth against Gemini not actually returning real HTML tags
+// despite being asked to — either HTML-entity-escaping them inside the JSON
+// string (e.g. "&lt;h2&gt;...&lt;/h2&gt;", which DOMPurify/the browser then
+// renders as literal text, not a heading) or just writing markdown-style
+// **bold**/## headings, or plain blank-line-separated paragraphs. Never
+// ships a single untagged text blob.
+function ensureHtmlStructure(raw) {
+  let html = raw.trim()
+
+  // Case 1: real tags are there, just HTML-entity-escaped — decode only
+  // the specific escapes a tag would use, not a full entity decode, so a
+  // genuine "&" in body text (e.g. "R&D") isn't touched.
+  if (!/<[a-z][\s\S]*>/i.test(html) && /&lt;\/?[a-z]+&gt;/i.test(html)) {
+    html = html.replace(/&lt;(\/?[a-z0-9]+)&gt;/gi, '<$1>')
+  }
+
+  // Case 2: still no real <p>/<h2>/<ul> tags at all — Gemini returned plain
+  // text (possibly with markdown-style ## / **bold** markers). Split into
+  // blank-line-separated blocks and wrap each in <p>, stripping markdown
+  // markers so they don't render as literal characters.
+  if (!/<(p|h2|ul|li)[\s>]/i.test(html)) {
+    html = html
+      .split(/\n{2,}/)
+      .map(block => block.trim())
+      .filter(Boolean)
+      .map(block => `<p>${block.replace(/^#{1,6}\s*/, '').replace(/\*\*(.*?)\*\*/g, '$1')}</p>`)
+      .join('')
+  }
+
+  return html
 }
 
 // Strips out any internal /news/{slug} link Gemini produced whose slug
@@ -184,9 +223,11 @@ INTERNAL LINKING (optional): below are existing MEDWEB-PK Medical News articles.
 EXISTING ARTICLES:
 ${linkCandidates.map(n => `- "${n.title}" → slug: ${n.slug}`).join('\n')}`
 
-  const prompt = `You are a health/medical news editor for MEDWEB-PK, a Pakistani medical education platform for pharmacy/medical students and healthcare professionals.
+  const prompt = `You are a health news editor for MEDWEB-PK, a Pakistani medical education platform. You cover general global health and medical news for anyone interested in health — disease outbreaks, medical research breakthroughs, drug approvals and recalls, public health policy, and similar stories — written as straightforward journalism, the way a real health-news outlet would, NOT as a classroom lesson.
 
-Rewrite the following news story into an ORIGINAL, well-structured article in your own words. Do not copy sentences from the source — genuinely reword it — but stay strictly factually consistent with the source content given below. Tone: clear, informative, professional, encouraging.
+Rewrite the following news story into an ORIGINAL article in your own words. Do not copy sentences from the source — genuinely reword it — but stay strictly factually consistent with the source content given below.
+
+Tone: match the actual story. An outbreak update should read like an outbreak update, a research breakthrough like a research story, a drug recall like a recall notice. Do NOT force a "what this means for medical/pharmacy students" or "public health lessons" angle onto every article by default — only include that kind of framing if THIS specific story genuinely calls for it. The closing paragraph should read like a natural end to this particular story, not a template reused across every article.
 
 Respond with STRICT JSON only — no markdown code fences, no commentary before or after — in exactly this shape:
 {"title": "...", "metaTitle": "...", "metaDescription": "...", "bodyHtml": "..."}
@@ -200,7 +241,9 @@ Rules:
   - Then 2 to 4 <h2> subheadings, each followed by one or two short <p> paragraphs under it
   - A <ul> of <li> items ONLY if the content genuinely has a list (e.g. symptoms, steps, tips) — never force one in
   - One closing <p> paragraph
-  - Allowed tags ONLY: <p>, <h2>, <ul>, <li>, <strong>, <em>, and (only per the internal-linking rule below) <a href="/news/...">. No other tags, no inline styles, no class attributes.${internalLinksBlock}
+  - Allowed tags ONLY: <p>, <h2>, <ul>, <li>, <strong>, <em>, and (only per the internal-linking rule below) <a href="/news/...">. No other tags, no inline styles, no class attributes.
+  - Output REAL HTML tags exactly as characters like <h2> and <p> — do NOT escape them (never write &lt;h2&gt;), and do NOT use markdown (never write ## for a heading or **text** for bold).
+  - Example of the exact bodyHtml shape expected (structure only — write fresh content, don't reuse this wording): "<p>Intro paragraph summarizing the story.</p><h2>First subheading</h2><p>A short paragraph.</p><h2>Second subheading</h2><p>Another short paragraph.</p><p>Closing paragraph.</p>"${internalLinksBlock}
 
 SOURCE ARTICLE
 Title: ${article.title}
@@ -249,8 +292,9 @@ Source publication: ${article.source?.name || 'Unknown'}`
     throw new Error('Gemini output is missing title or bodyHtml')
   }
 
+  parsed.bodyHtml = ensureHtmlStructure(parsed.bodyHtml)
   const validSlugs = new Set(linkCandidates.map(n => n.slug))
-  parsed.bodyHtml = sanitizeInternalLinks(parsed.bodyHtml.trim(), validSlugs)
+  parsed.bodyHtml = sanitizeInternalLinks(parsed.bodyHtml, validSlugs)
   return parsed
 }
 
@@ -292,7 +336,14 @@ async function main() {
       console.log(`→ Rewriting: "${article.title}" (${article.source?.name || 'unknown source'})`)
       const rewritten = await rewriteWithGemini(article, linkCandidates)
       const slug = await uniqueSlug(slugify(rewritten.title))
-      const imageUrl = buildImageUrl(pickImageKeyword(article, rewritten.title))
+      const keyword = pickImageKeyword(article, rewritten.title)
+      const imageUrl = buildImageUrl(keyword)
+
+      // Printed so a workflow run's log is enough to catch a regression
+      // like the last one (image URL silently failing, or bodyHtml being
+      // JSON-escaped/plain text) without needing to open Firestore.
+      console.log(`  image: keyword="${keyword}" → ${imageUrl}`)
+      console.log(`  bodyHtml (first 300 chars): ${rewritten.bodyHtml.slice(0, 300)}${rewritten.bodyHtml.length > 300 ? '…' : ''}`)
 
       await db.collection('news').add({
         title: rewritten.title.trim(),
