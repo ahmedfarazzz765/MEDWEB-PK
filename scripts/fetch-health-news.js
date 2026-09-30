@@ -35,13 +35,18 @@ const SERVICE_ACCOUNT_JSON = process.env.FIREBASE_SERVICE_ACCOUNT
 // models/gemini-3.8-flash"). Updated to the model name Google's own error
 // pointed at.
 const GEMINI_MODEL = 'gemini-3.8-flash'
-const MAX_ARTICLES_PER_RUN = 3 // keep the daily draft queue small and reviewable, not a flood
+// Lowered from 3 to 2 — two of three articles exhausted every retry and
+// still hit 503 in a real run, meaning the free-tier endpoint was under
+// sustained load, not just a brief spike. Fewer candidates per run means
+// fewer near-simultaneous requests piling onto the same overloaded endpoint.
+const MAX_ARTICLES_PER_RUN = 2
 // Backoff schedule for a transient Gemini overload (503) or rate limit
-// (429) — confirmed from a real failed run where NewsAPI/dedup worked
-// fine and all 3 Gemini calls hit "model is currently experiencing high
-// demand", not a code bug. Retried per-article, so one persistently
-// overloaded call never blocks the others from succeeding.
-const GEMINI_RETRY_DELAYS_MS = [5000, 15000, 30000]
+// (429). Extended with a 4th, longer attempt (60s) after a real run saw
+// persistent 503s survive all three original retries (5s/15s/30s,
+// ~50s total) — in case the load spike just outlasts that window.
+// Retried per-article, so one persistently overloaded call never blocks
+// the others from succeeding.
+const GEMINI_RETRY_DELAYS_MS = [5000, 15000, 30000, 60000]
 
 function fail(message) {
   console.error(`❌ ${message}`)
@@ -241,6 +246,45 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
+// Parses Gemini's raw text response into the expected
+// {title, metaTitle, metaDescription, bodyHtml} object, tolerating the
+// ways that response has actually failed to be clean JSON in real runs:
+// markdown code fences around it, or extra text before/after the object.
+// Tries progressively looser extraction before giving up, and — critically
+// — logs enough of the raw response (length + first/last 200 chars, not
+// the whole thing) to diagnose a future failure without guessing, per a
+// real run where "non-JSON output" alone wasn't enough information.
+function extractJsonResponse(raw, finishReason) {
+  const trimmed = raw.trim()
+  // Strip ```json ... ``` or ``` ... ``` fences if present.
+  const unfenced = trimmed.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim()
+
+  const attempts = [unfenced]
+  // Fallback: the object between the first { and the last } — tolerates
+  // stray commentary Gemini added outside the JSON despite instructions.
+  const first = unfenced.indexOf('{')
+  const last = unfenced.lastIndexOf('}')
+  if (first !== -1 && last > first) attempts.push(unfenced.slice(first, last + 1))
+
+  for (const candidate of attempts) {
+    try {
+      return JSON.parse(candidate)
+    } catch (e) { /* try the next candidate */ }
+  }
+
+  const diagnostic =
+    `length=${raw.length} chars, finishReason=${finishReason || 'unknown'}, ` +
+    `starts: "${raw.slice(0, 200)}", ends: "${raw.slice(-200)}"`
+
+  // finishReason === 'MAX_TOKENS' means Gemini's own response says it was
+  // cut off by the output-token cap — surface that as the actual cause
+  // instead of a generic parse error that just looks like a formatting fluke.
+  if (finishReason === 'MAX_TOKENS') {
+    throw new Error(`Gemini's response was cut off at the maxOutputTokens limit before finishing valid JSON. ${diagnostic}`)
+  }
+  throw new Error(`Gemini returned non-JSON output. ${diagnostic}`)
+}
+
 // Calls the Gemini API, retrying a transient 503 (overloaded) or 429
 // (rate-limited) response with exponential-ish backoff (GEMINI_RETRY_DELAYS_MS)
 // before giving up on this specific article — the rest of the run's
@@ -311,13 +355,13 @@ Rules:
 - "metaTitle": a concise, keyword-relevant SEO title, 60 characters or fewer (can match "title" if it already fits)
 - "metaDescription": a natural 1-2 sentence summary of the article, 155 characters or fewer, written as a search-engine snippet — no clickbait, no quotation marks
 - "bodyHtml": the full article body as semantic HTML, structured like a real, substantial article, not a few short paragraphs restating the headline:
-  - Target length: roughly 5000 to 7000 words of genuine, substantial content — real depth, not padding or repetition. Expand with real context: background on the disease/topic/research area, relevant statistics and details drawn from or consistent with the source material, historical or comparative context, expert-style analysis of implications, and what plausibly happens next.
-  - One intro <p> paragraph, then as many <h2> subheadings as the content genuinely needs to stay organized at this length — typically 5 to 10 — each followed by two to four <p> paragraphs under it, then one closing <p> paragraph.
+  - Target length: roughly 500 to 700 words of genuine, substantial content — real depth, not padding or repetition. Add real context where it earns its place: brief background on the disease/topic/research area, a relevant statistic or detail from the source material, and the implications or what plausibly happens next — but stay concise and readable at this length, not stretched.
+  - One intro <p> paragraph, then 2 to 4 <h2> subheadings, each followed by one or two short <p> paragraphs under it, then one closing <p> paragraph.
   - A <ul> of <li> items where a list genuinely fits (e.g. symptoms, steps, key facts, timeline of events) — never force one in.
   - Near the end, ONE clearly-marked source-attribution line in this exact pattern: <p>Source: <a href="${article.url}" target="_blank" rel="noopener noreferrer">${article.source?.name || 'original source'}</a></p> — use that exact URL and that exact source name, verbatim, nothing else. You may also naturally reference the source by name earlier in the prose (e.g. "according to ${article.source?.name || 'the original report'}") without a link there — only this one closing line needs the actual <a href>.
   - Allowed tags ONLY: <p>, <h2>, <ul>, <li>, <strong>, <em>, and <a href="..."> (only for the source-attribution line above and, per the internal-linking rule below, MEDWEB's own /news/ links). No other tags, no inline styles, no class attributes.
   - Output REAL HTML tags exactly as characters like <h2> and <p> — do NOT escape them (never write &lt;h2&gt;), and do NOT use markdown (never write ## for a heading or **text** for bold).
-  - Example of the exact bodyHtml shape expected (structure and length pattern only — write fresh, much longer content, don't reuse this wording): "<p>Intro paragraph summarizing the story.</p><h2>First subheading</h2><p>Paragraph.</p><p>Paragraph.</p><h2>Second subheading</h2><p>Paragraph.</p>...<p>Closing paragraph.</p><p>Source: <a href=\"https://example.com/article\" target=\"_blank\" rel=\"noopener noreferrer\">Example News</a></p>"${internalLinksBlock}
+  - Example of the exact bodyHtml shape expected (structure only — write fresh content, don't reuse this wording): "<p>Intro paragraph summarizing the story.</p><h2>First subheading</h2><p>Paragraph.</p><h2>Second subheading</h2><p>Paragraph.</p><p>Closing paragraph.</p><p>Source: <a href=\"https://example.com/article\" target=\"_blank\" rel=\"noopener noreferrer\">Example News</a></p>"${internalLinksBlock}
 
 SOURCE ARTICLE
 Title: ${article.title}
@@ -326,38 +370,22 @@ Content snippet: ${article.content || '(none provided)'}
 Source publication: ${article.source?.name || 'Unknown'}
 Source URL: ${article.url}`
 
-  // 5000-7000 words of body content alone is roughly 7000-9500 tokens
-  // (English averages ~0.75 words/token); the JSON wrapper, HTML tags, and
-  // metaTitle/metaDescription add more on top. maxOutputTokens defaults to
-  // a much smaller cap on most Gemini models, which would silently
-  // truncate a response this long mid-JSON — set generously high here
-  // rather than hitting that by surprise. Transient 503/429s are retried
-  // inside callGeminiWithRetry(); anything else (incl. 404) throws.
+  // 500-700 words of body content is roughly 700-950 tokens (English
+  // averages ~0.75 words/token); 4096 leaves generous headroom for that
+  // plus the JSON wrapper, HTML tags, and metaTitle/metaDescription without
+  // relying on an unusually high value that may exceed what this model
+  // actually supports (the previous 32768 — sized for a since-abandoned
+  // 5000-7000 word target — plausibly contributed to the truncation seen
+  // in a real run, if the model's real ceiling is lower than that).
+  // Transient 503/429s are retried inside callGeminiWithRetry(); anything
+  // else (incl. 404) throws.
   const res = await callGeminiWithRetry({
     contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: { maxOutputTokens: 32768 },
+    generationConfig: { maxOutputTokens: 4096 },
   })
   const data = await res.json()
   const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
-  // Gemini sometimes wraps JSON in ```json fences despite instructions — strip them defensively.
-  const cleaned = raw.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim()
-
-  let parsed
-  try {
-    parsed = JSON.parse(cleaned)
-  } catch (e) {
-    // A response this long is genuinely at risk of hitting the output-token
-    // cap mid-JSON — Gemini reports that explicitly via finishReason, so
-    // surface THAT as the actual cause instead of a generic parse error
-    // that just looks like a formatting fluke.
-    if (data.candidates?.[0]?.finishReason === 'MAX_TOKENS') {
-      throw new Error(
-        `Gemini's response was cut off at the maxOutputTokens limit (currently 32768) before finishing valid JSON — ` +
-        `the requested 5000-7000 word length may need a higher limit, or a shorter target. Raw output ended: …${cleaned.slice(-200)}`
-      )
-    }
-    throw new Error(`Gemini returned non-JSON output: ${cleaned.slice(0, 300)}`)
-  }
+  const parsed = extractJsonResponse(raw, data.candidates?.[0]?.finishReason)
   if (!parsed.title?.trim() || !parsed.bodyHtml?.trim()) {
     throw new Error('Gemini output is missing title or bodyHtml')
   }
