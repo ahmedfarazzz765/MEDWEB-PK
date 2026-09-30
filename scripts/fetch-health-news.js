@@ -36,6 +36,12 @@ const SERVICE_ACCOUNT_JSON = process.env.FIREBASE_SERVICE_ACCOUNT
 // pointed at.
 const GEMINI_MODEL = 'gemini-3.8-flash'
 const MAX_ARTICLES_PER_RUN = 3 // keep the daily draft queue small and reviewable, not a flood
+// Backoff schedule for a transient Gemini overload (503) or rate limit
+// (429) — confirmed from a real failed run where NewsAPI/dedup worked
+// fine and all 3 Gemini calls hit "model is currently experiencing high
+// demand", not a code bug. Retried per-article, so one persistently
+// overloaded call never blocks the others from succeeding.
+const GEMINI_RETRY_DELAYS_MS = [5000, 15000, 30000]
 
 function fail(message) {
   console.error(`❌ ${message}`)
@@ -231,6 +237,58 @@ function ensureSourceAttribution(html, article) {
   return `${html}<p>Source: <a href="${article.url}" target="_blank" rel="noopener noreferrer">${sourceName}</a></p>`
 }
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+// Calls the Gemini API, retrying a transient 503 (overloaded) or 429
+// (rate-limited) response with exponential-ish backoff (GEMINI_RETRY_DELAYS_MS)
+// before giving up on this specific article — the rest of the run's
+// candidates are unaffected either way (see the per-article try/catch in
+// main()). A 404 (invalid model) is NOT retried — that's a config problem,
+// not a transient one, so it fails immediately as GeminiModelError exactly
+// as before. Any other non-ok status also fails immediately.
+async function callGeminiWithRetry(requestBody) {
+  const maxRetries = GEMINI_RETRY_DELAYS_MS.length
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+      }
+    )
+    if (res.ok) return res
+
+    const bodyText = await res.text()
+
+    // A 404 here means the model itself is invalid/retired (as opposed to a
+    // transient/rate-limit/auth failure) — Google's own error body says so
+    // explicitly (e.g. "model ... is no longer available"). Distinguished
+    // with a dedicated error type so main() can stop the whole run after
+    // the first failure instead of repeating the same doomed request against
+    // every remaining candidate and creating zero drafts with three
+    // identical, easy-to-miss log lines.
+    if (res.status === 404) {
+      throw new GeminiModelError(
+        `Gemini model "${GEMINI_MODEL}" was rejected as not found (HTTP 404). ` +
+        `It's likely been retired/renamed by Google — update GEMINI_MODEL in ` +
+        `scripts/fetch-health-news.js to a currently valid model id. Google's response: ${bodyText}`
+      )
+    }
+
+    if ((res.status === 503 || res.status === 429) && attempt < maxRetries) {
+      const delayMs = GEMINI_RETRY_DELAYS_MS[attempt]
+      console.warn(`  ⏳ Gemini overloaded (HTTP ${res.status}), retrying in ${delayMs / 1000}s... (attempt ${attempt + 1}/${maxRetries})`)
+      await sleep(delayMs)
+      continue
+    }
+
+    throw new Error(`Gemini request failed: HTTP ${res.status} — ${bodyText}`)
+  }
+}
+
 async function rewriteWithGemini(article, linkCandidates) {
   const internalLinksBlock = linkCandidates.length === 0 ? '' : `
 
@@ -268,41 +326,17 @@ Content snippet: ${article.content || '(none provided)'}
 Source publication: ${article.source?.name || 'Unknown'}
 Source URL: ${article.url}`
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      // 5000-7000 words of body content alone is roughly 7000-9500 tokens
-      // (English averages ~0.75 words/token); the JSON wrapper, HTML tags,
-      // and metaTitle/metaDescription add more on top. maxOutputTokens
-      // defaults to a much smaller cap on most Gemini models, which would
-      // silently truncate a response this long mid-JSON — set generously
-      // high here rather than hitting that by surprise.
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: 32768 },
-      }),
-    }
-  )
-  if (!res.ok) {
-    const body = await res.text()
-    // A 404 here means the model itself is invalid/retired (as opposed to a
-    // transient/rate-limit/auth failure) — Google's own error body says so
-    // explicitly (e.g. "model ... is no longer available"). Distinguished
-    // with a dedicated error type so main() can stop the whole run after
-    // the first failure instead of repeating the same doomed request against
-    // every remaining candidate and creating zero drafts with three
-    // identical, easy-to-miss log lines.
-    if (res.status === 404) {
-      throw new GeminiModelError(
-        `Gemini model "${GEMINI_MODEL}" was rejected as not found (HTTP 404). ` +
-        `It's likely been retired/renamed by Google — update GEMINI_MODEL in ` +
-        `scripts/fetch-health-news.js to a currently valid model id. Google's response: ${body}`
-      )
-    }
-    throw new Error(`Gemini request failed: HTTP ${res.status} — ${body}`)
-  }
+  // 5000-7000 words of body content alone is roughly 7000-9500 tokens
+  // (English averages ~0.75 words/token); the JSON wrapper, HTML tags, and
+  // metaTitle/metaDescription add more on top. maxOutputTokens defaults to
+  // a much smaller cap on most Gemini models, which would silently
+  // truncate a response this long mid-JSON — set generously high here
+  // rather than hitting that by surprise. Transient 503/429s are retried
+  // inside callGeminiWithRetry(); anything else (incl. 404) throws.
+  const res = await callGeminiWithRetry({
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { maxOutputTokens: 32768 },
+  })
   const data = await res.json()
   const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
   // Gemini sometimes wraps JSON in ```json fences despite instructions — strip them defensively.
