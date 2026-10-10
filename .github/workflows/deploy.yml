@@ -28,21 +28,24 @@ jobs:
           VITE_GOOGLE_PLACE_ID: ${{ secrets.VITE_GOOGLE_PLACE_ID }}
           VITE_YOUTUBE_API_KEY: ${{ secrets.VITE_YOUTUBE_API_KEY }}
         run: npm run build
-      # Retrying with ftps changed nothing — all 3 attempts failed at the
-      # identical point ("creating folder assets/") with the identical
-      # ECONNRESET, pointing at something server/environment-specific
-      # rather than a random transient blip. Testing plain `ftp` here as
-      # step 1 of isolating the cause — some shared-hosting FTP servers
-      # handle plain-FTP passive-mode data connections more reliably than
-      # explicit FTPS from GitHub-hosted runners. Acceptable here since
-      # this only deploys public static site files, not secrets (the FTP
-      # credentials themselves still only travel as GitHub Actions
-      # secrets, never in this file). dangerous-clean-slate was already
-      # never set in this workflow (confirmed, not changed) — so that
-      # specific cause is ruled out without needing a code change.
-      - name: Deploy to Hostinger via FTP (attempt 1/3)
-        id: deploy1
-        continue-on-error: true
+      # Retrying (3x, with ftps then plain ftp) never helped — every attempt
+      # failed at the identical point ("creating folder assets/") with the
+      # identical ECONNRESET, which means it's deterministic, not transient.
+      # Retrying a deterministic failure is pointless, so that pattern is
+      # gone. Splitting the deploy instead: everything except assets/ first
+      # (this is the bulk of the site and has never been the thing that
+      # fails), then assets/ on its own with a longer timeout. If assets/
+      # still resets, the rest of the site is already live and only the
+      # assets/ step needs retrying by hand — not a full redeploy, and not
+      # a failed job that reverts nothing.
+      #
+      # SFTP (port 22) would likely be more reliable than FTP here, but
+      # switching to it needs confirming first that Hostinger's plan has
+      # SSH/SFTP access enabled (hPanel → Advanced → SSH Access) and new
+      # FTP_SFTP_* secrets — I have no access to hPanel to check that
+      # myself, so this stays on FTP until that's confirmed.
+      - name: Deploy site (everything except assets/) via FTP
+        id: deploy-main
         timeout-minutes: 15
         uses: SamKirkland/FTP-Deploy-Action@v4.4.0
         with:
@@ -54,48 +57,25 @@ jobs:
           log-level: verbose
           local-dir: ./dist/
           server-dir: /public_html/
+          exclude: |
+            **/assets/**
+          # Own state-tracking file so this step's diff-against-remote
+          # logic never mixes with the assets/-only step below — they
+          # cover completely different local-dir/server-dir scopes.
+          state-name: .ftp-deploy-sync-state-main.json
 
-      - name: Wait before retry (attempt 2)
-        if: steps.deploy1.outcome == 'failure'
-        run: |
-          echo "Attempt 1 failed (ECONNRESET or otherwise) — waiting 30s before retrying."
-          sleep 30
-
-      - name: Deploy to Hostinger via FTP (attempt 2/3)
-        id: deploy2
-        if: steps.deploy1.outcome == 'failure'
-        continue-on-error: true
-        timeout-minutes: 15
+      - name: Deploy assets/ via FTP
+        id: deploy-assets
+        timeout-minutes: 20
         uses: SamKirkland/FTP-Deploy-Action@v4.4.0
         with:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftp
-          timeout: 60000
+          timeout: 120000
           log-level: verbose
-          local-dir: ./dist/
-          server-dir: /public_html/
-
-      - name: Wait before retry (attempt 3)
-        if: steps.deploy1.outcome == 'failure' && steps.deploy2.outcome == 'failure'
-        run: |
-          echo "Attempt 2 failed as well — waiting 30s before the final retry."
-          sleep 30
-
-      # Final attempt is NOT continue-on-error — if this one also fails,
-      # the job must still show red, not a silent false-green success.
-      - name: Deploy to Hostinger via FTP (attempt 3/3)
-        id: deploy3
-        if: steps.deploy1.outcome == 'failure' && steps.deploy2.outcome == 'failure'
-        timeout-minutes: 15
-        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          protocol: ftp
-          timeout: 60000
-          log-level: verbose
-          local-dir: ./dist/
-          server-dir: /public_html/
+          local-dir: ./dist/assets/
+          server-dir: /public_html/assets/
+          dangerous-clean-slate: false
+          state-name: .ftp-deploy-sync-state-assets.json
