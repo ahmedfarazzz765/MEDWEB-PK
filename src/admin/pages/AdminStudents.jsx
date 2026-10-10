@@ -44,8 +44,12 @@ export default function AdminStudents() {
 
   const students = useMemo(() => data.map(s => ({
     ...s,
-    regCount: (s.registrations || []).length,
-    certCount: (s.certificates || []).length,
+    // Prefer the stored counters (maintained incrementally in
+    // upsertFromRegistration/upsertFromCertificate) — falls back to the
+    // array length only for a doc from before those fields existed, until
+    // its next registration/certificate upsert backfills a real count.
+    regCount: s.registrationCount ?? (s.registrations || []).length,
+    certCount: s.certificateCount ?? (s.certificates || []).length,
   })), [data])
 
   const totalRegistrations = students.reduce((a, s) => a + s.regCount, 0)

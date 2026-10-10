@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Calendar, Clock, User, CheckCircle, ArrowLeft, Star } from 'lucide-react'
-import { webinarsService, formsService, settingsService, studentsDbService, ambassadorsService, DEFAULT_WEBINAR_FORM_FIELDS } from '../firebase/services'
+import { webinarsService, formsService, settingsService, studentsDbService, ambassadorsService, DEFAULT_WEBINAR_FORM_FIELDS, normalizePhone } from '../firebase/services'
 import { sendWebinarConfirmation } from '../firebase/email'
 import { uploadToCloudinary } from '../firebase/cloudinary'
 import { applyNameTitleCase, resolveFormField } from '../lib/formFieldResolve'
@@ -136,6 +136,18 @@ export default function WebinarRegister() {
     const emailField = fields.find(f => f.type === 'email' && values[f.key])
     if (emailField && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values[emailField.key])) {
       setError('Please enter a valid email address.')
+      return
+    }
+    // A malformed phone number (wrong digit count, typo) silently fails to
+    // fold into the canonical 92-prefixed form in studentsDbService and
+    // creates a stray duplicate student record instead of joining the
+    // person's real one — catching it here, before submission, is the
+    // only reliable place to prevent that (fixing it after the fact means
+    // merging two Firestore docs by hand). Pakistani mobile numbers are
+    // always 11 digits locally (03XX-XXXXXXX) or 12 with the country code.
+    const rawPhone = resolveFormField(fields, values, { type: 'phone', labelRegex: /phone|whatsapp|contact/i, flatKeys: ['phone', 'whatsapp', 'contact'] })
+    if (rawPhone && !/^92\d{10}$/.test(normalizePhone(rawPhone))) {
+      setError('Please enter a valid phone number (e.g. 0300-1234567).')
       return
     }
     setError('')

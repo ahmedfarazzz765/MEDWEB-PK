@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { CheckCircle, ArrowLeft, Star, AlertCircle } from 'lucide-react'
-import { formsService, webinarsService, settingsService, studentsDbService, certificatesService } from '../firebase/services'
+import { formsService, webinarsService, settingsService, studentsDbService, certificatesService, normalizePhone } from '../firebase/services'
 import { uploadToCloudinary } from '../firebase/cloudinary'
 import { generateAndIssueCertificate } from '../lib/certificateGenerator'
 import { resolveFormField, applyNameTitleCase } from '../lib/formFieldResolve'
@@ -46,6 +46,16 @@ export default function DynamicForm() {
   const handleSubmit = async () => {
     const missing = (form.fields || []).filter(f => f.required && !values[f.key] && f.type !== 'checkbox')
     if (missing.length) { setError(`Please fill: ${missing.map(m => m.label).join(', ')}`); return }
+    // A malformed phone number (wrong digit count, typo) silently fails to
+    // fold into the canonical 92-prefixed form in studentsDbService and
+    // creates a stray duplicate student record instead of joining the
+    // person's real one — catching it here, before submission, is the
+    // only reliable place to prevent that.
+    const rawPhoneField = resolveFormField(form.fields || [], values, { type: 'phone', labelRegex: /phone|whatsapp|contact/i, flatKeys: ['phone', 'whatsapp', 'contact'] })
+    if (rawPhoneField && !/^92\d{10}$/.test(normalizePhone(rawPhoneField))) {
+      setError('Please enter a valid phone number (e.g. 0300-1234567).')
+      return
+    }
     setError(''); setStatus('loading')
     try {
       let clean = {}

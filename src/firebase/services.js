@@ -358,9 +358,31 @@ const STUDENT_DB_COL = 'studentDatabase'
 // digits) normalized to their 92-country-code form so "0329-1692899",
 // "+92 329 1692899" and "923291692899" all resolve to the same key.
 // Returns '' if nothing usable was given.
-function normalizePhone(raw) {
+// Exported (not just an internal helper) so form pages can validate a
+// phone number BEFORE submission — a malformed number (wrong digit count,
+// typo) silently fails to fold into the canonical 92-prefixed form here
+// and creates its own stray studentDatabase doc instead of joining the
+// person's real one. Catching that at entry time is the only reliable
+// fix; an already-malformed doc already in Firestore needs a human to
+// review and merge it, not an automatic fuzzy-match (which risks
+// wrongly merging two different people).
+//
+// KNOWN EXISTING STRAY DOC (found 2026-10-10, predates this guard, not
+// auto-fixed by it): studentDatabase/030443049943 — 12 raw digits starting
+// with "0" (a typo'd phone number one digit too long), sitting alongside
+// correctly-normalized docs like 923000060665. To be merged by hand in the
+// Firebase console into that person's real doc once identified — don't
+// delete this note until that's done.
+export function normalizePhone(raw) {
   let digits = String(raw || '').replace(/[^0-9]/g, '')
   if (!digits) return ''
+  // "00" is the international dialing prefix some people type instead of
+  // "+" (e.g. "0092 329 1692899") — strip it the same way a leading "+"
+  // is already implicitly stripped by the digits-only regex above, so
+  // both forms of the same number normalize to the same key. Without
+  // this, two registrations from the same person using different prefix
+  // styles would fork into two separate studentDatabase docs.
+  if (digits.startsWith('00')) digits = digits.slice(2)
   if (digits.length === 11 && digits.startsWith('0')) digits = '92' + digits.slice(1)
   else if (digits.length === 10 && digits.startsWith('3')) digits = '92' + digits
   return digits
@@ -442,6 +464,14 @@ export const studentsDbService = {
   },
 
   // Webinar Registration submission — one entry per distinct webinarId.
+  // registrationCount is maintained alongside the `registrations` array
+  // (incremented only when a genuinely new entry is added, same dedup
+  // check) so the Admin Students table can read a plain number straight
+  // off the doc instead of deriving it from the array's length on every
+  // render. An older doc from before this field existed just has
+  // registrationCount start from 0 here rather than backfilling the
+  // count of entries already in `registrations` — AdminStudents.jsx
+  // falls back to the array length for those until their next upsert.
   upsertFromRegistration: ({ email, name, phone, university, degree, webinarId, webinarTitle, registeredAt }) =>
     upsertStudent({ phone, email }, base => {
       const already = (base.registrations || []).some(r => r.webinarId === webinarId)
@@ -454,6 +484,7 @@ export const studentsDbService = {
           ...(base.registrations || []),
           { webinarId: webinarId || '', webinarTitle: webinarTitle || '', registeredAt: registeredAt || new Date().toISOString() },
         ],
+        registrationCount: already ? (base.registrationCount || 0) : (base.registrationCount || 0) + 1,
       }
     }),
 
@@ -469,7 +500,8 @@ export const studentsDbService = {
       degree: degree?.trim() || base.degree,
     })),
 
-  // Certificate issuance — one entry per distinct certCode.
+  // Certificate issuance — one entry per distinct certCode. certificateCount
+  // maintained the same way registrationCount is above.
   upsertFromCertificate: ({ email, phone, name, webinarId, webinarTitle, certCode, issuedAt }) =>
     upsertStudent({ phone, email }, base => {
       const already = (base.certificates || []).some(c => c.certCode === certCode)
@@ -480,6 +512,7 @@ export const studentsDbService = {
           ...(base.certificates || []),
           { webinarId: webinarId || '', webinarTitle: webinarTitle || '', certCode: certCode || '', issuedAt: issuedAt || new Date().toISOString() },
         ],
+        certificateCount: already ? (base.certificateCount || 0) : (base.certificateCount || 0) + 1,
       }
     }),
 
