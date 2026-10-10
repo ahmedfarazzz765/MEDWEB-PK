@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { FileText, Trash2, Edit2, Plus, Link2, Eye, Download, X, Star } from 'lucide-react'
+import { FileText, Trash2, Edit2, Plus, Link2, Eye, Download, X, Star, Copy } from 'lucide-react'
 import StatCard from '../components/StatCard'
 import DataTable from '../components/DataTable'
 import Modal from '../components/Modal'
@@ -46,6 +46,32 @@ export default function AdminForms() {
   const openAdd  = () => { setForm(emptyForm()); setEditId(null); setModal(true) }
   const openEdit = row => { setForm({ ...emptyForm(), ...row }); setEditId(row.id); setModal(true) }
   const close    = () => { setModal(false); setEditId(null) }
+
+  // Duplicate — copies every field/question (type, options, order, required
+  // flag) and the success-screen config exactly, but NOT the id/createdAt/
+  // updatedAt of the original. editId stays null, so handleSave below takes
+  // the exact same formsService.add() path "+ Create Form" already uses —
+  // no second create/save code path. Submissions never carry over: they
+  // live in a separate `formSubmissions` collection keyed by formId, and
+  // this new doc gets its own fresh id from Firestore, so there's nothing
+  // to explicitly exclude there. Opens straight into the editor (title
+  // defaults to "<original> (Copy)", description copied as-is) so both can
+  // be edited immediately before the first save.
+  const openDuplicate = row => {
+    setForm({
+      ...emptyForm(),
+      status: row.status || 'Active',
+      title: `${row.title} (Copy)`,
+      description: row.description || '',
+      fields: (row.fields || []).map(f => ({ ...f, options: [...(f.options || [])] })),
+      successConfig: {
+        message: row.successConfig?.message || '',
+        links: (row.successConfig?.links || []).map(l => ({ ...l })),
+      },
+    })
+    setEditId(null)
+    setModal(true)
+  }
 
   const addField = (type) => {
     const label = FIELD_TYPES.find(f => f.type === type)?.label || 'Field'
@@ -117,8 +143,9 @@ export default function AdminForms() {
       <div className="flex gap-1.5">
         <button onClick={() => setViewSubs(row)} className="p-1.5 rounded-lg hover:bg-blue-50 text-[#1655c3]" title="Responses"><Eye size={13} /></button>
         <button onClick={() => copyLink(v)} className="p-1.5 rounded-lg hover:bg-blue-50 text-[#64ac37]" title="Copy link"><Link2 size={13} /></button>
-        <button onClick={() => openEdit(row)} className="p-1.5 rounded-lg hover:bg-blue-50 text-[#1655c3]"><Edit2 size={13} /></button>
-        <button onClick={() => handleDelete(v)} className="p-1.5 rounded-lg hover:bg-red-50 text-red-400"><Trash2 size={13} /></button>
+        <button onClick={() => openEdit(row)} className="p-1.5 rounded-lg hover:bg-blue-50 text-[#1655c3]" title="Edit"><Edit2 size={13} /></button>
+        <button onClick={() => openDuplicate(row)} className="p-1.5 rounded-lg hover:bg-blue-50 text-[#1655c3]" title="Duplicate"><Copy size={13} /></button>
+        <button onClick={() => handleDelete(v)} className="p-1.5 rounded-lg hover:bg-red-50 text-red-400" title="Delete"><Trash2 size={13} /></button>
       </div>
     )},
   ]
