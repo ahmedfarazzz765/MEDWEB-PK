@@ -4,6 +4,7 @@ import jsPDF from 'jspdf'
 import { Award, CheckCircle, XCircle, Eye, Edit2, Download, Copy, ExternalLink, FileText, Plus, X, Folder, ArrowLeft, FileSpreadsheet, FileType } from 'lucide-react'
 import StatCard   from '../components/StatCard'
 import DataTable  from '../components/DataTable'
+import FolderGrid from '../components/FolderGrid'
 import Modal      from '../components/Modal'
 import FormField, { inputCls } from '../components/FormField'
 import ImageUpload from '../components/ImageUpload'
@@ -554,36 +555,17 @@ export default function AdminCertificates() {
           />
         </div>
       ) : (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-[#1a1a1a] text-base">Certificate Folders</h3>
-            <AdminButton size="sm" onClick={openIssue}>+ Issue Certificate</AdminButton>
-          </div>
-          {folders.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 text-gray-400 py-14">
-              <div className="w-11 h-11 rounded-2xl bg-gray-50 flex items-center justify-center">
-                <Folder size={18} className="text-gray-300" />
-              </div>
-              <span className="text-sm font-medium">No certificates yet — click Issue Certificate to create one</span>
-            </div>
-          ) : (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {folders.map(f => (
-                <button key={f.key} onClick={() => setActiveFolderKey(f.key)}
-                  className="flex items-center gap-3 text-left p-4 rounded-2xl border border-gray-100 hover:border-[#1655c3]/40 hover:shadow-md transition-all duration-200 bg-gray-50/60 hover:bg-white">
-                  <div className="w-11 h-11 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
-                    <Folder size={20} className="text-[#1655c3]" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="font-semibold text-sm text-[#1a1a1a] truncate">{f.label}</div>
-                    <div className="text-xs text-gray-400 mt-0.5">{f.latestIssued ? `Latest: ${f.latestIssued}` : 'No issue date'}</div>
-                  </div>
-                  <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-blue-50 text-[#1655c3] shrink-0">{f.certs.length}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <FolderGrid
+          title="Certificate Folders"
+          items={folders.map(f => ({
+            key: f.key, label: f.label,
+            sublabel: f.latestIssued ? `Latest: ${f.latestIssued}` : 'No issue date',
+            count: f.certs.length,
+          }))}
+          onOpen={setActiveFolderKey}
+          emptyMessage="No certificates yet — click Issue Certificate to create one"
+          actions={<AdminButton size="sm" onClick={openIssue}>+ Issue Certificate</AdminButton>}
+        />
       )}
 
       {/* EDIT MODAL (legacy design-picker records only) with live preview */}
