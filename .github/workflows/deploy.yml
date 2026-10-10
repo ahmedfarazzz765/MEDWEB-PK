@@ -28,18 +28,18 @@ jobs:
           VITE_GOOGLE_PLACE_ID: ${{ secrets.VITE_GOOGLE_PLACE_ID }}
           VITE_YOUTUBE_API_KEY: ${{ secrets.VITE_YOUTUBE_API_KEY }}
         run: npm run build
-      # Hostinger's FTP server has been resetting the data-socket connection
-      # mid-transfer ("read ECONNRESET") during/after the ~9MB assets/
-      # upload, causing the job to fail outright and need a manual re-run.
-      # SamKirkland/FTP-Deploy-Action doesn't expose a concurrency/threads
-      # input (it isn't git-ftp — this is a separate project built on
-      # basic-ftp) as far as I can tell, and nick-fields/retry can only
-      # retry a shell `command`, not wrap a `uses:` action like this one —
-      # so instead of a single step, this is the same deploy step run up
-      # to 3 times with a cooldown between attempts, continuing past a
-      # failed attempt only to try again. `log-level: verbose` is on for
-      # now so a failure's actual FTP-level cause shows up in the log —
-      # worth turning back down to `standard` once this is confirmed fixed.
+      # Retrying with ftps changed nothing — all 3 attempts failed at the
+      # identical point ("creating folder assets/") with the identical
+      # ECONNRESET, pointing at something server/environment-specific
+      # rather than a random transient blip. Testing plain `ftp` here as
+      # step 1 of isolating the cause — some shared-hosting FTP servers
+      # handle plain-FTP passive-mode data connections more reliably than
+      # explicit FTPS from GitHub-hosted runners. Acceptable here since
+      # this only deploys public static site files, not secrets (the FTP
+      # credentials themselves still only travel as GitHub Actions
+      # secrets, never in this file). dangerous-clean-slate was already
+      # never set in this workflow (confirmed, not changed) — so that
+      # specific cause is ruled out without needing a code change.
       - name: Deploy to Hostinger via FTP (attempt 1/3)
         id: deploy1
         continue-on-error: true
@@ -49,8 +49,7 @@ jobs:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          protocol: ftps
-          security: loose
+          protocol: ftp
           timeout: 60000
           log-level: verbose
           local-dir: ./dist/
@@ -72,8 +71,7 @@ jobs:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          protocol: ftps
-          security: loose
+          protocol: ftp
           timeout: 60000
           log-level: verbose
           local-dir: ./dist/
@@ -96,8 +94,7 @@ jobs:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          protocol: ftps
-          security: loose
+          protocol: ftp
           timeout: 60000
           log-level: verbose
           local-dir: ./dist/
