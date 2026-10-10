@@ -64,18 +64,96 @@ jobs:
           # cover completely different local-dir/server-dir scopes.
           state-name: .ftp-deploy-sync-state-main.json
 
-      - name: Deploy assets/ via FTP
-        id: deploy-assets
-        timeout-minutes: 20
+      # The main-site step above now succeeds reliably — confirmed by a
+      # real run — and the ECONNRESET is isolated specifically to this
+      # assets/ step, pointing at assets/'s own size/file-count as the
+      # trigger, not the deploy as a whole. Checked the real dist/assets/
+      # output to plan this rather than guessing: it's a FLAT directory
+      # (Vite content-hashes every filename and drops them all in one
+      # place — there are no images/, fonts/ subfolders to split by, so
+      # "split by subfolder" isn't literally possible here). Split by file
+      # TYPE instead, using extension globs that stay stable across builds
+      # even though the hash in each filename changes every build:
+      #   code (js+css)  ~2.8 MB
+      #   PNGs           ~4.7 MB  (the largest group — most likely culprit)
+      #   JPEGs          ~0.4 MB
+      # Each step now transfers well under half of what the single
+      # all-of-assets/ step was sending in one FTP session. Timeout raised
+      # to 180s (from 120s) per step per the request, even though each
+      # step now carries less data. On "passive mode / per-file retry":
+      # I don't have live access to re-check this action's current docs,
+      # and from what I know of it (built on the basic-ftp library) it
+      # doesn't expose a user-facing passive-mode toggle or a connection-
+      # retry-per-file input — there's nothing to enable here. If these
+      # three still reset, that's a real server-side transfer-size/duration
+      # limit on this Hostinger plan, not something any client-side config
+      # here can work around.
+      - name: "Deploy assets/ via FTP (code: js, css)"
+        id: deploy-assets-code
+        timeout-minutes: 15
         uses: SamKirkland/FTP-Deploy-Action@v4.4.0
         with:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftp
-          timeout: 120000
+          timeout: 180000
           log-level: verbose
           local-dir: ./dist/assets/
           server-dir: /public_html/assets/
           dangerous-clean-slate: false
-          state-name: .ftp-deploy-sync-state-assets.json
+          exclude: |
+            **/*.png
+            **/*.jpg
+            **/*.jpeg
+            **/*.gif
+            **/*.webp
+            **/*.svg
+          state-name: .ftp-deploy-sync-state-assets-code.json
+
+      - name: Deploy assets/ via FTP (PNG images)
+        id: deploy-assets-png
+        timeout-minutes: 15
+        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftp
+          timeout: 180000
+          log-level: verbose
+          local-dir: ./dist/assets/
+          server-dir: /public_html/assets/
+          dangerous-clean-slate: false
+          exclude: |
+            **/*.js
+            **/*.css
+            **/*.jpg
+            **/*.jpeg
+            **/*.gif
+            **/*.webp
+            **/*.svg
+          state-name: .ftp-deploy-sync-state-assets-png.json
+
+      - name: Deploy assets/ via FTP (JPEG images)
+        id: deploy-assets-jpeg
+        timeout-minutes: 15
+        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftp
+          timeout: 180000
+          log-level: verbose
+          local-dir: ./dist/assets/
+          server-dir: /public_html/assets/
+          dangerous-clean-slate: false
+          exclude: |
+            **/*.js
+            **/*.css
+            **/*.png
+            **/*.gif
+            **/*.webp
+            **/*.svg
+          state-name: .ftp-deploy-sync-state-assets-jpeg.json
