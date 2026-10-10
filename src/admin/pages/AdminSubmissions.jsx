@@ -151,12 +151,23 @@ export default function AdminSubmissions() {
     return { id: viewStudent.id, submittedAt: raw.registeredAt, values }
   })() : null
 
+  // Columns are driven entirely by this webinar's own registration form
+  // schema (activeFields) — not the fixed Name/Phone/Email/University
+  // summary columns shown on screen — so a custom field added via Form
+  // Builder for this specific webinar (e.g. "T-Shirt Size", "Dietary
+  // Requirements") shows up as its own column with real data, not just
+  // the 4 fixed ones. Still reuses the same downloadCsv() helper the
+  // Newsletter export already uses, not a second exporter — only the
+  // header/rows fed into it are built dynamically per-folder instead of
+  // hardcoded. Same boolean-to-Yes/No formatting ResponsesModal already
+  // uses for a checkbox field's raw `true`/`false` value.
   const exportFolderCsv = () => {
     if (!activeFolder) return
+    const formatValue = v => (typeof v === 'boolean' ? (v ? 'Yes' : 'No') : (v ?? ''))
     downloadCsv(
       `${activeFolder.label.replace(/\s+/g, '_')}_registrations.csv`,
-      ['Name', 'Phone', 'Email', 'University', 'Registered'],
-      students.map(s => [s.name, s.phone, s.email, s.university, formatDateStr(s.registeredAt)])
+      [...activeFields.map(f => f.label), 'Registered'],
+      students.map(s => [...activeFields.map(f => formatValue(s.raw[f.key])), formatDateStr(s.registeredAt)])
     )
   }
   const exportNewsletterCsv = () => {
