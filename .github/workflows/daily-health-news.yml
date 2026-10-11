@@ -16,6 +16,12 @@ on:
 jobs:
   fetch-health-news:
     runs-on: ubuntu-latest
+    # Worst-case estimate: 2 articles × (primary model's 4 retries, up to
+    # 110s total, + fallback model's 2 retries, up to 20s total) ≈ 260s of
+    # possible Gemini wait time alone, plus checkout/npm install/NewsAPI/
+    # Firestore overhead. 10 minutes leaves real headroom above that
+    # estimate while still guaranteeing the job can't hang indefinitely.
+    timeout-minutes: 10
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

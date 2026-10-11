@@ -32,21 +32,38 @@ const SERVICE_ACCOUNT_JSON = process.env.FIREBASE_SERVICE_ACCOUNT
 // gemini-2.0-flash was retired by Google and 404s on every call — confirmed
 // from a real workflow run (18 headlines fetched fine, all 3 rewrite
 // attempts failed with "This model ... is no longer available ... use
-// models/gemini-3.8-flash"). Updated to the model name Google's own error
-// pointed at.
-const GEMINI_MODEL = 'gemini-3.8-flash'
+// models/gemini-3.8-flash"). gemini-3.8-flash is confirmed working from a
+// later real run (produced an actual draft). No live internet access from
+// here to re-verify either model id is still current as of right now —
+// if BOTH entries below ever 404, that's the next thing to check by hand
+// (list available models at https://ai.google.dev/gemini-api/docs/models).
+//
+// Tried in order per article; a 404 (invalid/retired model) or an
+// exhausted-retries 503/429 (sustained overload) on the first one falls
+// through to the second instead of giving up on that article entirely.
+// "-latest" is a Google-maintained alias that auto-points at whatever
+// their current flash model is, so if gemini-3.8-flash itself gets
+// retired later, this fallback has a real chance of still working
+// without needing a code change — a pinned second model would just be
+// one more name that can independently go stale.
+const GEMINI_MODELS = ['gemini-3.8-flash', 'gemini-flash-latest']
 // Lowered from 3 to 2 — two of three articles exhausted every retry and
 // still hit 503 in a real run, meaning the free-tier endpoint was under
 // sustained load, not just a brief spike. Fewer candidates per run means
 // fewer near-simultaneous requests piling onto the same overloaded endpoint.
 const MAX_ARTICLES_PER_RUN = 2
 // Backoff schedule for a transient Gemini overload (503) or rate limit
-// (429). Extended with a 4th, longer attempt (60s) after a real run saw
-// persistent 503s survive all three original retries (5s/15s/30s,
-// ~50s total) — in case the load spike just outlasts that window.
-// Retried per-article, so one persistently overloaded call never blocks
-// the others from succeeding.
+// (429) on the PRIMARY model. Extended with a 4th, longer attempt (60s)
+// after a real run saw persistent 503s survive all three original retries
+// (5s/15s/30s, ~50s total) — in case the load spike just outlasts that
+// window. Retried per-article, so one persistently overloaded call never
+// blocks the others from succeeding.
 const GEMINI_RETRY_DELAYS_MS = [5000, 15000, 30000, 60000]
+// Shorter budget for the FALLBACK model — by the time this runs, the
+// primary model's full retry budget has likely already been spent, and
+// the job has a hard timeout-minutes ceiling in the workflow now, so this
+// stays short deliberately rather than doubling the worst-case runtime.
+const GEMINI_FALLBACK_RETRY_DELAYS_MS = [5000, 15000]
 
 function fail(message) {
   console.error(`❌ ${message}`)
@@ -54,11 +71,19 @@ function fail(message) {
 }
 
 // Thrown specifically when Gemini 404s on the model itself — see
-// rewriteWithGemini() below. Kept distinct from a generic Error so main()
-// can react differently: retrying the same invalid model against the next
-// candidate would just 404 again, so the whole run stops after the first
-// one instead of burning through every candidate for an identical failure.
+// rewriteWithGemini() below. Kept distinct from a generic Error so the
+// model-fallback logic and main()'s final exit-code decision can react
+// differently to it than to an ordinary failure.
 class GeminiModelError extends Error {}
+// Thrown when every retry attempt for a model was exhausted on a 503
+// (overloaded) or 429 (rate-limited) response — i.e. a real, sustained API
+// overload, not a bug in this script. Distinguished from a generic Error
+// so main() can exit 0 (with a clear warning) instead of failing the whole
+// job when EVERY candidate's failure was this kind — per the explicit
+// requirement that only genuine bugs (missing secrets, Firestore errors,
+// an invalid model) should trigger the "all jobs have failed" email, not
+// Gemini simply being busy on a given day.
+class GeminiOverloadError extends Error {}
 
 if (!NEWS_API_KEY) fail('Missing NEWS_API_KEY environment variable')
 if (!GEMINI_API_KEY) fail('Missing GEMINI_API_KEY environment variable')
@@ -285,18 +310,17 @@ function extractJsonResponse(raw, finishReason) {
   throw new Error(`Gemini returned non-JSON output. ${diagnostic}`)
 }
 
-// Calls the Gemini API, retrying a transient 503 (overloaded) or 429
-// (rate-limited) response with exponential-ish backoff (GEMINI_RETRY_DELAYS_MS)
-// before giving up on this specific article — the rest of the run's
-// candidates are unaffected either way (see the per-article try/catch in
-// main()). A 404 (invalid model) is NOT retried — that's a config problem,
-// not a transient one, so it fails immediately as GeminiModelError exactly
-// as before. Any other non-ok status also fails immediately.
-async function callGeminiWithRetry(requestBody) {
-  const maxRetries = GEMINI_RETRY_DELAYS_MS.length
+// Calls ONE specific Gemini model, retrying a transient 503 (overloaded) or
+// 429 (rate-limited) response with backoff (per `retryDelays`) before
+// giving up on this model. A 404 (model invalid/retired) is never retried
+// — that's a config problem, not a transient one. Any other non-ok status
+// (e.g. a bad API key, a malformed request) also fails immediately — model
+// fallback wouldn't fix those either, only a different 404/503/429 would.
+async function callGeminiOnce(requestBody, model, retryDelays) {
+  const maxRetries = retryDelays.length
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -307,30 +331,50 @@ async function callGeminiWithRetry(requestBody) {
 
     const bodyText = await res.text()
 
-    // A 404 here means the model itself is invalid/retired (as opposed to a
-    // transient/rate-limit/auth failure) — Google's own error body says so
-    // explicitly (e.g. "model ... is no longer available"). Distinguished
-    // with a dedicated error type so main() can stop the whole run after
-    // the first failure instead of repeating the same doomed request against
-    // every remaining candidate and creating zero drafts with three
-    // identical, easy-to-miss log lines.
     if (res.status === 404) {
       throw new GeminiModelError(
-        `Gemini model "${GEMINI_MODEL}" was rejected as not found (HTTP 404). ` +
-        `It's likely been retired/renamed by Google — update GEMINI_MODEL in ` +
-        `scripts/fetch-health-news.js to a currently valid model id. Google's response: ${bodyText}`
+        `Gemini model "${model}" was rejected as not found (HTTP 404) — likely retired/renamed by Google. Response: ${bodyText}`
       )
     }
 
-    if ((res.status === 503 || res.status === 429) && attempt < maxRetries) {
-      const delayMs = GEMINI_RETRY_DELAYS_MS[attempt]
-      console.warn(`  ⏳ Gemini overloaded (HTTP ${res.status}), retrying in ${delayMs / 1000}s... (attempt ${attempt + 1}/${maxRetries})`)
-      await sleep(delayMs)
-      continue
+    if (res.status === 503 || res.status === 429) {
+      if (attempt < maxRetries) {
+        const delayMs = retryDelays[attempt]
+        console.warn(`  ⏳ Gemini model "${model}" overloaded (HTTP ${res.status}), retrying in ${delayMs / 1000}s... (attempt ${attempt + 1}/${maxRetries})`)
+        await sleep(delayMs)
+        continue
+      }
+      throw new GeminiOverloadError(
+        `Gemini model "${model}" still overloaded (HTTP ${res.status}) after ${maxRetries} retries. Response: ${bodyText}`
+      )
     }
 
     throw new Error(`Gemini request failed: HTTP ${res.status} — ${bodyText}`)
   }
+}
+
+// Tries each model in GEMINI_MODELS in order — only falls through to the
+// next one on a 404 (that model is gone) or an overload that survived its
+// full retry budget (GeminiModelError / GeminiOverloadError). Any other
+// kind of error (bad request, bad API key, network failure) is NOT model-
+// specific, so it's thrown immediately rather than wasting time retrying
+// it against a different model that would fail the exact same way.
+async function callGeminiWithFallback(requestBody) {
+  let lastError
+  for (let i = 0; i < GEMINI_MODELS.length; i++) {
+    const model = GEMINI_MODELS[i]
+    const retryDelays = i === 0 ? GEMINI_RETRY_DELAYS_MS : GEMINI_FALLBACK_RETRY_DELAYS_MS
+    try {
+      return await callGeminiOnce(requestBody, model, retryDelays)
+    } catch (e) {
+      lastError = e
+      const isLastModel = i === GEMINI_MODELS.length - 1
+      const isFallbackWorthy = e instanceof GeminiModelError || e instanceof GeminiOverloadError
+      if (isLastModel || !isFallbackWorthy) throw e
+      console.warn(`  ⚠️ "${model}" failed (${e.constructor.name}) — falling back to "${GEMINI_MODELS[i + 1]}"...`)
+    }
+  }
+  throw lastError
 }
 
 async function rewriteWithGemini(article, linkCandidates) {
@@ -377,9 +421,11 @@ Source URL: ${article.url}`
   // actually supports (the previous 32768 — sized for a since-abandoned
   // 5000-7000 word target — plausibly contributed to the truncation seen
   // in a real run, if the model's real ceiling is lower than that).
-  // Transient 503/429s are retried inside callGeminiWithRetry(); anything
-  // else (incl. 404) throws.
-  const res = await callGeminiWithRetry({
+  // Transient 503/429s are retried per-model inside callGeminiOnce(), and
+  // callGeminiWithFallback() tries the next model in GEMINI_MODELS if the
+  // first one 404s or exhausts its retries; anything else throws straight
+  // through.
+  const res = await callGeminiWithFallback({
     contents: [{ parts: [{ text: prompt }] }],
     generationConfig: { maxOutputTokens: 4096 },
   })
@@ -430,6 +476,15 @@ async function main() {
   let created = 0
   let failed = 0
   let modelInvalid = false
+  // Tracks whether EVERY failure in this run was a GeminiOverloadError
+  // (both models exhausted their retries under sustained load) — if so,
+  // zero drafts is an expected outcome on a bad API day, not a bug, and
+  // the run should exit 0 with a clear warning instead of failing the
+  // job and sending an "all jobs have failed" email for something no
+  // code change here can fix. Any OTHER kind of error (Firestore write
+  // failure, malformed JSON that survived both fallback attempts, etc.)
+  // flips this to true, since that IS a real bug worth failing loudly on.
+  let hadNonOverloadFailure = false
   for (const article of candidates) {
     try {
       console.log(`→ Rewriting: "${article.title}" (${article.source?.name || 'unknown source'})`)
@@ -467,13 +522,15 @@ async function main() {
       failed++
       console.error(`  ✗ Skipped "${article.title}": ${e.message}`)
       if (e instanceof GeminiModelError) {
-        // Every remaining candidate would fail identically — stop here
-        // instead of repeating the same 404 for each one and burying the
-        // one actionable line in duplicate noise.
+        // callGeminiWithFallback() already tried every model in
+        // GEMINI_MODELS — this means ALL of them 404'd, which every
+        // remaining candidate would hit identically. Stop here instead of
+        // repeating the same failure for each one.
         modelInvalid = true
-        console.error(`\n❌ Gemini model "${GEMINI_MODEL}" is invalid — stopping this run early instead of retrying it against every remaining candidate.`)
+        console.error(`\n❌ All configured Gemini models (${GEMINI_MODELS.join(', ')}) are unavailable — stopping this run early instead of retrying every remaining candidate against the same failure.`)
         break
       }
+      if (!(e instanceof GeminiOverloadError)) hadNonOverloadFailure = true
     }
   }
 
@@ -482,11 +539,27 @@ async function main() {
     `(${headlines.length} fetched, ${headlines.length - fresh.length} already existed as drafts/published).`
   )
 
-  // A bad model config (or every candidate failing outright) must surface
-  // as a failed Actions run, not a quiet green checkmark with zero drafts —
-  // that silent-3x-failure was exactly the reported bug.
-  if (modelInvalid) fail(`Gemini model "${GEMINI_MODEL}" is not available — update GEMINI_MODEL in scripts/fetch-health-news.js.`)
-  if (created === 0) fail('No drafts were created this run — see the errors above.')
+  // A bad model config must still surface as a failed Actions run — that's
+  // a real bug (a code change is needed to fix it), not something that
+  // resolves itself tomorrow.
+  if (modelInvalid) fail(`All configured Gemini models (${GEMINI_MODELS.join(', ')}) are unavailable — update GEMINI_MODELS in scripts/fetch-health-news.js.`)
+
+  if (created === 0) {
+    if (!hadNonOverloadFailure) {
+      // Every candidate failed purely from sustained Gemini API overload
+      // (503/429) after exhausting retries across both models — an
+      // expected outcome on a bad API day, not a bug in this script.
+      // Exits 0 deliberately so this doesn't trigger the "all jobs have
+      // failed" email for something no code change here can fix; tomorrow's
+      // scheduled run will just try again.
+      console.warn(
+        `\n⚠️  No drafts created — every candidate failed due to Gemini API overload after exhausting all retries. ` +
+        `This is expected under sustained load, not a bug. Exiting 0.`
+      )
+      return
+    }
+    fail('No drafts were created this run due to a non-overload error — see the errors above.')
+  }
 }
 
 main().catch(e => {
