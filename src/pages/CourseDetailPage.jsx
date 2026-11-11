@@ -6,6 +6,7 @@ import { coursesService } from '../firebase/services'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
 import CoverImage from '../components/CoverImage'
+import SEO, { SITE_URL } from '../components/SEO'
 
 export default function CourseDetailPage() {
   const { id } = useParams()
@@ -54,8 +55,26 @@ export default function CourseDetailPage() {
   const fullDescription = course.fullDescription || course.description
   const instructorInitials = (course.instructor || '?').replace(/^Dr\.?\s*/i, '').split(' ').map(n => n[0]).slice(0, 2).join('')
 
+  const courseJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Course',
+    name: course.title,
+    description: fullDescription || `${course.title} — a MEDWEB-PK course for medical and pharmacy students.`,
+    provider: { '@type': 'Organization', name: 'MEDWEB-PK', sameAs: SITE_URL },
+    ...(course.instructor ? { hasCourseInstance: { '@type': 'CourseInstance', courseMode: 'Online', instructor: { '@type': 'Person', name: course.instructor } } } : {}),
+    ...(course.rating > 0 ? { aggregateRating: { '@type': 'AggregateRating', ratingValue: course.rating, ratingCount: Math.max(course.students || 1, 1) } } : {}),
+  }
+
   return (
     <div className="font-poppins bg-[#f7f9fc] min-h-screen">
+      <SEO
+        title={course.title}
+        description={fullDescription || `${course.title} — a MEDWEB-PK course for medical and pharmacy students.`}
+        path={`/courses/${id}`}
+        image={poster}
+        type="article"
+        jsonLd={courseJsonLd}
+      />
       <Navbar />
 
       {/* Hero band */}

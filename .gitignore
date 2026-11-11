@@ -1,5 +1,9 @@
 node_modules
+dist
 dist-ssr
+# Regenerated fresh on every `npm run build` by scripts/generate-sitemap.js
+# — committing a snapshot would just go stale.
+public/sitemap.xml
 *.local
 
 .env

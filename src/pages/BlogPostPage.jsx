@@ -5,6 +5,7 @@ import { blogService } from '../firebase/services'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
 import PostArticleView from '../components/PostArticleView'
+import SEO from '../components/SEO'
 
 export default function BlogPostPage() {
   const { slug } = useParams()
@@ -52,6 +53,13 @@ export default function BlogPostPage() {
 
   return (
     <div className="min-h-screen">
+      <SEO
+        title={post.title}
+        description={post.excerpt}
+        path={`/blog/${slug}`}
+        image={post.imageUrl}
+        type="article"
+      />
       <Navbar />
       <PostArticleView
         post={post}

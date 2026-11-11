@@ -37,6 +37,7 @@ import RequireAmbassadorAuth from './ambassador/RequireAmbassadorAuth'
 import ComingSoonPage from './ambassador/ComingSoonPage'
 import WebinarAnnouncementPopup from './components/WebinarAnnouncementPopup'
 import NewsPopup from './components/NewsPopup'
+import NotFoundPage from './pages/NotFoundPage'
 
 // Marketing popups belong on the public site only — mounting them
 // unconditionally at the Router root meant refreshing any /admin page
@@ -107,6 +108,7 @@ function App() {
         <Route path="/ambassador/referrals"      element={<RequireAmbassadorAuth><ComingSoonPage navKey="referrals" /></RequireAmbassadorAuth>} />
         <Route path="/ambassador/rewards"        element={<RequireAmbassadorAuth><ComingSoonPage navKey="rewards" /></RequireAmbassadorAuth>} />
         <Route path="/ambassador/help"           element={<RequireAmbassadorAuth><ComingSoonPage navKey="help" /></RequireAmbassadorAuth>} />
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
       </ErrorBoundary>
     </Router>

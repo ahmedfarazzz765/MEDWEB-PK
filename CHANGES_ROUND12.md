@@ -117,3 +117,90 @@ still needs manual verification.
 `/contact` all return HTTP 200. Same caveat as Prompt 1 — no real browser
 available, so this confirms the server doesn't crash, not that the UI
 renders/behaves correctly.
+
+## Prompt 3 — Technical SEO
+
+### 1. react-helmet-async — unique title/description/canonical/OG/Twitter
+- Installed `react-helmet-async@3.0.0`. `main.jsx` wraps `<App>` in
+  `<HelmetProvider>`.
+- `components/SEO.jsx` (new): shared component rendering title,
+  description, canonical, Open Graph, Twitter Card, and optional JSON-LD.
+- Wired into `HomePage`, `WebinarDetailPage`, `CourseDetailPage`,
+  `BlogPostPage`, `NewsPostPage` (migrated off the old imperative
+  `setPageMeta()` — see `lib/pageMeta.js`, still used by
+  `CertificatePage.jsx` which wasn't in this prompt's scope),
+  `AnnouncementPage`, and every list/legal page (Webinars, Courses, Blog,
+  News, Team, Speakers, Ambassadors, Advisory Board, Announcements, About,
+  Privacy/Terms/Refund) — 22 pages total.
+
+### 2. Pre-rendering for crawlers/link previews
+- Not full headless-Chrome DOM prerendering — too heavy (needs a Chromium
+  binary in CI) for what's actually needed here. Instead:
+  `scripts/generate-static-meta.js` (new) runs after `vite build` and
+  writes a real `dist/<route>/index.html` per public route, built from the
+  actual compiled `dist/index.html` (correct hashed asset paths) with that
+  route's own title/description/canonical/OG/Twitter tags injected into
+  the raw HTML — so a non-JS crawler (WhatsApp, LinkedIn, Twitter) sees
+  real per-page content immediately, not the generic site-wide tags every
+  route shared before. A real browser still loads the same JS bundle and
+  gets the full interactive app; `react-helmet-async` keeps tags in sync
+  client-side on top of this.
+- Host reality check: the actual deploy target is **Hostinger via FTP**,
+  not Vercel — `vercel.json` is leftover/unused (confirmed earlier) and
+  wasn't touched. Configured `public/.htaccess` instead (see #4 below).
+- `package.json`: `"build"` now runs
+  `generate-sitemap.js && vite build && generate-static-meta.js`.
+- `.github/workflows/deploy.yml`: build step now also gets
+  `FIREBASE_SERVICE_ACCOUNT` (same secret `scripts/fetch-health-news.js`
+  already uses) so the dynamic per-item pages actually generate in CI —
+  both scripts degrade gracefully (warn + static-only output) without it,
+  so a local build never fails over a missing secret.
+- Known limitation: `generate-static-meta.js`'s static-page titles/
+  descriptions are hand-kept in sync with each page's `<SEO>` props (a
+  plain Node script can't import JSX) — update both if one changes.
+
+### 3. Sitemap
+- `scripts/generate-sitemap.js` (new): writes `public/sitemap.xml` from
+  the static route list plus real Firestore data — published webinars,
+  active courses, published blog posts, published news, enabled
+  announcements. Runs before `vite build` so Vite copies the real file
+  into `dist/`. Gitignored (regenerated every build, a committed snapshot
+  would just go stale).
+
+### 4. Real 404
+- `pages/NotFoundPage.jsx` (new) + a `<Route path="*">` catch-all in
+  `App.jsx` — there was no fallback at all before (confirmed in Prompt 1:
+  an unmatched path rendered blank).
+- `public/.htaccess`: replaced the blanket rewrite-everything-to-200 rule
+  with `ErrorDocument 404 /index.html` — Apache serves a real file
+  directly (200) when one exists (including every route
+  `generate-static-meta.js` pre-generates), and only falls back to
+  index.html's body under a genuine 404 status for anything else, so a
+  truly broken/typo'd URL is no longer indistinguishable from a real page
+  to crawlers or monitoring tools that check status codes.
+
+### 5. JSON-LD
+- `HomePage`: `EducationalOrganization`.
+- `WebinarDetailPage`: `Event` (startDate parsed defensively from the
+  admin's free-text date/time fields — omitted rather than ever emitted
+  invalid if unparseable).
+- `CourseDetailPage`: `Course` (+ `AggregateRating` when a real rating
+  exists).
+
+---
+
+**Housekeeping:** `.gitignore` was missing `dist` entirely (only
+`dist-ssr` was listed) — added, now that a real build was actually run
+locally to verify all of the above.
+
+**Verification:** every touched/new file passed an `esbuild` syntax
+check, AND the full `npm run build` was actually run end-to-end (not just
+syntax-checked) — completed successfully: 15-URL sitemap generated
+correctly, Vite build succeeded (pre-existing ~2.8MB main JS bundle
+warning — that's Prompt 4's scope), and `generate-static-meta.js`
+correctly produced all 13 static route pages (dynamic per-item pages were
+correctly skipped — no `FIREBASE_SERVICE_ACCOUNT` available in this
+sandbox; they'll generate for real in actual CI). Spot-checked
+`dist/webinars/index.html` and the homepage's own `dist/index.html` —
+all tags present and correct. `npm run dev` still serves all routes
+including the new 404 catch-all.

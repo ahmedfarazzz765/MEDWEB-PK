@@ -1,8 +1,16 @@
 <IfModule mod_rewrite.c>
   RewriteEngine On
-  RewriteBase /
-  RewriteRule ^index\.html$ - [L]
-  RewriteCond %{REQUEST_FILENAME} !-f
-  RewriteCond %{REQUEST_FILENAME} !-d
-  RewriteRule . /index.html [L]
 </IfModule>
+
+# SPA fallback with a REAL 404 status for genuinely unknown paths — the
+# previous blanket RewriteRule silently rewrote every non-file/non-directory
+# path to /index.html with HTTP 200, so a typo'd/removed URL was
+# indistinguishable from a real page to any crawler or monitoring tool that
+# checks status codes. ErrorDocument only fires when Apache's own file
+# lookup genuinely fails (any path that isn't a real file — scripts/
+# generate-static-meta.js prerenders every known public route to a real
+# dist/<route>/index.html, so those are served directly with a real 200;
+# this only applies to paths that aren't one of those). The response body
+# is still index.html, so React Router's client-side app loads normally
+# and renders the right page/404 screen either way.
+ErrorDocument 404 /index.html

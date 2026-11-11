@@ -8,6 +8,7 @@ import SectionHeading from '../components/SectionHeading'
 import CardRowSkeleton from '../components/CardRowSkeleton'
 import SectionEmptyState from '../components/SectionEmptyState'
 import CoverImage from '../components/CoverImage'
+import SEO from '../components/SEO'
 
 const PAGE_SIZE = 12
 
@@ -56,6 +57,7 @@ export default function NewsListPage() {
 
   return (
     <div className="font-poppins bg-[#f7f9fc] min-h-screen">
+      <SEO title="Medical News" description="Curated medical news for healthcare students, properly sourced and referenced." path="/news" />
       <Navbar />
       <div className="max-w-7xl mx-auto px-4 pt-10 pb-16">
         <Link to="/" className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-[#1655c3] mb-6 transition-colors">

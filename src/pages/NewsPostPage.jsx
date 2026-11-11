@@ -4,7 +4,7 @@ import { ArrowLeft, Calendar, ExternalLink, Link2 } from 'lucide-react'
 import DOMPurify from 'dompurify'
 import { motion } from 'framer-motion'
 import { newsService } from '../firebase/services'
-import { setPageMeta } from '../lib/pageMeta'
+import SEO from '../components/SEO'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
 import CoverImage from '../components/CoverImage'
@@ -59,24 +59,6 @@ export default function NewsPostPage() {
       .catch(() => setOthers([]))
   }, [item])
 
-  // Per-article <title>/<meta> — metaTitle/metaDescription come from the
-  // automated draft pipeline (scripts/fetch-health-news.js) when present;
-  // an admin-authored item without them falls back to the title and a
-  // truncated plain-text version of the content, same idea as the
-  // AI-generated ones would produce. Same client-side-only limitation as
-  // CertificatePage.jsx's setPageMeta usage: correct for a real visitor's
-  // tab/description and any crawler that executes JS, not guaranteed for
-  // a crawler that fetches raw HTML (this is a static SPA, no SSR).
-  useEffect(() => {
-    if (!item) return
-    setPageMeta({
-      title: item.metaTitle || item.title,
-      description: item.metaDescription || fallbackDescription(item.content),
-      image: item.imageUrl,
-      url: window.location.href,
-    })
-  }, [item])
-
   if (item === undefined) {
     return (
       <div className="font-poppins bg-[#f7f9fc] min-h-screen">
@@ -107,6 +89,18 @@ export default function NewsPostPage() {
 
   return (
     <div className="font-poppins bg-[#f7f9fc] min-h-screen">
+      {/* metaTitle/metaDescription come from the automated draft pipeline
+          (scripts/fetch-health-news.js) when present; an admin-authored
+          item without them falls back to the title and a truncated
+          plain-text version of the content, same idea as the AI-generated
+          ones would produce. */}
+      <SEO
+        title={item.metaTitle || item.title}
+        description={item.metaDescription || fallbackDescription(item.content)}
+        path={`/news/${slug}`}
+        image={item.imageUrl}
+        type="article"
+      />
       <Navbar />
 
       <div className="px-4 pt-10 pb-16 sm:pt-14 sm:pb-24" style={{ background: 'linear-gradient(135deg, #1655c3, #64ac37)' }}>

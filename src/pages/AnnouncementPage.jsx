@@ -7,6 +7,7 @@ import { isAnnouncementActive } from '../lib/announcements'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
 import CoverImage from '../components/CoverImage'
+import SEO from '../components/SEO'
 
 export default function AnnouncementPage() {
   const { slug } = useParams()
@@ -49,6 +50,13 @@ export default function AnnouncementPage() {
 
   return (
     <div className="font-poppins bg-[#f7f9fc] min-h-screen">
+      <SEO
+        title={item.title}
+        description={item.shortDescription}
+        path={`/announcements/${slug}`}
+        image={item.imageUrl}
+        type="article"
+      />
       <Navbar />
 
       {/* Hero band */}

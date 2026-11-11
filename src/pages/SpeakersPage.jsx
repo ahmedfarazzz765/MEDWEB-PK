@@ -9,6 +9,7 @@ import Footer from '../sections/Footer'
 import SectionHeading from '../components/SectionHeading'
 import CardRowSkeleton from '../components/CardRowSkeleton'
 import SectionEmptyState from '../components/SectionEmptyState'
+import SEO from '../components/SEO'
 
 // Speaker roster is derived from webinar records rather than a separate
 // admin-maintained list — see src/lib/speakers.js for why. MemberCard
@@ -28,6 +29,7 @@ export default function SpeakersPage() {
 
   return (
     <div className="font-poppins bg-[#f7f9fc] min-h-screen flex flex-col justify-between">
+      <SEO title="Speakers" description="Expert speakers who have presented at MEDWEB-PK webinars." path="/speakers" />
       <div>
         <Navbar />
         <div className="max-w-7xl mx-auto px-4 pt-10 pb-16">

@@ -27,6 +27,16 @@ jobs:
           VITE_GOOGLE_PLACES_API_KEY: ${{ secrets.VITE_GOOGLE_PLACES_API_KEY }}
           VITE_GOOGLE_PLACE_ID: ${{ secrets.VITE_GOOGLE_PLACE_ID }}
           VITE_YOUTUBE_API_KEY: ${{ secrets.VITE_YOUTUBE_API_KEY }}
+          # Reuses the same service-account secret scripts/fetch-health-news.js
+          # already relies on — the build now also runs
+          # scripts/generate-sitemap.js (pre-build) and
+          # scripts/generate-static-meta.js (post-build) via "npm run build"
+          # (see package.json), both of which degrade gracefully (warn +
+          # static-only output) if this isn't set, so the build never fails
+          # over it — but it needs to be a real repo secret for the dynamic
+          # (webinar/course/blog/news/announcement) pages to actually
+          # generate real content instead of just the static routes.
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: npm run build
       # Retrying (3x, with ftps then plain ftp) never helped — every attempt
       # failed at the identical point ("creating folder assets/") with the

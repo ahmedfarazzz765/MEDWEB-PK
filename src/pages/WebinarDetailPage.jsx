@@ -7,6 +7,16 @@ import { webinarsService } from '../firebase/services'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
 import CoverImage from '../components/CoverImage'
+import SEO, { SITE_URL } from '../components/SEO'
+
+// `date`/`time` are free-text admin fields (e.g. "June 12, 2026"), not
+// guaranteed ISO 8601 — Event JSON-LD's startDate needs real ISO or search
+// engines reject the whole block, so this parses defensively and simply
+// omits startDate rather than ever emitting an invalid one.
+function toIsoStartDate(dateStr, timeStr) {
+  const parsed = new Date(timeStr ? `${dateStr} ${timeStr}` : dateStr)
+  return isNaN(parsed.getTime()) ? null : parsed.toISOString()
+}
 
 // Reuses the exact status colors already established in AdminWebinars.jsx's
 // table / WebinarsSlider.jsx's card, so every surface agrees.
@@ -79,8 +89,32 @@ export default function WebinarDetailPage() {
   }
   const showFeedbackButton = webinar.feedbackEnabled && webinar.feedbackButtonEnabled !== false && (webinar.feedbackLink || webinar.feedbackFormId)
 
+  const webinarTitle = webinar.topic || webinar.title || 'Webinar'
+  const startDate = toIsoStartDate(webinar.date, webinar.time)
+  const eventJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Event',
+    name: webinarTitle,
+    description: webinar.description || `Live webinar: ${webinarTitle}`,
+    ...(startDate ? { startDate } : {}),
+    eventAttendanceMode: 'https://schema.org/OnlineEventAttendanceMode',
+    eventStatus: isCompleted ? 'https://schema.org/EventScheduled' : 'https://schema.org/EventScheduled',
+    location: { '@type': 'VirtualLocation', url: `${SITE_URL}/webinar/${id}` },
+    ...(poster ? { image: poster } : {}),
+    organizer: { '@type': 'Organization', name: 'MEDWEB-PK', url: SITE_URL },
+    ...(speakers.length ? { performer: speakers.map(s => ({ '@type': 'Person', name: s.name })) } : {}),
+  }
+
   return (
     <div className="font-poppins bg-[#f7f9fc] min-h-screen">
+      <SEO
+        title={webinarTitle}
+        description={webinar.description || `Join "${webinarTitle}" — a live MEDWEB-PK webinar for medical and pharmacy students.`}
+        path={`/webinar/${id}`}
+        image={poster}
+        type="article"
+        jsonLd={eventJsonLd}
+      />
       <Navbar />
 
       {/* Hero band — same template as BlogPostPage/CourseDetailPage/etc */}

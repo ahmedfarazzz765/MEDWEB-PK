@@ -5,6 +5,7 @@ import { ArrowLeft } from 'lucide-react'
 import { settingsService } from '../firebase/services'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
+import SEO from '../components/SEO'
 
 const PLACEHOLDER = 'Add your policy content in the admin panel.'
 
@@ -23,6 +24,7 @@ export default function RefundPolicyPage() {
 
   return (
     <div className="font-poppins bg-[#f7f9fc] min-h-screen">
+      <SEO title="Refund Policy" description="MEDWEB-PK's refund policy." path="/refund-policy" />
       <Navbar />
       <div className="px-4 pt-10 pb-20 sm:pt-14 sm:pb-28" style={{ background: 'linear-gradient(135deg, #1655c3, #64ac37)' }}>
         <div className="max-w-4xl mx-auto">

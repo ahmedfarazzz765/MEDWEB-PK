@@ -19,6 +19,17 @@ import Footer from '../sections/Footer'
 import Team from '../sections/About'
 import AdvisoryBoard from '../sections/AdvisoryBoard'
 import { sectionVisibilityService, settingsService } from '../firebase/services'
+import SEO, { SITE_NAME, SITE_URL, DEFAULT_IMAGE } from '../components/SEO'
+
+const ORGANIZATION_JSON_LD = {
+  '@context': 'https://schema.org',
+  '@type': 'EducationalOrganization',
+  name: SITE_NAME,
+  url: SITE_URL,
+  logo: DEFAULT_IMAGE,
+  description: "Pakistan's medical education platform — live webinars, expert-designed courses, verified certificates, and a nationwide student ambassador network for healthcare students.",
+  sameAs: [], // admin-configured social links already shown in the footer — not a fixed list worth hardcoding here
+}
 
 // Missing doc/field = visible. Only an explicit `false` hides a section —
 // see services.js for the full rationale.
@@ -68,6 +79,7 @@ export default function HomePage() {
 
   return (
     <div className="font-poppins">
+      <SEO path="/" jsonLd={ORGANIZATION_JSON_LD} />
       {showIntro && <LaunchIntro onDone={() => setShowIntro(false)} />}
       {v.welcomeBar && <WelcomeBar />}
       <Navbar />

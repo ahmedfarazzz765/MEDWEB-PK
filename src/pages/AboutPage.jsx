@@ -6,6 +6,7 @@ import { settingsService } from '../firebase/services'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
 import CoverImage from '../components/CoverImage'
+import SEO from '../components/SEO'
 
 export default function AboutPage() {
   const navigate = useNavigate()
@@ -32,6 +33,7 @@ export default function AboutPage() {
 
   return (
     <div className="font-poppins bg-[#f7f9fc] min-h-screen">
+      <SEO title="About Us" description={d.wwaFull} path="/about" />
       <Navbar />
       <div className="px-4 pt-10 pb-20 sm:pt-14 sm:pb-28" style={{ background: 'linear-gradient(135deg, #1655c3, #64ac37)' }}>
         <div className="max-w-4xl mx-auto">

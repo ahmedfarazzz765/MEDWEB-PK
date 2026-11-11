@@ -8,6 +8,7 @@ import Footer from '../sections/Footer'
 import SectionHeading from '../components/SectionHeading'
 import CardRowSkeleton from '../components/CardRowSkeleton'
 import SectionEmptyState from '../components/SectionEmptyState'
+import SEO from '../components/SEO'
 
 const PAGE_SIZE = 12
 
@@ -27,6 +28,7 @@ export default function CoursesListPage() {
 
   return (
     <div className="font-poppins bg-[#f7f9fc] min-h-screen">
+      <SEO title="All Courses" description="Browse MEDWEB-PK's full catalog of structured courses for medical and pharmacy students." path="/courses" />
       <Navbar />
       <div className="max-w-7xl mx-auto px-4 pt-10 pb-16">
         <Link to="/" className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-[#1655c3] mb-6 transition-colors">

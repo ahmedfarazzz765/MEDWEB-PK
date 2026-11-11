@@ -8,6 +8,7 @@ import Footer from '../sections/Footer'
 import SectionHeading from '../components/SectionHeading'
 import CardRowSkeleton from '../components/CardRowSkeleton'
 import SectionEmptyState from '../components/SectionEmptyState'
+import SEO from '../components/SEO'
 
 const PAGE_SIZE = 16
 
@@ -70,6 +71,7 @@ export default function TeamListPage() {
 
   return (
     <div className="font-poppins bg-[#f7f9fc] min-h-screen flex flex-col justify-between">
+      <SEO title="Our Team" description="Meet the team behind MEDWEB-PK, Pakistan's medical education platform." path="/team" />
       <div>
         <Navbar />
         <div className="max-w-7xl mx-auto px-4 pt-10 pb-16">
