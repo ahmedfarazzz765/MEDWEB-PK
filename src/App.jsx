@@ -1,4 +1,5 @@
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import ErrorBoundary from './components/ErrorBoundary'
 import HomePage          from './pages/HomePage'
 import WebinarRegister   from './pages/WebinarRegister'
 import WebinarDetailPage from './pages/WebinarDetailPage'
@@ -57,7 +58,15 @@ function App() {
   return (
     <Router>
       <PublicSitePopups />
+      <ErrorBoundary>
       <Routes>
+        {/* "Contact" everywhere else in the app (navbar/footer) is really
+            just the homepage's own Footer contact section (#contact) —
+            there was never a dedicated page, so a direct hit on the bare
+            path (someone typing it, an indexed URL, etc.) matched no
+            route and rendered blank. Redirects to the real anchor instead
+            of leaving that URL dead. */}
+        <Route path="/contact"                element={<Navigate to="/#contact" replace />} />
         <Route path="/"                       element={<HomePage />} />
         <Route path="/founder-message"        element={<FounderMessagePage />} />
         <Route path="/about"                  element={<AboutPage />} />
@@ -99,6 +108,7 @@ function App() {
         <Route path="/ambassador/rewards"        element={<RequireAmbassadorAuth><ComingSoonPage navKey="rewards" /></RequireAmbassadorAuth>} />
         <Route path="/ambassador/help"           element={<RequireAmbassadorAuth><ComingSoonPage navKey="help" /></RequireAmbassadorAuth>} />
       </Routes>
+      </ErrorBoundary>
     </Router>
   )
 }

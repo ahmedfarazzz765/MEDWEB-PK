@@ -43,7 +43,11 @@ export default function TeamListPage() {
   // Renders exactly what's in Firestore — no default-template fallback
   // (see About.jsx's categoryCards for why: merging in defaults here made
   // Admin-deleted category cards keep reappearing regardless of Firestore state).
-  const categoryCards = dbCategories
+  // A category with zero active members is hidden entirely — same filter
+  // as the homepage's Team section in About.jsx.
+  const categoryCards = team === null ? dbCategories : dbCategories.filter(cat =>
+    team.some(m => (m.category || 'Chief Executive').toLowerCase() === cat.name.toLowerCase())
+  )
   const activeCategoryObj = categoryCards.find(c => c.name === activeCategory)
   const showApply = activeCategoryObj?.applyEnabled && activeCategoryObj?.applyFormId
 

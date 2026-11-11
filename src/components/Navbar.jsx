@@ -165,14 +165,6 @@ export default function Navbar() {
             </a>
           )}
 
-          {/* Admin Login Button */}
-          <a
-            href="/admin/login"
-            className="hidden lg:inline-flex items-center whitespace-nowrap text-xs font-bold px-4 py-2 rounded-full border border-gray-200 text-gray-600 hover:border-[#1655c3] hover:text-[#1655c3] transition-all duration-200 flex-shrink-0"
-          >
-            🛡 Admin Login
-          </a>
-
           {/* Mobile Menu Toggle Button */}
           <button
             className="lg:hidden p-2 rounded-lg hover:bg-gray-100"
@@ -241,14 +233,6 @@ export default function Navbar() {
                 <MessageCircle size={14} /> Join MEDWEB Community
               </a>
             )}
-
-            <a
-              href="/admin/login"
-              onClick={() => setMenuOpen(false)}
-              className="block mt-3 text-center py-2.5 rounded-lg text-xs font-bold text-gray-600 border border-gray-200"
-            >
-              🛡 Admin Login
-            </a>
           </div>
         )}
       </div>

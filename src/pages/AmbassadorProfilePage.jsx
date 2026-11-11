@@ -29,13 +29,16 @@ async function downloadImageFile(url, filename) {
   URL.revokeObjectURL(blobUrl)
 }
 
+// Returns 0 (no real rating yet) instead of defaulting to 1 star — see
+// the same fix/comment in sections/Ambassadors.jsx.
 function pointsToStars(points) {
   const p = Number(points) || 0
   if (p >= 15000) return 5
   if (p >= 10000) return 4
   if (p >= 5000)  return 3
   if (p >= 1000)  return 2
-  return 1
+  if (p > 0)      return 1
+  return 0
 }
 
 // Only rendered for platforms that actually have a value — empty/unset
@@ -199,12 +202,14 @@ export default function AmbassadorProfilePage() {
               )}
             </div>
 
-            {/* 3. Rank + star Ranking */}
+            {/* 3. Rank + star Ranking (stars only shown once there's a real one) */}
             <div className="flex items-center justify-between flex-wrap gap-2">
               <span className="text-xs font-bold px-3 py-1 rounded-full bg-blue-50 text-[#1655c3]">{ambassador.rank || 'Ambassador'}</span>
-              <div className="flex items-center gap-1">
-                {[1, 2, 3, 4, 5].map(n => <Star key={n} size={16} className={n <= stars ? 'text-amber-400 fill-amber-400' : 'text-gray-200 fill-gray-200'} />)}
-              </div>
+              {stars > 0 && (
+                <div className="flex items-center gap-1">
+                  {[1, 2, 3, 4, 5].map(n => <Star key={n} size={16} className={n <= stars ? 'text-amber-400 fill-amber-400' : 'text-gray-200 fill-gray-200'} />)}
+                </div>
+              )}
             </div>
 
             {/* 4. Status, Points */}

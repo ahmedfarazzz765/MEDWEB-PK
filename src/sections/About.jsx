@@ -224,7 +224,12 @@ export default function Team() {
   // present, which meant deleting every category card in Admin never
   // actually emptied the homepage: the "deleted" defaults just kept
   // reappearing on every render regardless of Firestore state.)
-  const categoryCards = dbCategories
+  // A category with zero active members is hidden entirely here (and on
+  // /team, same filter in TeamListPage.jsx) — an empty "0 Members" card
+  // is more confusing than useful either way.
+  const categoryCards = team === null ? dbCategories : dbCategories.filter(cat =>
+    team.some(m => (m.category || 'Chief Executive').toLowerCase() === cat.name.toLowerCase())
+  )
 
   const handleCategorySelect = catName => {
     navigate(`/team?category=${encodeURIComponent(catName)}`)

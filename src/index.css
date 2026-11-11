@@ -8,7 +8,14 @@ body {
   background: #ffffff;
   color: #1a1a1a;
   overflow-x: hidden;
-}html { scroll-behavior: smooth; }
+}
+/* overflow-x must be set on html, not just body — once body has an
+   explicit overflow value, the viewport's own horizontal scrollbar is
+   governed by html, and body's overflow-x:hidden alone doesn't reliably
+   suppress it in every browser. A slightly oversized element anywhere on
+   the page (e.g. a marquee/carousel a few px past its container) was
+   showing up as page-level horizontal scroll because of this. */
+html { scroll-behavior: smooth; overflow-x: hidden; }
 
 .swiper-pagination-bullet-active { background: #1655c3 !important; }
 .swiper-button-next, .swiper-button-prev { color: #1655c3 !important; }

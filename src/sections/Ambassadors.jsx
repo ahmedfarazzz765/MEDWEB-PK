@@ -9,13 +9,19 @@ import BrandWatermark from '../components/BrandWatermark'
 import Skeleton from '../components/Skeleton'
 import CoverImage from '../components/CoverImage'
 
+// Returns 0 (no real rating yet) instead of defaulting to 1 star for an
+// ambassador with no ranking and no points — the old fallback showed a
+// fabricated "1 star" for literally everyone until they'd earned enough
+// points to cross the first real threshold, which reads as a real (if
+// low) rating rather than "not rated yet".
 function pointsToStars(points) {
   const p = Number(points) || 0
   if (p >= 15000) return 5
   if (p >= 10000) return 4
   if (p >= 5000)  return 3
   if (p >= 1000)  return 2
-  return 1
+  if (p > 0)      return 1
+  return 0
 }
 
 function StarRating({ count }) {
@@ -41,9 +47,11 @@ export function AmbassadorCard({ a }) {
       }
       <h3 className="mt-4 text-sm font-bold text-[#1a1a1a]">{a.name}</h3>
       <p className="text-xs text-gray-500 mt-0.5">{a.university || a.rank}</p>
-      <div className="mt-3">
-        <StarRating count={stars} />
-      </div>
+      {stars > 0 && (
+        <div className="mt-3">
+          <StarRating count={stars} />
+        </div>
+      )}
       {a.points > 0 && (
         <div className="mt-2 text-sm font-black text-[#1655c3]">
           {Number(a.points).toLocaleString()} <span className="text-xs font-semibold text-gray-400">pts</span>

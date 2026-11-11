@@ -202,6 +202,11 @@ export default function WebinarsSlider() {
   const navigate       = useNavigate()
   const [webinars, setWebinars] = useState(null) // null = still loading; [] = confirmed empty
   const h = useSiteSettings(HEADING_DEFAULTS)
+  // sortWebinars already puts Live/Upcoming first and Completed
+  // (newest-first) last — if none of the former exist, this section is
+  // showing only past sessions, so the heading should say so rather than
+  // promising "Upcoming" webinars that aren't there.
+  const hasLiveOrUpcoming = (webinars || []).some(w => w.status !== 'Completed')
 
   const handleRegister = (webinar) => {
     // feedback custom-form mode — still a page navigation, untouched
@@ -231,7 +236,9 @@ export default function WebinarsSlider() {
     <section id="webinars" className="py-10 sm:py-12 px-4 bg-[#f7f9fc] relative overflow-hidden">
       <BrandWatermark seed={4} />
       <div className="max-w-7xl mx-auto relative z-10">
-        <SectionHeading word1={h.webinarsHeading1} word2={h.webinarsHeading2}
+        <SectionHeading
+          word1={hasLiveOrUpcoming ? h.webinarsHeading1 : 'Recent'}
+          word2={h.webinarsHeading2}
           subtitle={h.webinarsSubtitle}
           className="mb-4" />
         <div className="text-center mb-6 sm:mb-8">
