@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { settingsService } from '../firebase/services'
 import { STATS } from '../data/statsConfig'
+import { useComputedStats } from '../hooks/useComputedStats'
 
 export default function Stats() {
   const [vals, setVals] = useState({})
+  const { resolveStat } = useComputedStats()
 
   useEffect(() => {
     const unsub = settingsService.listen(s => { if (s) setVals(s) })
@@ -27,7 +29,7 @@ export default function Stats() {
                 <Icon size={20} style={{ color }} />
               </div>
               <div className="relative text-xl sm:text-2xl font-black mb-0.5" style={{ color }}>
-                {vals[key] || fallback}
+                {resolveStat(key, vals, fallback)}
               </div>
               <div className="relative text-xs text-gray-500 font-medium">{label}</div>
             </motion.div>

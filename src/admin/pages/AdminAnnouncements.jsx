@@ -28,7 +28,7 @@ function uniqueSlug(base, existingSlugs) {
 const emptyForm = () => ({
   title: '', shortDescription: '', content: '', imageUrl: '',
   linkType: 'internal', externalUrl: '', slug: '', ctaLabel: 'Learn More',
-  enabled: true, autoHideDate: '', highlights: [],
+  enabled: true, startDate: '', autoHideDate: '', highlights: [],
 })
 
 export default function AdminAnnouncements() {
@@ -68,7 +68,7 @@ export default function AdminAnnouncements() {
       title: row.title || '', shortDescription: row.shortDescription || '', content: row.content || '',
       imageUrl: row.imageUrl || '', linkType: row.linkType || 'internal', externalUrl: row.externalUrl || '',
       slug: row.slug || '', ctaLabel: row.ctaLabel || 'Learn More',
-      enabled: row.enabled !== false, autoHideDate: row.autoHideDate || '',
+      enabled: row.enabled !== false, startDate: row.startDate || '', autoHideDate: row.autoHideDate || '',
       highlights: Array.isArray(row.highlights) ? row.highlights : [],
     })
     setEditId(row.id); setModal('edit')
@@ -119,15 +119,22 @@ export default function AdminAnnouncements() {
         {v === 'external' ? <><ExternalLink size={12} /> External</> : <><FileText size={12} /> Internal Page</>}
       </span>
     )},
+    { key: 'startDate', label: 'Starts', render: v => v
+      ? <span className="inline-flex items-center gap-1 text-xs text-gray-500"><CalendarClock size={12} /> {v}</span>
+      : <span className="text-gray-300 text-xs">—</span>
+    },
     { key: 'autoHideDate', label: 'Auto-hide', render: v => v
       ? <span className="inline-flex items-center gap-1 text-xs text-gray-500"><CalendarClock size={12} /> {v}</span>
       : <span className="text-gray-300 text-xs">—</span>
     },
     { key: 'id', label: 'Status', render: (v, row) => {
       const active = isAnnouncementActive(row)
+      const today = new Date().toISOString().slice(0, 10)
+      const notStartedYet = row.enabled !== false && row.startDate && row.startDate > today
+      const label = row.enabled === false ? 'Disabled' : active ? 'Active' : notStartedYet ? 'Scheduled' : 'Expired'
       return (
-        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${active ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-500'}`}>
-          {row.enabled === false ? 'Disabled' : active ? 'Active' : 'Expired'}
+        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${active ? 'bg-green-50 text-green-600' : notStartedYet ? 'bg-blue-50 text-[#1655c3]' : 'bg-gray-100 text-gray-500'}`}>
+          {label}
         </span>
       )
     }},
@@ -226,9 +233,14 @@ export default function AdminAnnouncements() {
               </>
             )}
 
-            <FormField label="Auto-hide After Date (optional — leave blank to control manually only)">
-              <input className={inputCls} type="date" value={form.autoHideDate} onChange={set('autoHideDate')} />
-            </FormField>
+            <div className="grid grid-cols-2 gap-4">
+              <FormField label="Start Date (optional — leave blank to show immediately)">
+                <input className={inputCls} type="date" value={form.startDate} onChange={set('startDate')} />
+              </FormField>
+              <FormField label="Auto-hide After Date (optional — leave blank to control manually only)">
+                <input className={inputCls} type="date" value={form.autoHideDate} onChange={set('autoHideDate')} />
+              </FormField>
+            </div>
 
             <label className="flex items-center gap-3 cursor-pointer select-none">
               <input type="checkbox" checked={form.enabled} onChange={e => setForm(prev => ({ ...prev, enabled: e.target.checked }))} className="w-4 h-4 accent-[#1655c3]" />

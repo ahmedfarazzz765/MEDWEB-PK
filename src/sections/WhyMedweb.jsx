@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { settingsService } from '../firebase/services'
 import { STATS } from '../data/statsConfig'
+import { useComputedStats } from '../hooks/useComputedStats'
 import SectionHeading from '../components/SectionHeading'
 import CoverImage from '../components/CoverImage'
 import webinarsImg from '../assets/hero_doctors.jpeg'
@@ -53,6 +54,7 @@ export default function WhyMedweb() {
   const [whyHeading2, setWhyHeading2] = useState('MEDWEB?')
   const [cards, setCards] = useState(DEFAULT_CARDS)
   const [statVals, setStatVals] = useState({})
+  const { resolveStat } = useComputedStats()
 
   useEffect(() => {
     const unsub = settingsService.listen(s => {
@@ -147,7 +149,7 @@ export default function WhyMedweb() {
                   <Icon size={20} style={{ color }} />
                 </div>
                 <div>
-                  <div className="text-[#0f172a] font-black text-lg sm:text-xl leading-none">{statVals[key] || fallback}</div>
+                  <div className="text-[#0f172a] font-black text-lg sm:text-xl leading-none">{resolveStat(key, statVals, fallback)}</div>
                   <div className="text-gray-500 text-xs mt-1">{label}</div>
                 </div>
               </div>

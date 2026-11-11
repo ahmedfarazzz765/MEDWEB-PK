@@ -438,13 +438,38 @@ export default function AdminContent({ initialTab }) {
 
           <div className="pt-5 border-t border-gray-100">
             <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Stats (shown in this section)</h4>
+            <p className="text-[11px] text-gray-400 mb-3">
+              Students Trained, Webinars Hosted, Certificates Issued and Courses Available are computed
+              live from real data by default (webinars counted only once Completed, certificates only
+              while not Revoked, courses only while Active). Tick "Manual" on any of them to type a
+              fixed value instead. Expert Instructors and Cities Reached have no matching collection to
+              compute from, so they're always manual.
+            </p>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-              <FormField label="Students Trained"><input className={inputCls} value={s.studentsCount} onChange={e => set('studentsCount', e.target.value)} /></FormField>
-              <FormField label="Webinars Hosted"><input className={inputCls} value={s.webinarsCount} onChange={e => set('webinarsCount', e.target.value)} /></FormField>
-              <FormField label="Expert Instructors"><input className={inputCls} value={s.instructorsCount} onChange={e => set('instructorsCount', e.target.value)} /></FormField>
-              <FormField label="Cities Reached"><input className={inputCls} value={s.citiesCount} onChange={e => set('citiesCount', e.target.value)} /></FormField>
-              <FormField label="Certificates Issued"><input className={inputCls} value={s.certificatesCount} onChange={e => set('certificatesCount', e.target.value)} /></FormField>
-              <FormField label="Courses Available"><input className={inputCls} value={s.coursesCount} onChange={e => set('coursesCount', e.target.value)} /></FormField>
+              {[
+                { key: 'studentsCount',     label: 'Students Trained',    computed: true },
+                { key: 'webinarsCount',     label: 'Webinars Hosted',     computed: true },
+                { key: 'instructorsCount',  label: 'Expert Instructors',  computed: false },
+                { key: 'citiesCount',       label: 'Cities Reached',      computed: false },
+                { key: 'certificatesCount', label: 'Certificates Issued', computed: true },
+                { key: 'coursesCount',      label: 'Courses Available',   computed: true },
+              ].map(({ key, label, computed }) => (
+                <FormField key={key} label={label}>
+                  <input
+                    className={inputCls}
+                    value={s[key]}
+                    onChange={e => set(key, e.target.value)}
+                    disabled={computed && !s[`${key}Manual`]}
+                    placeholder={computed && !s[`${key}Manual`] ? 'Computed live from Firestore' : undefined}
+                  />
+                  {computed && (
+                    <label className="flex items-center gap-1 mt-1.5 text-[10px] font-semibold text-gray-500 cursor-pointer">
+                      <input type="checkbox" checked={!!s[`${key}Manual`]} onChange={e => set(`${key}Manual`, e.target.checked)} className="accent-[#1655c3]" />
+                      Manual override
+                    </label>
+                  )}
+                </FormField>
+              ))}
             </div>
           </div>
         </Card>

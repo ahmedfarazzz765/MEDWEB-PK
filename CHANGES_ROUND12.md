@@ -72,3 +72,48 @@
 environment — actual UI behavior (redirect landing spot, popup badge
 appearance/persistence, horizontal-scroll absence, star/category hiding)
 still needs manual verification.
+
+## Prompt 2 — Real numbers & real testimonials
+
+### 1. Homepage counters computed from Firestore
+- `hooks/useComputedStats.js` (new): shared hook computing 4 of the 6
+  homepage counters live — Students Trained (`studentsDbService`),
+  Webinars Hosted (status Completed only), Certificates Issued (status
+  not Revoked only), Courses Available (status Active only). Expert
+  Instructors and Cities Reached have no matching collection to compute
+  from and stay manual, unchanged.
+- `sections/Stats.jsx` + `sections/WhyMedweb.jsx`: both already shared
+  the same `STATS` config (per an existing code comment) — both now call
+  the shared hook instead of just displaying the raw saved settings
+  string, so the fix lives in one place, not duplicated.
+- `admin/pages/AdminContent.jsx`: added a "Manual override" checkbox next
+  to each of the 4 computed fields. Unchecked (default) = live-computed,
+  input disabled with a "Computed live from Firestore" placeholder;
+  checked = the admin's typed value is used, same behavior as before this
+  round.
+
+### 2. Testimonials — approved only, no YouTube comments
+- The "only approved items" half was already correctly implemented
+  (`testimonialsService.listen` already filtered by status).
+- `sections/Testimonials.jsx`: now also excludes
+  `category === 'YouTube Review'` — the exact tag
+  `pendingTestimonialsService.approve()` writes for an approved
+  YouTube-comment item (Google Reviews and anything else still show).
+
+### 3. Announcement bar start/end dates
+- `autoHideDate` (expiry) already existed and worked
+  (`lib/announcements.js`'s `isAnnouncementActive()`).
+- Added the missing half: a new `startDate` field. `isAnnouncementActive()`
+  now also returns false if `startDate` is set and still in the future.
+- `admin/pages/AdminAnnouncements.jsx`: added the Start Date input next to
+  the existing Auto-hide Date field, a new "Starts" table column, and a
+  distinct "Scheduled" status badge (vs. "Expired") for an announcement
+  whose start date hasn't arrived yet.
+
+---
+
+**Verification:** every touched file passed an `esbuild` syntax check.
+`npm run dev` started cleanly; curl confirmed `/`, `/announcements`,
+`/contact` all return HTTP 200. Same caveat as Prompt 1 — no real browser
+available, so this confirms the server doesn't crash, not that the UI
+renders/behaves correctly.

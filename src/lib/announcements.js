@@ -3,9 +3,10 @@
 // never disagree about what's actually showing.
 export function isAnnouncementActive(a) {
   if (!a?.enabled) return false
-  if (a.autoHideDate) {
-    const today = new Date().toISOString().slice(0, 10)
-    if (a.autoHideDate < today) return false
-  }
+  const today = new Date().toISOString().slice(0, 10)
+  // startDate: scheduled to appear from a future date — not active yet.
+  if (a.startDate && a.startDate > today) return false
+  // autoHideDate: expires after this date.
+  if (a.autoHideDate && a.autoHideDate < today) return false
   return true
 }

@@ -68,7 +68,12 @@ export default function Testimonials() {
 
   useEffect(() => {
     const unsub = testimonialsService.listen(rows => {
-      const approved = rows.filter(r => (r.status || 'Approved') === 'Approved')
+      // Approved via Admin > Pending Reviews (pendingTestimonialsService.approve())
+      // tags a YouTube-comment-sourced item with category "YouTube Review" —
+      // those shouldn't appear as a homepage testimonial even once approved
+      // (a comment isn't the same as a submitted review); Google Reviews and
+      // anything else stay.
+      const approved = rows.filter(r => (r.status || 'Approved') === 'Approved' && r.category !== 'YouTube Review')
       setTestimonials(approved)
     })
     return () => unsub && unsub()
