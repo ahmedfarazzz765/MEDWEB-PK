@@ -4,7 +4,7 @@ import { Menu, X, ChevronDown, MessageCircle } from 'lucide-react'
 import { useSiteSettings } from '../hooks/useSiteSettings'
 import { blogCategoriesService } from '../firebase/services'
 import { DEFAULT_BLOG_CATEGORIES } from '../constants/blogCategories'
-import logo from '../assets/medweb.png'
+import Logo from './Logo'
 
 const DEFAULTS = {
   navTagline: 'Connecting Medical Minds',
@@ -89,8 +89,7 @@ export default function Navbar() {
 
           {/* Logo + Brand Name */}
           <a href="#home" onClick={e => handleLinkClick(e, '#home')} className="flex items-center gap-2.5 flex-shrink-0">
-            <img
-              src={logo}
+            <Logo
               alt="MEDWEB Logo"
               className="w-12 h-12 sm:w-14 sm:h-14 object-contain"
             />

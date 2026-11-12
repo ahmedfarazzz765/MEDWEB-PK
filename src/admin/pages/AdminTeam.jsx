@@ -48,7 +48,7 @@ function makeMemberColumns(openEdit, handleDelete) {
     {
       key: 'imageUrl',
       label: '',
-      render: v => v ? <CoverImage src={v} bias="center 25%" className="w-9 h-9 rounded-xl" /> : <div className="w-9 h-9 rounded-xl bg-blue-50" />
+      render: (v, row) => v ? <CoverImage src={v} alt={row.name || ''} bias="center 25%" className="w-9 h-9 rounded-xl" /> : <div className="w-9 h-9 rounded-xl bg-blue-50" />
     },
     {
       key: 'name',
@@ -432,7 +432,7 @@ export default function AdminTeam() {
                   return (
                     <SortableItem key={m.id || i} id={m.id || i} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex items-center gap-4 hover:shadow-md transition-shadow overflow-hidden">
                       {m.imageUrl ? (
-                        <CoverImage src={m.imageUrl} bias="center 25%" className="w-12 h-12 rounded-2xl shrink-0" />
+                        <CoverImage src={m.imageUrl} alt={m.name || ""} bias="center 25%" className="w-12 h-12 rounded-2xl shrink-0" />
                       ) : (
                         <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-black text-base shrink-0" style={{ background: col }}>
                           {m.name?.split(' ').map(n => n[0]).slice(0, 2).join('')}
@@ -463,7 +463,7 @@ export default function AdminTeam() {
                 return (
                   <div key={m.id || i} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex items-center gap-4 hover:shadow-md transition-shadow relative overflow-hidden">
                     {m.imageUrl ? (
-                      <CoverImage src={m.imageUrl} bias="center 25%" className="w-12 h-12 rounded-2xl shrink-0" />
+                      <CoverImage src={m.imageUrl} alt={m.name || ""} bias="center 25%" className="w-12 h-12 rounded-2xl shrink-0" />
                     ) : (
                       <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-black text-base shrink-0" style={{ background: col }}>
                         {m.name?.split(' ').map(n => n[0]).slice(0, 2).join('')}

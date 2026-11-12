@@ -150,7 +150,7 @@ export default function CertificatePage() {
             from data via CertificateTemplate as before */}
         {cert.certificateImageUrl ? (
           <div className="cert-print-area flex justify-center">
-            <img src={cert.certificateImageUrl} alt={`Certificate ${cert.certCode}`} className="max-w-full rounded-2xl shadow-lg" />
+            <img src={cert.certificateImageUrl} alt={`Certificate ${cert.certCode}`} loading="lazy" decoding="async" className="max-w-full rounded-2xl shadow-lg" />
           </div>
         ) : (
           <div ref={wrapRef} className="cert-print-area flex justify-center">

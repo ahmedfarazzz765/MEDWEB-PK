@@ -9,8 +9,8 @@ import { STATS } from '../data/statsConfig'
 import { useComputedStats } from '../hooks/useComputedStats'
 import SectionHeading from '../components/SectionHeading'
 import CoverImage from '../components/CoverImage'
-import webinarsImg from '../assets/hero_doctors.jpeg'
-import coursesImg from '../assets/doctors.png'
+import webinarsImg from '../assets/hero_doctors.webp'
+import coursesImg from '../assets/doctors.webp'
 
 const ICONS = { Award, UserCheck, DollarSign, Headphones, BookOpen, GraduationCap, Shield, Heart, Star, Users, Video, CheckCircle, Radio, ShieldCheck }
 

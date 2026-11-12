@@ -1,25 +1,34 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, lazy, Suspense } from 'react'
 import { useLocation } from 'react-router-dom'
 import LaunchIntro from '../components/LaunchIntro'
 import WelcomeBar from '../sections/WelcomeBar'
 import Navbar from '../components/Navbar'
 import AnnouncementTicker from '../sections/AnnouncementTicker'
 import Hero from '../sections/Hero'
-import TrustedPartners from '../sections/TrustedPartners'
-import Stats from '../sections/Stats'
-import FounderMessage from '../sections/FounderMessage'
-import WebinarsSlider from '../sections/WebinarsSlider'
-import CoursesHighlight from '../sections/CoursesHighlight'
-import WhyMedweb from '../sections/WhyMedweb'
-import Testimonials from '../sections/Testimonials'
-import Ambassadors from '../sections/Ambassadors'
-import CertificateVerification from '../sections/CertificateVerification'
-import LatestBlog from '../sections/LatestBlog'
-import Footer from '../sections/Footer'
-import Team from '../sections/About'
-import AdvisoryBoard from '../sections/AdvisoryBoard'
 import { sectionVisibilityService, settingsService } from '../firebase/services'
 import SEO, { SITE_NAME, SITE_URL, DEFAULT_IMAGE } from '../components/SEO'
+
+// Everything below the fold is code-split — Hero is the only section a
+// visitor sees without scrolling, so it's the only one that needs to be
+// in the initial bundle. Each gets its own Suspense boundary (not one
+// shared one) so they resolve independently instead of all waiting on
+// the slowest chunk; fallback={null} since every one of these already
+// shows its own internal skeleton once its JS has loaded and it starts
+// fetching its own Firestore data — this only covers the brief moment
+// the chunk itself is still downloading.
+const TrustedPartners = lazy(() => import('../sections/TrustedPartners'))
+const Stats = lazy(() => import('../sections/Stats'))
+const FounderMessage = lazy(() => import('../sections/FounderMessage'))
+const WebinarsSlider = lazy(() => import('../sections/WebinarsSlider'))
+const CoursesHighlight = lazy(() => import('../sections/CoursesHighlight'))
+const WhyMedweb = lazy(() => import('../sections/WhyMedweb'))
+const Testimonials = lazy(() => import('../sections/Testimonials'))
+const Team = lazy(() => import('../sections/About'))
+const AdvisoryBoard = lazy(() => import('../sections/AdvisoryBoard'))
+const Ambassadors = lazy(() => import('../sections/Ambassadors'))
+const CertificateVerification = lazy(() => import('../sections/CertificateVerification'))
+const LatestBlog = lazy(() => import('../sections/LatestBlog'))
+const Footer = lazy(() => import('../sections/Footer'))
 
 const ORGANIZATION_JSON_LD = {
   '@context': 'https://schema.org',
@@ -85,20 +94,20 @@ export default function HomePage() {
       <Navbar />
       <AnnouncementTicker />
       {v.hero && <Hero />}
-      {v.trustedPartners && <TrustedPartners />}
-      {v.stats && <Stats />}
-      {v.founderMessage && <FounderMessage />}
+      {v.trustedPartners && <Suspense fallback={null}><TrustedPartners /></Suspense>}
+      {v.stats && <Suspense fallback={null}><Stats /></Suspense>}
+      {v.founderMessage && <Suspense fallback={null}><FounderMessage /></Suspense>}
       {/* Webinars now appear ABOVE Courses (per requirements) */}
-      {v.webinars && <WebinarsSlider />}
-      {v.courses && <CoursesHighlight />}
-      {v.whyMedweb && <WhyMedweb />}
-      {v.testimonials && <Testimonials />}
-      {v.team && <Team />}
-      {v.advisoryBoard && <AdvisoryBoard />}
-      {v.ambassadors && <Ambassadors />}
-      {v.certificateVerification && <CertificateVerification />}
-      {v.latestBlog && <LatestBlog />}
-      {v.footer && <Footer />}
+      {v.webinars && <Suspense fallback={null}><WebinarsSlider /></Suspense>}
+      {v.courses && <Suspense fallback={null}><CoursesHighlight /></Suspense>}
+      {v.whyMedweb && <Suspense fallback={null}><WhyMedweb /></Suspense>}
+      {v.testimonials && <Suspense fallback={null}><Testimonials /></Suspense>}
+      {v.team && <Suspense fallback={null}><Team /></Suspense>}
+      {v.advisoryBoard && <Suspense fallback={null}><AdvisoryBoard /></Suspense>}
+      {v.ambassadors && <Suspense fallback={null}><Ambassadors /></Suspense>}
+      {v.certificateVerification && <Suspense fallback={null}><CertificateVerification /></Suspense>}
+      {v.latestBlog && <Suspense fallback={null}><LatestBlog /></Suspense>}
+      {v.footer && <Suspense fallback={null}><Footer /></Suspense>}
     </div>
   )
 }

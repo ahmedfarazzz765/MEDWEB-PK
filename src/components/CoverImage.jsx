@@ -23,11 +23,13 @@
 // a Tailwind specificity gamble (both target the same CSS property; which
 // one wins depends on stylesheet generation order, not className order) —
 // so sizing always stays 100% under the caller's control.
-export default function CoverImage({ src, alt = '', bias = 'center', className = '', style, ...rest }) {
+export default function CoverImage({ src, alt = '', bias = 'center', className = '', style, loading = 'lazy', decoding = 'async', ...rest }) {
   return (
     <img
       src={src}
       alt={alt}
+      loading={loading}
+      decoding={decoding}
       className={`object-cover ${className}`}
       style={{ objectPosition: bias, ...style }}
       {...rest}

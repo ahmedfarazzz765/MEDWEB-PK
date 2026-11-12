@@ -112,7 +112,7 @@ export default function AdminAnnouncements() {
   const activeCount = data.filter(isAnnouncementActive).length
 
   const columns = [
-    { key: 'imageUrl', label: '', render: v => v ? <CoverImage src={v} className="w-9 h-9 rounded-lg" /> : <div className="w-9 h-9 rounded-lg bg-blue-50" /> },
+    { key: 'imageUrl', label: '', render: (v, row) => v ? <CoverImage src={v} alt={row.title || ''} className="w-9 h-9 rounded-lg" /> : <div className="w-9 h-9 rounded-lg bg-blue-50" /> },
     { key: 'title', label: 'Title', render: v => <span className="font-semibold text-[#1a1a1a]">{v}</span> },
     { key: 'linkType', label: 'Link', render: v => (
       <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-500">
@@ -168,7 +168,7 @@ export default function AdminAnnouncements() {
             {data.map(a => (
               <SortableItem key={a.id} id={a.id} className="flex items-center gap-3 bg-gray-50 rounded-xl border border-gray-100 p-3 pr-9">
                 {a.imageUrl ? (
-                  <CoverImage src={a.imageUrl} className="w-10 h-10 rounded-lg shrink-0" />
+                  <CoverImage src={a.imageUrl} alt={a.title || ""} className="w-10 h-10 rounded-lg shrink-0" />
                 ) : (
                   <div className="w-10 h-10 rounded-lg bg-[#1655c3] flex items-center justify-center text-white shrink-0"><Megaphone size={16} /></div>
                 )}

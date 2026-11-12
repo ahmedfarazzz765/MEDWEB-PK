@@ -248,6 +248,8 @@ export default function AmbassadorProfilePage() {
                   <img
                     src={ambassador.cardImageUrl}
                     alt={`${ambassador.name}'s Ambassador Card`}
+                    loading="lazy"
+                    decoding="async"
                     className="max-w-[260px] w-full rounded-2xl border border-gray-100 shadow-[0_8px_24px_rgba(0,0,0,0.08)]"
                   />
                 ) : (

@@ -21,7 +21,7 @@ function PartnerChip({ name, logoImage }) {
   if (logoImage) {
     return (
       <div className="flex items-center justify-center h-16 w-36 border border-gray-200 rounded-xl px-4 py-2 bg-white">
-        <img src={logoImage} alt={name || 'Partner logo'} className="max-h-10 w-full object-contain" />
+        <img src={logoImage} alt={name || 'Partner logo'} loading="lazy" decoding="async" className="max-h-10 w-full object-contain" />
       </div>
     )
   }

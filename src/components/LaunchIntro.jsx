@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import logo from '../assets/medweb.png'
+import logo from '../assets/medweb.webp'
 
 // ─────────────────────────────────────────────────────────────────────────
 // Placeholder motivational lines — the site owner will supply the final

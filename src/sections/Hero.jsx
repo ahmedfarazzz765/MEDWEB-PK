@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
+import { Helmet } from 'react-helmet-async'
 import { motion } from 'framer-motion'
 import { ArrowRight, Play, Activity, Dna, Building2 } from 'lucide-react'
 import { useSiteSettings } from '../hooks/useSiteSettings'
 import { webinarsService } from '../firebase/services'
-import heroBanner from '../assets/hero_clean.jpeg'
+import heroBanner from '../assets/hero_clean.webp'
 
 const DEFAULTS = {
   heroBadge: "Pakistan's Leading Platform for Medical Education",
@@ -35,6 +36,15 @@ export default function Hero() {
       className="relative overflow-hidden bg-cover bg-center"
       style={{ backgroundImage: `url(${d.heroImage || heroBanner})` }}
     >
+      {/* Only preloaded when the bundled fallback is actually in use — an
+          admin-uploaded override (d.heroImage) is a Firestore Storage URL
+          we don't know ahead of render, so preloading it here would just
+          race the img-equivalent fetch the CSS background triggers anyway. */}
+      {!d.heroImage && (
+        <Helmet>
+          <link rel="preload" as="image" href={heroBanner} />
+        </Helmet>
+      )}
       {/* Light mask — photo dissolves into the page's white/light background on the left,
           stays fully bright and untouched on the right. No dark tint over the photo. */}
       <div className="absolute inset-0 bg-gradient-to-r from-white via-white/85 sm:via-white/70 to-transparent" />

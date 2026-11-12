@@ -35,7 +35,7 @@ function uniqueSlug(base, existingSlugs) {
 
 function makeColumns(openEdit, handlePublish, handleDelete) {
   return [
-    { key: 'imageUrl', label: '',          render: v => v ? <CoverImage src={v} className="w-8 h-8 rounded-lg" /> : <div className="w-8 h-8 rounded-lg bg-blue-50" /> },
+    { key: 'imageUrl', label: '',          render: (v, row) => v ? <CoverImage src={v} alt={row.title || ''} className="w-8 h-8 rounded-lg" /> : <div className="w-8 h-8 rounded-lg bg-blue-50" /> },
     { key: 'title',    label: 'Title',     render: v => <span className="font-semibold text-[#1a1a1a]">{v}</span> },
     { key: 'references', label: 'Sources', render: v => <span className="text-gray-500 text-xs">{(v || []).filter(r => r.url?.trim()).length || '—'}</span> },
     { key: 'published',label: 'Published', render: v => v || <span className="text-gray-300 text-xs">—</span> },

@@ -127,7 +127,7 @@ export default function NewsPostPage() {
             {item.imageUrl && (
               <div className="w-full bg-blue-50">
                 {/* object-contain, not CoverImage's crop — the full thumbnail, uncropped */}
-                <img src={item.imageUrl} alt={item.title} className="w-full max-h-[420px] object-contain mx-auto" />
+                <img src={item.imageUrl} alt={item.title} loading="lazy" decoding="async" className="w-full max-h-[420px] object-contain mx-auto" />
               </div>
             )}
 

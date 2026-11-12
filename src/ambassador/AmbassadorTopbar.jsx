@@ -3,7 +3,7 @@ import { signOut } from 'firebase/auth'
 import { auth } from '../firebase/config'
 import { Menu, Search, Bell, ChevronDown, LogOut } from 'lucide-react'
 import CoverImage from '../components/CoverImage'
-import logo from '../assets/medweb.png'
+import logo from '../assets/medweb.webp'
 
 export default function AmbassadorTopbar({ ambassador, onOpenMobileNav }) {
   const [menuOpen, setMenuOpen] = useState(false)

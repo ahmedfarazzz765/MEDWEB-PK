@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { Facebook, Instagram, Linkedin, MessageCircle, Mail, Phone, MapPin, ArrowRight, Check, Loader2 } from 'lucide-react'
 import { newsletterService } from '../firebase/services'
 import { useSiteSettings } from '../hooks/useSiteSettings'
-import logo from '../assets/medweb.png'
+import Logo from '../components/Logo'
 
 const DEFAULTS = {
   footerAbout: "Pakistan's premier medical education platform for pharmacy, biotech, psychology, and allied health sciences students.",
@@ -156,7 +156,7 @@ export default function Footer() {
           {/* About */}
           <div>
             <div className="flex items-center gap-2.5 mb-5">
-              <img src={logo} alt="MEDWEB Logo" className="w-11 h-11 object-contain" />
+              <Logo alt="MEDWEB Logo" className="w-11 h-11 object-contain" />
               <div>
                 <span className="font-black text-white text-xl tracking-tight">MED</span>
                 <span className="font-black text-[#64ac37] text-xl tracking-tight">WEB</span>

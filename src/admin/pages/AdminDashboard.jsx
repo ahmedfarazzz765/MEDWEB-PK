@@ -129,7 +129,7 @@ export default function AdminDashboard() {
               <thead><tr className="bg-gray-50 border-b border-gray-100">{['Name','University','Rank','Referred','Status'].map(h=><th key={h} className="text-left text-xs text-gray-500 font-semibold px-5 py-2.5">{h}</th>)}</tr></thead>
               <tbody>{ambassadors.slice(0,5).map((a,i)=>(
                 <tr key={i} className="border-b border-gray-50 hover:bg-blue-50/20 transition-colors">
-                  <td className="px-5 py-3 text-sm font-semibold text-[#1a1a1a] flex items-center gap-2">{a.imageUrl&&<CoverImage src={a.imageUrl} bias="center 25%" className="w-6 h-6 rounded-full"/>}{a.name}</td>
+                  <td className="px-5 py-3 text-sm font-semibold text-[#1a1a1a] flex items-center gap-2">{a.imageUrl&&<CoverImage src={a.imageUrl} alt={a.name || ""} bias="center 25%" className="w-6 h-6 rounded-full"/>}{a.name}</td>
                   <td className="px-5 py-3 text-sm text-gray-500">{a.university}</td>
                   <td className="px-5 py-3"><span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{background:`${rankColors[a.rank]}15`,color:rankColors[a.rank]}}>{a.rank}</span></td>
                   <td className="px-5 py-3 text-sm font-bold text-[#1655c3]">{a.students||0}</td>

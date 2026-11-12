@@ -100,7 +100,7 @@ function StarPicker({ value, onChange }) {
 
 function makeColumns(openEdit, handleDelete, rankThresholds, onIssueLogin, issuingLogin, onViewReferrals) {
   return [
-    { key: 'imageUrl',   label: '',           render: v => v ? <CoverImage src={v} bias="center 25%" className="w-8 h-8 rounded-full" /> : <div className="w-8 h-8 rounded-full bg-blue-50" /> },
+    { key: 'imageUrl',   label: '',           render: (v, row) => v ? <CoverImage src={v} alt={row.name || ''} bias="center 25%" className="w-8 h-8 rounded-full" /> : <div className="w-8 h-8 rounded-full bg-blue-50" /> },
     { key: 'name',       label: 'Name',        render: v => <span className="font-semibold text-[#1a1a1a]">{v}</span> },
     { key: 'university', label: 'University',  render: v => <span className="text-gray-500 text-xs">{v}</span> },
     { key: 'city',       label: 'City' },
@@ -457,7 +457,7 @@ export default function AdminAmbassadors() {
             {data.map(a => (
               <SortableItem key={a.id} id={a.id} className="flex items-center gap-3 bg-gray-50 rounded-xl border border-gray-100 p-3 pr-9">
                 {a.imageUrl ? (
-                  <CoverImage src={a.imageUrl} bias="center 25%" className="w-9 h-9 rounded-full shrink-0" />
+                  <CoverImage src={a.imageUrl} alt={a.name || ""} bias="center 25%" className="w-9 h-9 rounded-full shrink-0" />
                 ) : (
                   <div className="w-9 h-9 rounded-full bg-[#1655c3] flex items-center justify-center text-white font-bold text-xs shrink-0">{a.name?.charAt(0)}</div>
                 )}

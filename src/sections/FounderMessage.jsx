@@ -5,7 +5,7 @@ import { Quote, ArrowRight } from 'lucide-react'
 import { settingsService } from '../firebase/services'
 import BrandWatermark from '../components/BrandWatermark'
 import CoverImage from '../components/CoverImage'
-import founderFallback from '../assets/founder_pic.png'
+import founderFallback from '../assets/founder_pic.webp'
 
 const DEFAULTS = {
   founderName: 'Dr. Shahroz Abbas',

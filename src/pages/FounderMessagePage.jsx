@@ -6,7 +6,7 @@ import { settingsService } from '../firebase/services'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
 import CoverImage from '../components/CoverImage'
-import founderFallback from '../assets/founder_pic.png'
+import founderFallback from '../assets/founder_pic.webp'
 
 const DEFAULT_FULL = `As the founder of MEDWEB-PK, I strongly believe that accessible, evidence-based medical education is the right of every student — not a privilege available to a few. Throughout my academic and professional journey, I observed that thousands of talented medical, pharmacy, and allied health students struggle not because they lack ability, but because they lack proper guidance, structured clinical learning, and opportunities for skill development.
 

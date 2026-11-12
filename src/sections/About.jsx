@@ -8,7 +8,7 @@ import InfiniteMarquee from '../components/InfiniteMarquee'
 import CardRowSkeleton from '../components/CardRowSkeleton'
 import BrandWatermark from '../components/BrandWatermark'
 import CoverImage from '../components/CoverImage'
-import logo from '../assets/medweb.png'
+import logo from '../assets/medweb.webp'
 
 const HEADING_DEFAULTS = {
   teamHeading1: 'Our',

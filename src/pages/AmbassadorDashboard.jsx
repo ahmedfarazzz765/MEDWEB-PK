@@ -9,7 +9,7 @@ import { useSiteSettings } from '../hooks/useSiteSettings'
 import AmbassadorLayout from '../ambassador/AmbassadorLayout'
 import useAmbassador from '../ambassador/useAmbassador'
 import CoverImage from '../components/CoverImage'
-import logo from '../assets/medweb.png'
+import logo from '../assets/medweb.webp'
 
 const TAGLINES = [
   'More Connections,\nBigger Impact.',

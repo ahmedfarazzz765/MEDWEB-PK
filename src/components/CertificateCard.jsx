@@ -45,7 +45,7 @@ export default function CertificateCard({ cert }) {
         onClick={() => setTapped(t => !t)}
       >
         {cert.certificateImageUrl ? (
-          <img src={cert.certificateImageUrl} alt={title} className="w-full h-full object-cover" />
+          <img src={cert.certificateImageUrl} alt={title} loading="lazy" decoding="async" className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full overflow-hidden">
             <div style={{ transform: 'scale(0.3)', transformOrigin: 'top left' }}>

@@ -1,4 +1,4 @@
-import logo from '../assets/medweb.png'
+import logo from '../assets/medweb.webp'
 
 // Deterministic pseudo-random generator (same seed always produces the same
 // scatter) so each section's watermark layout is stable across re-renders

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { signInWithEmailAndPassword } from 'firebase/auth'
 import { auth } from '../firebase/config'
 import { Eye, EyeOff, Lock, Mail, Info, ArrowRight, CheckCircle2 } from 'lucide-react'
-import logo from '../assets/medweb.png'
+import logo from '../assets/medweb.webp'
 import AdminButton from './components/AdminButton'
 
 const FEATURES = [

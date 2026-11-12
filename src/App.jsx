@@ -1,43 +1,60 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import ErrorBoundary from './components/ErrorBoundary'
-import HomePage          from './pages/HomePage'
-import WebinarRegister   from './pages/WebinarRegister'
-import WebinarDetailPage from './pages/WebinarDetailPage'
-import FounderMessagePage from './pages/FounderMessagePage'
-import AboutPage          from './pages/AboutPage'
-import CertificatePage    from './pages/CertificatePage'
-import PortfolioPage      from './pages/PortfolioPage'
-import CourseDetailPage   from './pages/CourseDetailPage'
-import AmbassadorProfilePage from './pages/AmbassadorProfilePage'
-import BlogPostPage       from './pages/BlogPostPage'
-import AnnouncementPage   from './pages/AnnouncementPage'
-import AnnouncementsListPage from './pages/AnnouncementsListPage'
-import WebinarsListPage   from './pages/WebinarsListPage'
-import CoursesListPage    from './pages/CoursesListPage'
-import TeamListPage       from './pages/TeamListPage'
-import SpeakersPage       from './pages/SpeakersPage'
-import AmbassadorsListPage from './pages/AmbassadorsListPage'
-import AdvisoryBoardListPage from './pages/AdvisoryBoardListPage'
-import BlogListPage       from './pages/BlogListPage'
-import NewsListPage       from './pages/NewsListPage'
-import NewsPostPage       from './pages/NewsPostPage'
-import PrivacyPolicyPage  from './pages/PrivacyPolicyPage'
-import TermsOfServicePage from './pages/TermsOfServicePage'
-import RefundPolicyPage   from './pages/RefundPolicyPage'
-import DynamicForm       from './pages/DynamicForm'
-import AcceptInvite       from './pages/AcceptInvite'
-import NewsletterUnsubscribe from './pages/NewsletterUnsubscribe'
-import AdminLogin        from './admin/AdminLogin'
-import AdminPanel        from './admin/AdminPanel'
-import RequireAuth       from './admin/RequireAuth'
-import AmbassadorAcceptInvite from './pages/AmbassadorAcceptInvite'
-import AmbassadorLogin   from './pages/AmbassadorLogin'
-import AmbassadorDashboard from './pages/AmbassadorDashboard'
-import RequireAmbassadorAuth from './ambassador/RequireAmbassadorAuth'
-import ComingSoonPage from './ambassador/ComingSoonPage'
+import PageLoader from './components/PageLoader'
 import WebinarAnnouncementPopup from './components/WebinarAnnouncementPopup'
 import NewsPopup from './components/NewsPopup'
-import NotFoundPage from './pages/NotFoundPage'
+
+// Every route is code-split via React.lazy — previously every page
+// (including the entire /admin area: ~20 admin pages pulling in xlsx,
+// jspdf, html2canvas, Tiptap, dnd-kit, and the whole Ambassador
+// dashboard) was bundled into one ~2.8MB main chunk regardless of
+// whether a visitor ever opens /admin. Each import() below becomes its
+// own chunk, fetched only when that route is actually visited.
+const HomePage              = lazy(() => import('./pages/HomePage'))
+const WebinarRegister       = lazy(() => import('./pages/WebinarRegister'))
+const WebinarDetailPage     = lazy(() => import('./pages/WebinarDetailPage'))
+const FounderMessagePage    = lazy(() => import('./pages/FounderMessagePage'))
+const AboutPage             = lazy(() => import('./pages/AboutPage'))
+const CertificatePage       = lazy(() => import('./pages/CertificatePage'))
+const PortfolioPage         = lazy(() => import('./pages/PortfolioPage'))
+const CourseDetailPage      = lazy(() => import('./pages/CourseDetailPage'))
+const AmbassadorProfilePage = lazy(() => import('./pages/AmbassadorProfilePage'))
+const BlogPostPage          = lazy(() => import('./pages/BlogPostPage'))
+const AnnouncementPage      = lazy(() => import('./pages/AnnouncementPage'))
+const AnnouncementsListPage = lazy(() => import('./pages/AnnouncementsListPage'))
+const WebinarsListPage      = lazy(() => import('./pages/WebinarsListPage'))
+const CoursesListPage       = lazy(() => import('./pages/CoursesListPage'))
+const TeamListPage          = lazy(() => import('./pages/TeamListPage'))
+const SpeakersPage          = lazy(() => import('./pages/SpeakersPage'))
+const AmbassadorsListPage   = lazy(() => import('./pages/AmbassadorsListPage'))
+const AdvisoryBoardListPage = lazy(() => import('./pages/AdvisoryBoardListPage'))
+const BlogListPage          = lazy(() => import('./pages/BlogListPage'))
+const NewsListPage          = lazy(() => import('./pages/NewsListPage'))
+const NewsPostPage          = lazy(() => import('./pages/NewsPostPage'))
+const PrivacyPolicyPage     = lazy(() => import('./pages/PrivacyPolicyPage'))
+const TermsOfServicePage    = lazy(() => import('./pages/TermsOfServicePage'))
+const RefundPolicyPage      = lazy(() => import('./pages/RefundPolicyPage'))
+const DynamicForm           = lazy(() => import('./pages/DynamicForm'))
+const AcceptInvite          = lazy(() => import('./pages/AcceptInvite'))
+const NewsletterUnsubscribe = lazy(() => import('./pages/NewsletterUnsubscribe'))
+const NotFoundPage          = lazy(() => import('./pages/NotFoundPage'))
+
+// Admin — the single biggest chunk by far (every AdminXxx page, Form
+// Builder's dnd-kit, the Tiptap rich-text editor, xlsx/jspdf/html2canvas
+// exports). RequireAuth itself is tiny, but it only ever renders inside
+// an admin route, so it travels in the same chunk rather than the main one.
+const AdminLogin  = lazy(() => import('./admin/AdminLogin'))
+const AdminPanel  = lazy(() => import('./admin/AdminPanel'))
+const RequireAuth = lazy(() => import('./admin/RequireAuth'))
+
+// Ambassador dashboard area — a second, smaller admin-like area most
+// visitors never open.
+const AmbassadorAcceptInvite  = lazy(() => import('./pages/AmbassadorAcceptInvite'))
+const AmbassadorLogin         = lazy(() => import('./pages/AmbassadorLogin'))
+const AmbassadorDashboard     = lazy(() => import('./pages/AmbassadorDashboard'))
+const RequireAmbassadorAuth   = lazy(() => import('./ambassador/RequireAmbassadorAuth'))
+const ComingSoonPage          = lazy(() => import('./ambassador/ComingSoonPage'))
 
 // Marketing popups belong on the public site only — mounting them
 // unconditionally at the Router root meant refreshing any /admin page
@@ -60,6 +77,7 @@ function App() {
     <Router>
       <PublicSitePopups />
       <ErrorBoundary>
+      <Suspense fallback={<PageLoader />}>
       <Routes>
         {/* "Contact" everywhere else in the app (navbar/footer) is really
             just the homepage's own Footer contact section (#contact) —
@@ -110,6 +128,7 @@ function App() {
         <Route path="/ambassador/help"           element={<RequireAmbassadorAuth><ComingSoonPage navKey="help" /></RequireAmbassadorAuth>} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
+      </Suspense>
       </ErrorBoundary>
     </Router>
   )
