@@ -12,7 +12,7 @@ import CoverImage from '../../components/CoverImage'
 import SortableGrid, { SortableItem } from '../components/SortableGrid'
 import AdminCourseEnrollments from './AdminCourseEnrollments'
 import { coursesService, courseJoiningLinksService, formsService } from '../../firebase/services'
-import { karachiLocalToIso, isoToKarachiLocal } from '../../lib/karachiTime'
+import { karachiLocalToIso, karachiLocalToMs, isoToKarachiLocal } from '../../lib/karachiTime'
 
 const emptyForm = () => ({
   title: '', instructor: '', instructorImage: '', qualification: '', type: 'Free', status: 'Active',
@@ -186,6 +186,13 @@ export default function AdminCourses() {
         fee: form.originalPrice,
         discountEndsAt: karachiLocalToIso(discountEndsAt),
         registrationClosesAt: karachiLocalToIso(registrationClosesAt),
+        // Epoch-ms twins of the two ISO fields above — a Firestore rule
+        // can't parse an ISO string into a comparable time, only compare
+        // numbers against `request.time.toMillis()`, so these exist
+        // purely for rules to read. 0 when the picker is empty (never ''
+        // — a rule comparing a string to a number would never match).
+        discountEndsAtMs: karachiLocalToMs(discountEndsAt),
+        registrationClosesAtMs: karachiLocalToMs(registrationClosesAt),
       }
       let courseId = editId
       if (modal === 'add') courseId = await coursesService.add(coursePayload)

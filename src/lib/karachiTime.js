@@ -14,6 +14,18 @@ export function karachiLocalToIso(localStr) {
   return isNaN(d.getTime()) ? '' : d.toISOString()
 }
 
+// Same conversion as karachiLocalToIso, as a plain epoch-ms number
+// instead of an ISO string — Firestore security rules can't call
+// `new Date(...)` on a string, so a deadline a rule needs to compare
+// against `request.time` has to already be a number. 0 (not '' — rules
+// read this as a number, never a string) when the picker is empty.
+export function karachiLocalToMs(localStr) {
+  if (!localStr) return 0
+  const withSeconds = localStr.length === 16 ? `${localStr}:00` : localStr
+  const t = new Date(`${withSeconds}+05:00`).getTime()
+  return isNaN(t) ? 0 : t
+}
+
 // Reverse — renders a stored ISO string back into the Asia/Karachi
 // wall-clock `datetime-local` string the input needs, regardless of
 // where the admin's browser itself is.
