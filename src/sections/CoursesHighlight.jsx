@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight, BookOpen, Star, Clock } from 'lucide-react'
-import { coursesService } from '../firebase/services'
+import { coursesService, courseEnrollmentsService } from '../firebase/services'
+import { isRegistrationClosed } from '../lib/coursePricing'
 import { useSiteSettings } from '../hooks/useSiteSettings'
 import SectionHeading from '../components/SectionHeading'
 import InfiniteMarquee from '../components/InfiniteMarquee'
@@ -22,12 +23,27 @@ const BGS     = ['linear-gradient(135deg,#fffbeb,#fef3c7)','linear-gradient(135d
 export function CourseCard({ c, i }) {
   const color = COLORS[i % COLORS.length]
   const bg    = BGS[i % BGS.length]
-  const poster = c.posterImage || c.imageUrl
+  // Thumbnail (imageUrl) is what the card always shows — posterImage is
+  // a separate, full/uncropped image shown once on the detail page, not
+  // a fallback meant for this fixed 16:9 box.
+  const thumb = c.imageUrl || c.posterImage
+  const [seatCount, setSeatCount] = useState(null)
+
+  useEffect(() => {
+    if (c.type !== 'Paid' || !c.seatLimit) return
+    courseEnrollmentsService.getByCourse(c.id)
+      .then(rows => setSeatCount(rows.filter(r => r.status !== 'Rejected').length))
+      .catch(() => {})
+  }, [c.id, c.type, c.seatLimit])
+
+  const seatsFull = c.seatLimit > 0 && seatCount !== null && seatCount >= c.seatLimit
+  const registrationOpen = c.type === 'Paid' && c.enrollmentOpen !== false && !seatsFull && !isRegistrationClosed(c)
+
   return (
     <div className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 flex flex-col group relative overflow-hidden h-full">
       <div className="relative aspect-video w-full">
-        {poster
-          ? <CoverImage src={poster} className="w-full h-full" alt={c.title} />
+        {thumb
+          ? <CoverImage src={thumb} className="w-full h-full" alt={c.title} />
           : <div className="w-full h-full flex items-center justify-center" style={{ background: bg }}>
               <BookOpen size={32} style={{ color }} className="opacity-50" />
             </div>
@@ -65,8 +81,8 @@ export function CourseCard({ c, i }) {
           </div>
         )}
         {c.id ? (
-          <Link to={`/courses/${c.slug || c.id}`} className="inline-flex items-center gap-1.5 text-sm font-semibold mt-5 group-hover:gap-3 transition-all duration-200" style={{ color }}>
-            Explore Course <ArrowRight size={15} />
+          <Link to={`/courses/${c.slug || c.id}${registrationOpen ? '#enroll' : ''}`} className="inline-flex items-center gap-1.5 text-sm font-semibold mt-5 group-hover:gap-3 transition-all duration-200" style={{ color }}>
+            {registrationOpen ? 'Register Now' : 'Explore Course'} <ArrowRight size={15} />
           </Link>
         ) : (
           <Link to="/courses" className="inline-flex items-center gap-1.5 text-sm font-semibold mt-5 group-hover:gap-3 transition-all duration-200" style={{ color }}>

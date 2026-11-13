@@ -179,11 +179,20 @@ export default function AdminCourses() {
       const { joiningLink, discountEndsAt, registrationClosesAt, ...rest } = form
       const coursePayload = {
         ...rest,
+        // originalPrice/discountPrice stored as real numbers — discountPrice's
+        // own input binds to a plain string (so an empty box means "no
+        // discount" rather than coercing to 0 on every keystroke), so this is
+        // the one place it actually gets converted before saving.
+        originalPrice: Number(form.originalPrice) || 0,
+        // 0 (not '') means "no discount" — getCoursePricing already
+        // treats any non-positive discount as inactive, so this loses
+        // no information while keeping the field a real number.
+        discountPrice: Number(form.discountPrice) || 0,
         // `fee` kept mirrored to `originalPrice` for backward
         // compatibility — every pre-existing read of course.fee (cards,
         // JSON-LD offers, the event-details block) keeps working
         // unchanged; originalPrice is what this form actually edits now.
-        fee: form.originalPrice,
+        fee: Number(form.originalPrice) || 0,
         discountEndsAt: karachiLocalToIso(discountEndsAt),
         registrationClosesAt: karachiLocalToIso(registrationClosesAt),
         // Epoch-ms twins of the two ISO fields above — a Firestore rule

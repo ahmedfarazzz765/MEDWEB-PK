@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, ExternalLink, Star, Users, PlayCircle, Clock, ListChecks, Calendar, MapPin, Award, Banknote } from 'lucide-react'
 import { coursesService } from '../firebase/services'
@@ -20,6 +20,7 @@ export default function CourseDetailPage() {
   // doc-id lookup so nothing already shared ever breaks.
   const { id: slugOrId } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const [course, setCourse] = useState(null)
   const [loading, setLoading] = useState(true)
 
@@ -32,6 +33,18 @@ export default function CourseDetailPage() {
       .catch(() => setCourse(null))
       .finally(() => setLoading(false))
   }, [slugOrId])
+
+  // A card's "Register Now" link arrives as /courses/<slug>#enroll — jump
+  // to the form once the page (and its #enroll section) has actually
+  // rendered, same pattern HomePage.jsx already uses for cross-page
+  // anchor links.
+  useEffect(() => {
+    if (loading || location.hash !== '#enroll') return
+    const raf = requestAnimationFrame(() => {
+      document.getElementById('enroll')?.scrollIntoView({ behavior: 'smooth' })
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [loading, location.hash])
 
   if (loading) {
     return (
@@ -59,7 +72,11 @@ export default function CourseDetailPage() {
     )
   }
 
-  const poster = course.posterImage || course.imageUrl
+  // Top banner (16:9, cropped) is the thumbnail, not the full poster —
+  // mirrors the card's own `imageUrl` priority so the same image a
+  // visitor saw on the card is what greets them here. `posterImage` is
+  // shown separately, uncropped, inside the description below.
+  const thumb = course.imageUrl || course.posterImage
   const lectures = Array.isArray(course.lectures) ? course.lectures : []
   const tags = Array.isArray(course.tags) ? course.tags : []
   const fullDescription = course.fullDescription || course.description
@@ -83,11 +100,18 @@ export default function CourseDetailPage() {
   const startIso = isWorkshop ? parseIso(course.eventDate, course.startTime) : null
   const endIso = isWorkshop ? parseIso(course.eventDate, course.endTime) : null
 
+  // Thumbnail first (what a visitor actually saw on the card/search
+  // result), then the full poster as a second, larger image candidate —
+  // same priority SEO's own og:image above already uses for the first
+  // slot, kept consistent rather than picked independently.
+  const jsonLdImages = [course.ogImage || course.imageUrl, course.posterImage].filter(Boolean)
+
   const courseJsonLd = isWorkshop ? {
     '@context': 'https://schema.org',
     '@type': 'EducationEvent',
     name: course.title,
     description: seoDescription,
+    ...(jsonLdImages.length ? { image: jsonLdImages } : {}),
     ...(startIso ? { startDate: startIso } : {}),
     ...(endIso ? { endDate: endIso } : {}),
     eventAttendanceMode: 'https://schema.org/OnlineEventAttendanceMode',
@@ -100,6 +124,7 @@ export default function CourseDetailPage() {
     '@type': 'Course',
     name: course.title,
     description: seoDescription,
+    ...(jsonLdImages.length ? { image: jsonLdImages } : {}),
     provider: { '@type': 'Organization', name: 'MEDWEB-PK', sameAs: SITE_URL },
     ...(course.instructor ? { hasCourseInstance: { '@type': 'CourseInstance', courseMode: 'Online', instructor: { '@type': 'Person', name: course.instructor } } } : {}),
     ...(course.rating > 0 ? { aggregateRating: { '@type': 'AggregateRating', ratingValue: course.rating, ratingCount: Math.max(course.students || 1, 1) } } : {}),
@@ -112,7 +137,7 @@ export default function CourseDetailPage() {
         description={seoDescription}
         keywords={course.seoKeywords}
         path={canonicalPath}
-        image={course.ogImage || poster}
+        image={course.ogImage || course.imageUrl}
         type="article"
         jsonLd={courseJsonLd}
       />
@@ -154,18 +179,18 @@ export default function CourseDetailPage() {
           className="bg-white rounded-3xl shadow-[0_8px_40px_rgba(0,0,0,0.06)] overflow-hidden"
           initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }}
         >
-          {poster && (
+          {thumb && (
             <div className="w-full h-56 sm:h-72 overflow-hidden">
-              <CoverImage src={poster} alt={course.title} className="w-full h-full" onError={e => { e.target.style.display = 'none' }} />
+              <CoverImage src={thumb} alt={course.title} className="w-full h-full" onError={e => { e.target.style.display = 'none' }} />
             </div>
           )}
 
           <div className="p-6 sm:p-8 space-y-6">
             {course.instructor && (
               <div className="flex items-center gap-4 p-4 rounded-2xl border border-gray-100 bg-gray-50">
-                <div className="w-14 h-14 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-white shadow-sm bg-[#1655c3]">
+                <div className="w-20 h-20 rounded-2xl overflow-hidden flex-shrink-0 ring-2 ring-white shadow-sm bg-[#1655c3] flex items-center justify-center">
                   {course.instructorImage
-                    ? <CoverImage src={course.instructorImage} alt={course.instructor} bias="center 25%" className="w-full h-full" />
+                    ? <img src={course.instructorImage} alt={course.instructor} className="w-full h-full object-contain" loading="lazy" />
                     : <div className="w-full h-full flex items-center justify-center text-white font-bold text-base">{instructorInitials}</div>}
                 </div>
                 <div className="min-w-0">
@@ -174,6 +199,16 @@ export default function CourseDetailPage() {
                   {course.qualification && <div className="text-xs text-gray-500 truncate">{course.qualification}</div>}
                 </div>
               </div>
+            )}
+
+            {course.posterImage && (
+              <img
+                src={course.posterImage}
+                alt={`${course.title}${course.instructor ? ` – ${course.instructor}` : ''} workshop poster`}
+                loading="lazy"
+                className="block mx-auto w-full h-auto object-contain rounded-2xl"
+                style={{ maxWidth: 720 }}
+              />
             )}
 
             {(course.eventDate || course.platform || (course.type === 'Paid' && course.fee > 0)) && (

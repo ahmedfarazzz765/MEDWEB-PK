@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { X, Calendar } from 'lucide-react'
 import { coursesService } from '../firebase/services'
-import CoverImage from './CoverImage'
 import CoursePriceTag from './CoursePriceTag'
 
 const DISMISS_KEY = 'medweb_course_popup_dismissed_at'
@@ -57,7 +56,9 @@ export default function CoursePopup() {
   }
 
   if (!course) return null
-  const poster = course.posterImage || course.imageUrl
+  // Always the full poster, uncropped — imageUrl (the card thumbnail) is
+  // a different, 16:9-cropped image and isn't a substitute here.
+  const poster = course.posterImage
 
   return (
     <AnimatePresence>
@@ -83,9 +84,7 @@ export default function CoursePopup() {
               <X size={16} />
             </button>
             {poster && (
-              <div className="w-full h-44 sm:h-52">
-                <CoverImage src={poster} alt={course.title} className="w-full h-full" />
-              </div>
+              <img src={poster} alt={course.title} loading="lazy" className="block w-full h-auto object-contain" />
             )}
             <div className="p-5 sm:p-6">
               {course.category === 'Workshop' && (
