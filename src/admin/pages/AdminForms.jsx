@@ -218,6 +218,41 @@ export default function AdminForms() {
                   {['text','email','phone','textarea','checkbox'].includes(f.type) && (
                     <input className={`${inputCls} py-1.5 text-xs`} value={f.placeholder || ''} onChange={e => updField(idx, { placeholder: e.target.value })} placeholder="Placeholder / helper text" />
                   )}
+                  {f.type === 'file' && (
+                    <p className="text-[11px] text-gray-400 mt-1">Accepts JPG, PNG or PDF — max 5 MB.</p>
+                  )}
+
+                  {/* Conditional visibility — "Show only if <another field> equals
+                      <option>". Only makes sense once there's at least one earlier
+                      dropdown/radio field with options to key off of (e.g. "Payment
+                      Method") — hidden entirely otherwise rather than offering an
+                      empty, non-functional picker. */}
+                  {form.fields.slice(0, idx).some(other => ['dropdown', 'radio'].includes(other.type) && (other.options || []).length > 0) && (
+                    <div className="flex items-center gap-2 mt-2 pt-2 border-t border-dashed border-gray-200">
+                      <span className="text-[11px] font-semibold text-gray-500 whitespace-nowrap">Show only if</span>
+                      <select
+                        className={`${inputCls} py-1.5 text-xs flex-1`}
+                        value={f.showIfField || ''}
+                        onChange={e => updField(idx, { showIfField: e.target.value || null, showIfValue: e.target.value ? f.showIfValue : null })}
+                      >
+                        <option value="">— always shown —</option>
+                        {form.fields.slice(0, idx).filter(other => ['dropdown', 'radio'].includes(other.type) && (other.options || []).length > 0).map(other => (
+                          <option key={other.key} value={other.key}>{other.label || other.key}</option>
+                        ))}
+                      </select>
+                      {f.showIfField && (
+                        <>
+                          <span className="text-[11px] font-semibold text-gray-500">equals</span>
+                          <select className={`${inputCls} py-1.5 text-xs flex-1`} value={f.showIfValue || ''} onChange={e => updField(idx, { showIfValue: e.target.value })}>
+                            <option value="">Select option</option>
+                            {(form.fields.find(other => other.key === f.showIfField)?.options || []).map(o => (
+                              <option key={o} value={o}>{o}</option>
+                            ))}
+                          </select>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { X, Calendar } from 'lucide-react'
 import { coursesService } from '../firebase/services'
 import CoverImage from './CoverImage'
+import CoursePriceTag from './CoursePriceTag'
 
 const DISMISS_KEY = 'medweb_course_popup_dismissed_at'
 const DISMISS_HOURS = 24
@@ -92,10 +93,11 @@ export default function CoursePopup() {
               )}
               <h3 className="font-black text-[#1a1a1a] text-lg leading-snug mb-2">{course.title}</h3>
               {course.eventDate && (
-                <div className="flex items-center gap-1.5 text-gray-500 text-sm mb-4">
+                <div className="flex items-center gap-1.5 text-gray-500 text-sm mb-2">
                   <Calendar size={14} /> {course.eventDate}
                 </div>
               )}
+              <CoursePriceTag course={course} className="mb-4" />
               <Link
                 to={`/courses/${course.slug || course.id}`}
                 onClick={dismiss}

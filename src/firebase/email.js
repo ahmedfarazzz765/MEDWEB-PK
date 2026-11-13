@@ -356,7 +356,7 @@ export async function sendAmbassadorUpdatedEmail({ name, email, changes }) {
 // Paid course/workshop enrollment received — sent immediately on submit,
 // before any admin review (mirrors sendWebinarConfirmation's "silently
 // skips if not configured" contract).
-export async function sendCourseEnrollmentReceivedEmail({ name, email, courseTitle, enrollmentId }) {
+export async function sendCourseEnrollmentReceivedEmail({ name, email, courseTitle, enrollmentId, amountDue }) {
   return sendEmail({
     to_name: name,
     to_email: email,
@@ -370,6 +370,7 @@ export async function sendCourseEnrollmentReceivedEmail({ name, email, courseTit
       <div style="background:#eff6ff;border:2px solid #1655c3;border-radius:12px;padding:16px;text-align:center;margin-bottom:24px;">
         <p style="margin:0 0 4px;color:#666;font-size:11px;text-transform:uppercase;letter-spacing:1px;font-weight:700;">Enrollment ID</p>
         <p style="margin:0;color:#1655c3;font-size:20px;font-weight:900;font-family:monospace;">${enrollmentId}</p>
+        ${amountDue > 0 ? `<p style="margin:8px 0 0;color:#666;font-size:12px;">Amount Due: <strong style="color:#1655c3;">PKR ${Number(amountDue).toLocaleString()}</strong></p>` : ''}
       </div>
       <p style="color:#888;font-size:13px;margin:0;">We will verify your payment and email you once it's confirmed. Please keep your Enrollment ID handy in case you need to contact us.</p>
       <p style="color:#888;font-size:13px;margin:16px 0 0;">Questions? WhatsApp us at <strong>+92 329 1692899</strong> or email <strong>medwebpk@gmail.com</strong>.</p>
@@ -380,7 +381,7 @@ export async function sendCourseEnrollmentReceivedEmail({ name, email, courseTit
 
 // Payment verified — joining link only ever goes out through this email,
 // never to the public course page/form.
-export async function sendCourseEnrollmentApprovedEmail({ name, email, courseTitle, eventDate, startTime, endTime, platform, joiningLink, enrollmentId }) {
+export async function sendCourseEnrollmentApprovedEmail({ name, email, courseTitle, eventDate, startTime, endTime, platform, joiningLink, enrollmentId, amountDue }) {
   const when = [eventDate, [startTime, endTime].filter(Boolean).join(' – ')].filter(Boolean).join(' · ')
   return sendEmail({
     to_name: name,
@@ -400,7 +401,7 @@ export async function sendCourseEnrollmentApprovedEmail({ name, email, courseTit
       </div>
       <p style="color:#aaa;font-size:12px;margin:0 0 20px;text-align:center;">Or paste this link in your browser: <a href="${joiningLink}" style="color:#1655c3;">${joiningLink}</a></p>
       ` : ''}
-      <p style="color:#888;font-size:13px;margin:0;">Enrollment ID: <strong style="font-family:monospace;">${enrollmentId}</strong></p>
+      <p style="color:#888;font-size:13px;margin:0;">Enrollment ID: <strong style="font-family:monospace;">${enrollmentId}</strong>${amountDue > 0 ? ` · Amount Due: <strong style="color:#1655c3;">PKR ${Number(amountDue).toLocaleString()}</strong>` : ''}</p>
       <p style="color:#888;font-size:13px;margin:16px 0 0;">Questions? WhatsApp us at <strong>+92 329 1692899</strong> or email <strong>medwebpk@gmail.com</strong>.</p>
       <br><p style="color:#888;font-size:13px;margin:0;">— MEDWEB Team</p>
     `),

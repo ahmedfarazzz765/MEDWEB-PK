@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Download, Eye, Check, X as XIcon, FileText } from 'lucide-react'
+import { Download, Eye, Check, X as XIcon, FileText, ListChecks } from 'lucide-react'
 import StatCard from '../components/StatCard'
 import DataTable from '../components/DataTable'
 import Modal from '../components/Modal'
@@ -30,9 +30,19 @@ export default function AdminCourseEnrollments({ course, onClose }) {
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState('All')
   const [proofUrl, setProofUrl] = useState(null)
+  const [detailRow, setDetailRow] = useState(null) // enrollment row with `responses` being viewed
   const [rejectTarget, setRejectTarget] = useState(null) // enrollment row being rejected
   const [rejectReason, setRejectReason] = useState('')
   const [busyId, setBusyId] = useState(null)
+
+  // A linked-form enrollment has no top-level `paymentProofUrl` — its
+  // proof (if the form has a file field) lives inside `responses`
+  // instead, keyed by whatever label the admin gave that field.
+  const findProofUrl = row => {
+    if (row.paymentProofUrl) return row.paymentProofUrl
+    return Object.values(row.responses || {}).find(v => typeof v === 'string' && v.startsWith('http')) || null
+  }
+  const nameOf = row => row.name || row.fullName || '—'
 
   useEffect(() => {
     const unsub = courseEnrollmentsService.listenByCourse(course.id, data => { setRows(data); setLoading(false) })
@@ -45,7 +55,10 @@ export default function AdminCourseEnrollments({ course, onClose }) {
     Rejected: rows.filter(r => r.status === 'Rejected').length,
   }), [rows])
 
-  const filtered = statusFilter === 'All' ? rows : rows.filter(r => r.status === statusFilter)
+  const filtered = (statusFilter === 'All' ? rows : rows.filter(r => r.status === statusFilter))
+    // `name` always set here (never just `fullName`) so DataTable's own
+    // search-by-"name" keeps working for linked-form enrollments too.
+    .map(r => ({ ...r, name: nameOf(r) }))
 
   // Keeps the course's own `students` counter (already shown everywhere
   // else in the admin/public UI) in sync with real approved enrollments —
@@ -68,9 +81,10 @@ export default function AdminCourseEnrollments({ course, onClose }) {
       // carry it. Never passed through component state/props beyond this.
       const joiningLinkDoc = await courseJoiningLinksService.get(course.id).catch(() => null)
       sendCourseEnrollmentApprovedEmail({
-        name: row.name, email: row.email, courseTitle: course.title,
+        name: nameOf(row), email: row.email, courseTitle: course.title,
         eventDate: course.eventDate, startTime: course.startTime, endTime: course.endTime,
         platform: course.platform, joiningLink: joiningLinkDoc?.joiningLink || '', enrollmentId: row.enrollmentId,
+        amountDue: row.amountDue,
       }).catch(() => {})
     } catch (e) { alert('Error: ' + e.message) }
     finally { setBusyId(null) }
@@ -85,7 +99,7 @@ export default function AdminCourseEnrollments({ course, onClose }) {
       await syncStudentCount()
       activityLogService.log('course_enrollment_rejected', { courseId: course.id, enrollmentId: rejectTarget.enrollmentId, email: rejectTarget.email, reason: rejectReason.trim() })
       sendCourseEnrollmentRejectedEmail({
-        name: rejectTarget.name, email: rejectTarget.email, courseTitle: course.title,
+        name: nameOf(rejectTarget), email: rejectTarget.email, courseTitle: course.title,
         reason: rejectReason.trim(), enrollmentId: rejectTarget.enrollmentId,
       }).catch(() => {})
       setRejectTarget(null)
@@ -93,32 +107,44 @@ export default function AdminCourseEnrollments({ course, onClose }) {
     finally { setBusyId(null) }
   }
 
+  // Union of every distinct response label across the filtered rows —
+  // a linked form's fields vary per-course, so the CSV's extra columns
+  // can't be a fixed list the way the built-in form's fields are.
+  const responseKeys = useMemo(() => Array.from(new Set(filtered.flatMap(r => Object.keys(r.responses || {})))), [filtered])
+
   const exportCsv = () => {
     downloadCsv(
       `${(course.title || 'course').replace(/\s+/g, '_')}_enrollments.csv`,
-      ['Enrollment ID', 'Name', 'Email', 'WhatsApp', 'Institution', 'Transaction ID', 'Amount Paid', 'Payment Date', 'Status'],
-      filtered.map(r => [r.enrollmentId, r.name, r.email, r.whatsapp, r.institution, r.transactionId, r.amountPaid, r.paymentDate, r.status])
+      ['Enrollment ID', 'Name', 'Email', 'WhatsApp', 'Institution', 'Transaction ID', 'Amount Paid', 'Amount Due', 'Payment Date', 'Status', ...responseKeys],
+      filtered.map(r => [
+        r.enrollmentId, nameOf(r), r.email, r.whatsapp, r.institution, r.transactionId,
+        r.amountPaid, r.amountDue, r.paymentDate, r.status,
+        ...responseKeys.map(k => r.responses?.[k] ?? ''),
+      ])
     )
   }
 
   const columns = [
     { key: 'enrollmentId', label: 'ID', render: v => <span className="font-mono text-xs font-bold text-[#1655c3]">{v}</span> },
-    { key: 'name', label: 'Name', render: v => <span className="font-semibold text-[#1a1a1a]">{v}</span> },
+    { key: 'name', label: 'Name', render: (v, row) => <span className="font-semibold text-[#1a1a1a]">{nameOf(row)}</span> },
     { key: 'email', label: 'Email', render: v => <span className="text-gray-500 text-xs">{v}</span> },
     { key: 'whatsapp', label: 'WhatsApp' },
-    { key: 'institution', label: 'Institution' },
-    { key: 'transactionId', label: 'Transaction ID', render: v => <span className="font-mono text-xs">{v}</span> },
-    { key: 'amountPaid', label: 'Amount', render: v => <span className="font-bold text-[#64ac37]">PKR {Number(v || 0).toLocaleString()}</span> },
-    { key: 'paymentDate', label: 'Paid On' },
+    { key: 'amountPaid', label: 'Amount Paid', render: (v, row) => v ? <span className="font-bold text-[#64ac37]">PKR {Number(v).toLocaleString()}</span> : <span className="text-gray-300">—</span> },
+    { key: 'amountDue', label: 'Amount Due', render: v => v ? <span className="font-bold text-[#1655c3]">PKR {Number(v).toLocaleString()}</span> : <span className="text-gray-300">—</span> },
     { key: 'status', label: 'Status', render: v => {
       const m = { Pending: 'bg-yellow-50 text-yellow-600', Approved: 'bg-green-50 text-green-600', Rejected: 'bg-red-50 text-red-500' }
       return <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${m[v] || 'bg-gray-100 text-gray-500'}`}>{v}</span>
     }},
-    { key: 'id', label: 'Actions', render: (v, row) => (
+    { key: 'actions', label: 'Actions', render: (v, row) => (
       <div className="flex items-center gap-1.5">
-        <button onClick={() => setProofUrl(row.paymentProofUrl)} className="p-1.5 rounded-lg hover:bg-blue-50 text-[#1655c3]" title="View payment proof">
-          <Eye size={13} />
+        <button onClick={() => setDetailRow(row)} className="p-1.5 rounded-lg hover:bg-blue-50 text-[#1655c3]" title="View full submission">
+          <ListChecks size={13} />
         </button>
+        {findProofUrl(row) && (
+          <button onClick={() => setProofUrl(findProofUrl(row))} className="p-1.5 rounded-lg hover:bg-blue-50 text-[#1655c3]" title="View payment proof">
+            <Eye size={13} />
+          </button>
+        )}
         {canWrite && row.status === 'Pending' && (
           <>
             <button onClick={() => handleApprove(row)} disabled={busyId === row.id} className="p-1.5 rounded-lg hover:bg-green-50 text-green-600 disabled:opacity-40" title="Approve">
@@ -170,6 +196,41 @@ export default function AdminCourseEnrollments({ course, onClose }) {
           ) : (
             <img src={proofUrl} alt="Payment proof" className="w-full rounded-xl" />
           )}
+        </Modal>
+      )}
+
+      {detailRow && (
+        <Modal title={`Submission — ${nameOf(detailRow)}`} onClose={() => setDetailRow(null)}>
+          <div className="space-y-3">
+            {/* Fixed fields the built-in form always has */}
+            {[
+              ['Enrollment ID', detailRow.enrollmentId], ['Email', detailRow.email], ['WhatsApp', detailRow.whatsapp],
+              ['Institution', detailRow.institution], ['Qualification', detailRow.qualification], ['City', detailRow.city],
+              ['Payment Method', detailRow.paymentMethod], ['Transaction ID', detailRow.transactionId],
+              ['Amount Paid', detailRow.amountPaid ? `PKR ${Number(detailRow.amountPaid).toLocaleString()}` : ''],
+              ['Amount Due', detailRow.amountDue ? `PKR ${Number(detailRow.amountDue).toLocaleString()}` : ''],
+              ['Payment Date', detailRow.paymentDate],
+            ].filter(([, v]) => v).map(([label, v]) => (
+              <div key={label} className="flex items-start justify-between gap-3 border-b border-gray-100 pb-2">
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider shrink-0">{label}</span>
+                <span className="text-sm text-gray-700 text-right">{v}</span>
+              </div>
+            ))}
+            {/* Every answer from a linked Form Builder form, label -> value */}
+            {Object.entries(detailRow.responses || {}).map(([label, value]) => (
+              <div key={label} className="flex items-start justify-between gap-3 border-b border-gray-100 pb-2">
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider shrink-0">{label}</span>
+                {typeof value === 'string' && value.startsWith('http') ? (
+                  <button onClick={() => setProofUrl(value)} className="text-sm text-[#1655c3] font-semibold hover:underline shrink-0">View file</button>
+                ) : (
+                  <span className="text-sm text-gray-700 text-right">{typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value)}</span>
+                )}
+              </div>
+            ))}
+            {!Object.keys(detailRow.responses || {}).length && !detailRow.transactionId && (
+              <p className="text-sm text-gray-400 text-center py-6">No submission details recorded.</p>
+            )}
+          </div>
         </Modal>
       )}
 

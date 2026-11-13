@@ -7,6 +7,10 @@ import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
 import CoverImage from '../components/CoverImage'
 import CourseEnrollForm from '../components/CourseEnrollForm'
+import CourseLinkedForm from '../components/CourseLinkedForm'
+import CourseRegistrationGate from '../components/CourseRegistrationGate'
+import PaymentInstructions from '../components/PaymentInstructions'
+import CoursePriceTag from '../components/CoursePriceTag'
 import SEO, { SITE_URL } from '../components/SEO'
 
 export default function CourseDetailPage() {
@@ -137,7 +141,7 @@ export default function CourseDetailPage() {
               ))}
             </div>
           )}
-          {course.type === 'Paid' && course.enrollmentOpen !== false && (
+          {(course.type === 'Paid' || course.registrationFormId) && course.enrollmentOpen !== false && (
             <a href="#enroll" className="inline-flex items-center gap-2 text-[#1655c3] font-bold px-7 py-3 rounded-full bg-white hover:bg-gray-50 transition-colors text-sm mt-6 shadow-lg">
               Register Now →
             </a>
@@ -189,7 +193,7 @@ export default function CourseDetailPage() {
                 {course.type === 'Paid' && course.fee > 0 && (
                   <div className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 bg-gray-50">
                     <Banknote size={16} className="text-[#1655c3] shrink-0" />
-                    <span className="text-sm text-gray-700 font-bold">PKR {Number(course.fee).toLocaleString()}</span>
+                    <CoursePriceTag course={course} />
                   </div>
                 )}
               </div>
@@ -234,10 +238,16 @@ export default function CourseDetailPage() {
               </div>
             )}
 
-            {course.type === 'Paid' ? (
+            {(course.type === 'Paid' || course.registrationFormId) ? (
               <div id="enroll" className="border-t border-gray-100 pt-6">
-                <h2 className="font-bold text-[#1a1a1a] text-lg mb-4">Register Now</h2>
-                <CourseEnrollForm course={course} />
+                <h2 className="font-bold text-[#1a1a1a] text-lg mb-1">{course.title}</h2>
+                <CoursePriceTag course={course} className="mb-4" />
+                <CourseRegistrationGate course={course}>
+                  <div className="space-y-5">
+                    {course.type === 'Paid' && <PaymentInstructions course={course} />}
+                    {course.registrationFormId ? <CourseLinkedForm course={course} /> : <CourseEnrollForm course={course} />}
+                  </div>
+                </CourseRegistrationGate>
               </div>
             ) : course.whatsapp && (
               <a

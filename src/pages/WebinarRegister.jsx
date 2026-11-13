@@ -1,18 +1,15 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Calendar, Clock, User, CheckCircle, ArrowLeft, Star } from 'lucide-react'
+import { Calendar, Clock, User, CheckCircle, ArrowLeft } from 'lucide-react'
 import { webinarsService, formsService, settingsService, studentsDbService, ambassadorsService, DEFAULT_WEBINAR_FORM_FIELDS, normalizePhone } from '../firebase/services'
 import { sendWebinarConfirmation } from '../firebase/email'
-import { uploadToCloudinary } from '../firebase/cloudinary'
 import { applyNameTitleCase, resolveFormField } from '../lib/formFieldResolve'
 import FormSuccessLinks from '../components/FormSuccessLinks'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
 import CoverImage from '../components/CoverImage'
-
-const inputCls =
-  'w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#1655c3]/30 focus:border-[#1655c3] transition-all placeholder:text-gray-400 bg-gray-50'
+import DynamicFormFields, { visibleFields } from '../components/DynamicFormFields'
 
 export default function WebinarRegister() {
   const { id } = useParams()
@@ -60,78 +57,14 @@ export default function WebinarRegister() {
 
   const setField = (key, val) => setValues(prev => ({ ...prev, [key]: val }))
 
-  const handleFile = async (key, file) => {
-    if (!file) return
-    setField(key + '__uploading', true)
-    try {
-      const url = await uploadToCloudinary(file, 'medweb/form-uploads')
-      setField(key, url)
-    } catch (e) { setError('Upload failed: ' + e.message) }
-    finally { setField(key + '__uploading', false) }
-  }
-
-  const renderField = (f) => {
-    const v = values[f.key] ?? (f.type === 'checkbox' ? false : '')
-    switch (f.type) {
-      case 'textarea':
-        return <textarea rows={4} placeholder={f.placeholder} value={v} onChange={e => setField(f.key, e.target.value)} className={`${inputCls} resize-none`} />
-      case 'dropdown':
-      case 'qualification':
-      case 'semester': {
-        const opts = f.type === 'qualification'
-          ? ['MBBS', 'BDS', 'Pharm-D', 'Nursing', 'Allied Health Sciences', 'Medical Student', 'Other']
-          : f.type === 'semester'
-          ? ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', 'Final Year', 'Graduated']
-          : (f.options || [])
-        return (
-          <select value={v} onChange={e => setField(f.key, e.target.value)} className={`${inputCls} cursor-pointer`}>
-            <option value="">Select {f.label}</option>
-            {opts.map((o, i) => <option key={i} value={o}>{o}</option>)}
-          </select>
-        )
-      }
-      case 'radio':
-        return (
-          <div className="flex flex-wrap gap-3">
-            {(f.options || []).map((o, i) => (
-              <label key={i} className="flex items-center gap-2 cursor-pointer text-sm text-gray-600">
-                <input type="radio" name={f.key} checked={v === o} onChange={() => setField(f.key, o)} className="accent-[#1655c3]" />{o}
-              </label>
-            ))}
-          </div>
-        )
-      case 'checkbox':
-        return (
-          <label className="flex items-center gap-3 cursor-pointer select-none">
-            <input type="checkbox" checked={!!values[f.key]} onChange={e => setField(f.key, e.target.checked)} className="w-4 h-4 accent-[#1655c3]" />
-            <span className="text-sm text-gray-600">{f.placeholder || f.label}</span>
-          </label>
-        )
-      case 'file':
-        return (
-          <div>
-            <input type="file" onChange={e => handleFile(f.key, e.target.files?.[0])} className="text-sm" />
-            {values[f.key + '__uploading'] && <p className="text-xs text-[#1655c3] mt-1">Uploading…</p>}
-            {values[f.key] && !values[f.key + '__uploading'] && <p className="text-xs text-green-600 mt-1">Uploaded ✓</p>}
-          </div>
-        )
-      case 'rating':
-        return (
-          <div className="flex items-center gap-1">
-            {[1, 2, 3, 4, 5].map(n => (
-              <button key={n} type="button" onClick={() => setField(f.key, n)} className="p-0.5">
-                <Star size={26} className={n <= (Number(v) || 0) ? 'text-amber-400 fill-amber-400' : 'text-gray-200 fill-gray-200'} />
-              </button>
-            ))}
-          </div>
-        )
-      default:
-        return <input type={f.type === 'email' ? 'email' : f.type === 'phone' ? 'tel' : 'text'} placeholder={f.placeholder} value={v} onChange={e => setField(f.key, e.target.value)} className={inputCls} />
-    }
-  }
-
   const handleSubmit = async () => {
-    const missing = fields.filter(f => f.required && f.type !== 'checkbox' && !String(values[f.key] || '').trim())
+    // Only fields actually visible under the current values (a
+    // conditional field hidden by its own showIf never blocks submit as
+    // "required but empty") are checked — same `visibleFields` helper
+    // the render below uses, so what's validated always matches what's
+    // on screen.
+    const checkable = visibleFields(fields, values)
+    const missing = checkable.filter(f => f.required && f.type !== 'checkbox' && !String(values[f.key] || '').trim())
     if (missing.length) { setError(`Please fill: ${missing.map(m => m.label).join(', ')}`); return }
     const emailField = fields.find(f => f.type === 'email' && values[f.key])
     if (emailField && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values[emailField.key])) {
@@ -295,16 +228,7 @@ export default function WebinarRegister() {
                 Fill in the details below to reserve your seat. Fields marked <span className="text-red-500">*</span> are required.
               </p>
 
-              {fields.map((f, i) => (
-                <div key={f.key || i}>
-                  {f.type !== 'checkbox' && (
-                    <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                      {f.label} {f.required && <span className="text-red-500">*</span>}
-                    </label>
-                  )}
-                  {renderField(f)}
-                </div>
-              ))}
+              <DynamicFormFields fields={fields} values={values} setField={setField} onUploadError={msg => setError('Upload failed: ' + msg)} />
 
               {error && <p className="text-red-500 text-xs">{error}</p>}
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { BookOpen, Users, Star, Plus, X, Inbox } from 'lucide-react'
+import { BookOpen, Users, Star, Plus, X, Inbox, ExternalLink } from 'lucide-react'
 import TagInput from '../components/TagInput'
 import StatCard    from '../components/StatCard'
 import DataTable   from '../components/DataTable'
@@ -11,7 +11,8 @@ import ActionButtons from '../components/ActionButtons'
 import CoverImage from '../../components/CoverImage'
 import SortableGrid, { SortableItem } from '../components/SortableGrid'
 import AdminCourseEnrollments from './AdminCourseEnrollments'
-import { coursesService, courseJoiningLinksService } from '../../firebase/services'
+import { coursesService, courseJoiningLinksService, formsService } from '../../firebase/services'
+import { karachiLocalToIso, isoToKarachiLocal } from '../../lib/karachiTime'
 
 const emptyForm = () => ({
   title: '', instructor: '', instructorImage: '', qualification: '', type: 'Free', status: 'Active',
@@ -20,12 +21,20 @@ const emptyForm = () => ({
   students: 0, revenue: 'PKR 0', rating: 0, imageUrl: '',
   whatsapp: '03291692899', courseDuration: '', tags: [], featured: false,
   posterImage: '', driveLink: '', lectures: [],
+  // Form Builder link — same field name/pattern as webinars'
+  // registrationFormId, empty = built-in enrollment form fallback.
+  registrationFormId: '',
   // Workshop/event details
   eventDate: '', startTime: '', endTime: '', platform: '', joiningLink: '',
   // Payment instructions (manual verification — no payment gateway)
   paymentBankName: '', paymentAccountTitle: '', paymentAccountNumber: '', paymentIban: '', paymentJazzcashEasypaisa: '',
   certificateNote: '',
   enrollmentOpen: true, seatLimit: 0,
+  // Early-bird pricing — `fee` is kept in sync with `originalPrice` on
+  // every save (see handleSave) purely for backward compatibility with
+  // every existing read of `course.fee` (cards, JSON-LD offers, etc.);
+  // originalPrice is the one actually edited here going forward.
+  originalPrice: 0, discountPrice: '', discountEndsAt: '', registrationClosesAt: '',
   // SEO
   slug: '', seoTitle: '', seoDescription: '', seoKeywords: '', ogImage: '',
   // Homepage popup
@@ -75,10 +84,12 @@ export default function AdminCourses() {
   const [saving,  setSaving]  = useState(false)
   const [enrollmentsFor, setEnrollmentsFor] = useState(null) // course row, or null
   const [slugTouched, setSlugTouched] = useState(false)
+  const [forms, setForms] = useState([]) // Form Builder forms — same list Add Webinar's selector uses
 
   useEffect(() => {
     const unsub = coursesService.listen(rows => { setData(rows); setLoading(false) })
-    return unsub
+    const unsub2 = formsService.listen(rows => setForms(rows))
+    return () => { unsub(); unsub2() }
   }, [])
 
   // Backfill: any course saved before drag-reorder existed gets an `order`
@@ -109,11 +120,14 @@ export default function AdminCourses() {
       courseDuration: row.courseDuration || '', tags: Array.isArray(row.tags) ? row.tags : [], featured: !!row.featured,
       posterImage: row.posterImage || '', driveLink: row.driveLink || '', lectures: Array.isArray(row.lectures) ? row.lectures : [],
       category: row.category === 'Workshop' ? 'Workshop' : 'Course', fee: row.fee || 0,
+      registrationFormId: row.registrationFormId || '',
       eventDate: row.eventDate || '', startTime: row.startTime || '', endTime: row.endTime || '', platform: row.platform || '', joiningLink: '',
       paymentBankName: row.paymentBankName || '', paymentAccountTitle: row.paymentAccountTitle || '', paymentAccountNumber: row.paymentAccountNumber || '',
       paymentIban: row.paymentIban || '', paymentJazzcashEasypaisa: row.paymentJazzcashEasypaisa || '',
       certificateNote: row.certificateNote || '',
       enrollmentOpen: row.enrollmentOpen !== false, seatLimit: row.seatLimit || 0,
+      originalPrice: row.originalPrice || row.fee || 0, discountPrice: row.discountPrice || '',
+      discountEndsAt: isoToKarachiLocal(row.discountEndsAt), registrationClosesAt: isoToKarachiLocal(row.registrationClosesAt),
       slug: row.slug || '', seoTitle: row.seoTitle || '', seoDescription: row.seoDescription || '', seoKeywords: row.seoKeywords || '', ogImage: row.ogImage || '',
       popupEnabled: !!row.popupEnabled, popupStartDate: row.popupStartDate || '', popupEndDate: row.popupEndDate || '',
     })
@@ -162,7 +176,17 @@ export default function AdminCourses() {
       // joiningLink never goes into the public `courses` doc — see
       // courseJoiningLinksService's own comment for why — written to its
       // own doc right after, keyed by the course's id.
-      const { joiningLink, ...coursePayload } = form
+      const { joiningLink, discountEndsAt, registrationClosesAt, ...rest } = form
+      const coursePayload = {
+        ...rest,
+        // `fee` kept mirrored to `originalPrice` for backward
+        // compatibility — every pre-existing read of course.fee (cards,
+        // JSON-LD offers, the event-details block) keeps working
+        // unchanged; originalPrice is what this form actually edits now.
+        fee: form.originalPrice,
+        discountEndsAt: karachiLocalToIso(discountEndsAt),
+        registrationClosesAt: karachiLocalToIso(registrationClosesAt),
+      }
       let courseId = editId
       if (modal === 'add') courseId = await coursesService.add(coursePayload)
       else                 await coursesService.update(editId, coursePayload)
@@ -255,13 +279,50 @@ export default function AdminCourses() {
               </FormField>
               {form.type === 'Paid' && (
                 <FormField label="Fee (PKR)">
-                  <input className={inputCls} type="number" min="0" value={form.fee} onChange={setNum('fee')} placeholder="300" />
+                  <input className={inputCls} type="number" min="0" value={form.originalPrice} onChange={setNum('originalPrice')} placeholder="300" />
                 </FormField>
               )}
             </div>
             <FormField label="WhatsApp Number (shown on Free courses only — Paid courses use the enrollment form below)">
               <input className={inputCls} value={form.whatsapp} onChange={set('whatsapp')} placeholder="03XXXXXXXXX" />
             </FormField>
+
+            <div className="border-t border-gray-100 pt-4 mt-2">
+              <h4 className="font-bold text-[#1a1a1a] text-sm mb-1">Registration Form</h4>
+              <p className="text-[11px] text-gray-400 mb-3">Same Form Builder forms Add Webinar uses. Leave as "Default built-in enrollment form" to keep the fixed name/email/WhatsApp/payment fields below.</p>
+              <FormField label="Registration — attach a Form Builder form (optional)">
+                <select className={inputCls} value={form.registrationFormId} onChange={set('registrationFormId')}>
+                  <option value="">Default built-in enrollment form</option>
+                  {forms.map(f => <option key={f.id} value={f.id}>{f.title}</option>)}
+                </select>
+              </FormField>
+              {form.registrationFormId && (
+                <p className="text-xs text-gray-500 flex items-center gap-2 -mt-1">
+                  Using: <span className="font-semibold text-[#1a1a1a]">{forms.find(f => f.id === form.registrationFormId)?.title || '…'}</span>
+                  <a href={`/form/${form.registrationFormId}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[#1655c3] font-semibold hover:underline">
+                    Preview <ExternalLink size={11} />
+                  </a>
+                </p>
+              )}
+            </div>
+
+            {form.type === 'Paid' && (
+              <div className="border-t border-gray-100 pt-4 mt-2">
+                <h4 className="font-bold text-[#1a1a1a] text-sm mb-1">Early-Bird Pricing (optional)</h4>
+                <p className="text-[11px] text-gray-400 mb-3">Dates/times are Asia/Karachi (PKT). Leave Discount Price blank to disable early-bird pricing.</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField label="Discount Price (PKR)">
+                    <input className={inputCls} type="number" min="0" value={form.discountPrice} onChange={set('discountPrice')} placeholder="e.g. 200" />
+                  </FormField>
+                  <FormField label="Discount Ends At (PKT)">
+                    <input className={inputCls} type="datetime-local" value={form.discountEndsAt} onChange={set('discountEndsAt')} />
+                  </FormField>
+                </div>
+                <FormField label="Registration Closes At (PKT, optional)">
+                  <input className={inputCls} type="datetime-local" value={form.registrationClosesAt} onChange={set('registrationClosesAt')} />
+                </FormField>
+              </div>
+            )}
             <FormField label="Description (legacy — used only if Short/Full Description below are empty)">
               <textarea className={inputCls} rows={2} value={form.description} onChange={set('description')} placeholder="Course description…" />
             </FormField>
