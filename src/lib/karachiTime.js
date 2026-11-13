@@ -54,6 +54,19 @@ export function formatKarachiDisplay(iso) {
   return `${shifted.getUTCDate()} ${months[shifted.getUTCMonth()]} ${shifted.getUTCFullYear()}, ${h12}:${mm} ${ampm} PKT`
 }
 
+// For a plain `YYYY-MM-DD` date-only field (e.g. a course's popup
+// start/end date — no time component at all) — the start of that day
+// is 00:00:00 PKT, the end is 23:59:59 PKT, not whatever `new Date(...)`
+// would parse it as (UTC midnight, then local-timezone `setHours`,
+// mixing two different zones depending on the admin's/visitor's own
+// browser).
+export function karachiDateToMs(dateStr, endOfDay = false) {
+  if (!dateStr) return null
+  const time = endOfDay ? '23:59:59' : '00:00:00'
+  const t = new Date(`${dateStr}T${time}+05:00`).getTime()
+  return isNaN(t) ? null : t
+}
+
 export function isBeforeNow(iso) {
   if (!iso) return false
   const t = new Date(iso).getTime()
