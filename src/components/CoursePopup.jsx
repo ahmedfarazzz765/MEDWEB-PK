@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { X, Pin, Calendar, Clock } from 'lucide-react'
 import { coursesService } from '../firebase/services'
 import { karachiDateToMs } from '../lib/karachiTime'
+import { getWebinarPopupOpen, subscribeWebinarPopupOpen } from '../lib/popupStore'
 import CoursePriceTag from './CoursePriceTag'
 import CoverImage from './CoverImage'
 
@@ -18,14 +19,6 @@ function isWithinWindow(course) {
   const endMs = karachiDateToMs(course.popupEndDate, true)
   if (endMs !== null && now > endMs) return false
   return true
-}
-
-// WebinarAnnouncementPopup.jsx's own pin badge uses this exact gradient
-// nowhere else in the app — the only way to detect "is it currently on
-// screen" without adding any export/state to that file (which this task
-// explicitly says not to touch).
-function isWebinarPopupOpen() {
-  return !!document.querySelector('[style*="2b6fe0"]')
 }
 
 function Initials({ name }) {
@@ -60,17 +53,20 @@ export default function CoursePopup() {
     try { dismissedAt = localStorage.getItem(DISMISS_KEY) } catch { /* private window / blocked storage */ }
     if (dismissedAt && Date.now() - Number(dismissedAt) < DISMISS_HOURS * 60 * 60 * 1000) return
 
-    let interval = null
+    // Never stacked with the webinar announcement popup — read the
+    // shared store (src/lib/popupStore.js, written only by
+    // WebinarAnnouncementPopup.jsx) rather than guessing from the DOM.
+    // If it's already open at the 1.5s mark, wait for it to close; if
+    // no webinar ever qualifies, it's always false and this shows
+    // immediately, same as before.
+    let unsub = null
     const t = setTimeout(() => {
-      // Never stacked with the webinar announcement popup — show this
-      // one immediately if that one isn't open, otherwise poll until it
-      // closes (or was never open to begin with).
-      if (!isWebinarPopupOpen()) { setShow(true); return }
-      interval = setInterval(() => {
-        if (!isWebinarPopupOpen()) { setShow(true); clearInterval(interval) }
-      }, 400)
+      if (!getWebinarPopupOpen()) { setShow(true); return }
+      unsub = subscribeWebinarPopupOpen(open => {
+        if (!open) { setShow(true); unsub?.(); unsub = null }
+      })
     }, 1500)
-    return () => { clearTimeout(t); if (interval) clearInterval(interval) }
+    return () => { clearTimeout(t); if (unsub) unsub() }
   }, [course])
 
   const dismiss = () => {

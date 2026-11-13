@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { X, Pin } from 'lucide-react'
 import { webinarsService } from '../firebase/services'
 import { WebinarCard } from '../sections/WebinarsSlider'
+import { setWebinarPopupOpen } from '../lib/popupStore'
 
 // Picks the single most relevant webinar to announce: a Live one first
 // (happening right now), otherwise the soonest Upcoming one with a
@@ -46,6 +47,17 @@ export default function WebinarAnnouncementPopup() {
     const t = setTimeout(() => setShow(true), 1500)
     return () => clearTimeout(t)
   }, [webinar])
+
+  // Mirrors `show` into the shared popup store — the only way
+  // CoursePopup.jsx knows this popup is on screen, so the two are never
+  // stacked. Reactive on `show` itself rather than set inline at every
+  // place `show` changes (the timeout above, the close button, the
+  // backdrop click below), so there's exactly one place this can drift
+  // out of sync with the real on-screen state.
+  useEffect(() => {
+    setWebinarPopupOpen(show)
+    return () => { if (show) setWebinarPopupOpen(false) }
+  }, [show])
 
   const handleRegister = (w) => {
     setShow(false)
