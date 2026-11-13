@@ -1,15 +1,40 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Inbox, Download, Video, Mail, Eye, ArrowLeft } from 'lucide-react'
+import { Inbox, Download, Video, Mail, Eye, ArrowLeft, AlertTriangle, Edit2, Combine } from 'lucide-react'
 import StatCard from '../components/StatCard'
 import DataTable from '../components/DataTable'
 import FolderGrid from '../components/FolderGrid'
 import ResponsesModal from '../components/ResponsesModal'
 import AdminButton from '../components/AdminButton'
+import Modal from '../components/Modal'
+import FormField, { inputCls } from '../components/FormField'
+import useAdminPermissions from '../hooks/useAdminPermissions'
 import {
-  submissionsService, webinarsService, formsService, settingsService,
+  submissionsService, webinarsService, formsService, settingsService, activityLogService,
   toIsoString, DEFAULT_WEBINAR_FORM_FIELDS,
 } from '../../firebase/services'
 import { resolveFormField } from '../../lib/formFieldResolve'
+
+// A record is "flagged" for admin attention when the name couldn't be
+// resolved at all, or the email doesn't even look like an email —
+// Prompt 5: "flag records with empty name or mismatched email". Doesn't
+// try to verify the email is deliverable, just that it has the shape of
+// one — a typo'd/garbage value from a free-text form field is the actual
+// problem this is meant to catch.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const isFlagged = s => !s.name || s.name === '-' || !s.email || s.email === '-' || !EMAIL_RE.test(s.email)
+
+// Same match order as resolveFormField (lib/formFieldResolve.js) but
+// returns the KEY a value should be written to, instead of the value
+// itself — so an edit/merge writes wherever the resolver will actually
+// read it back from (a custom Form-Builder field's own key takes
+// priority over the flat fallback keys, same as display already does).
+function resolvedKeyFor(fields, raw, { type, labelRegex, flatKeys }) {
+  const list = fields || []
+  const field = (type && list.find(f => f.type === type)) || (labelRegex && list.find(f => labelRegex.test(f.label || '')))
+  if (field) return field.key
+  for (const k of flatKeys) if (raw?.[k] !== undefined) return k
+  return flatKeys[0]
+}
 
 const formatDateStr = (dateVal) => {
   const str = toIsoString(dateVal)
@@ -40,6 +65,12 @@ export default function AdminSubmissions() {
   // folder doesn't re-fetch.
   const [fieldsCache, setFieldsCache] = useState({}) // webinarId -> fields[]
   const [viewStudent, setViewStudent] = useState(null) // the student row currently open in the detail modal
+  const [editStudent, setEditStudent] = useState(null) // the student row currently open in the edit modal
+  const [editForm, setEditForm] = useState({ name: '', phone: '', email: '', university: '' })
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [selected, setSelected] = useState(new Set()) // student ids selected for merge, within the open folder
+  const [merging, setMerging] = useState(false)
+  const { canWrite, canDelete } = useAdminPermissions()
 
   useEffect(() => {
     const unsub = submissionsService.listen(data => { setRows(data); setLoading(false) })
@@ -121,16 +152,107 @@ export default function AdminSubmissions() {
     })
   }, [activeFolder, activeFields])
 
+  // Clears stale selections from whichever folder was open before —
+  // merge only ever compares 2 rows within the SAME folder.
+  useEffect(() => { setSelected(new Set()) }, [activeFolderKey])
+
+  const toggleSelect = id => setSelected(prev => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id); else next.add(id)
+    return next
+  })
+
+  const openEditStudent = row => {
+    setEditForm({
+      name: row.name === '-' ? '' : row.name,
+      phone: row.phone === '-' ? '' : row.phone,
+      email: row.email === '-' ? '' : row.email,
+      university: row.university === '-' ? '' : row.university,
+    })
+    setEditStudent(row)
+  }
+
+  const saveEditStudent = async () => {
+    if (!editStudent) return
+    setSavingEdit(true)
+    try {
+      // Write to whichever field key resolveFormField actually reads for
+      // this webinar's form (a custom Form-Builder field, or one of the
+      // flat fallback keys) — not blindly to `name`/`email`/`whatsapp`,
+      // or the correction would be silently shadowed by a still-present
+      // custom-field value with higher resolution priority.
+      const raw = editStudent.raw
+      const nameKey  = resolvedKeyFor(activeFields, raw, { labelRegex: /name/i, flatKeys: ['name', 'fullName', 'full_name'] })
+      const phoneKey = resolvedKeyFor(activeFields, raw, { type: 'phone', labelRegex: /phone|whatsapp|contact/i, flatKeys: ['phone', 'whatsapp', 'contact'] })
+      const emailKey = resolvedKeyFor(activeFields, raw, { type: 'email', labelRegex: /email/i, flatKeys: ['email'] })
+      await webinarsService.updateRegistration(editStudent.id, {
+        [nameKey]: editForm.name, [phoneKey]: editForm.phone, [emailKey]: editForm.email, university: editForm.university,
+      })
+      activityLogService.log('registration_edited', { registrationId: editStudent.id, name: editForm.name, email: editForm.email })
+      setEditStudent(null)
+    } catch (e) { alert('Error: ' + e.message) }
+    finally { setSavingEdit(false) }
+  }
+
+  // Merges the 2 selected registrations into one — keeps whichever field
+  // value is actually filled in from either record (so merging a record
+  // with a name but no email into one with an email but no name produces
+  // one complete record, not a coin-flip), writes that onto the first
+  // one's real field keys, then deletes the second. Restricted to
+  // Super Admin (not Editor) since it deletes a record — same rule
+  // ActionButtons.jsx already enforces for every other delete.
+  const handleMerge = async () => {
+    if (selected.size !== 2) return
+    const [idA, idB] = Array.from(selected)
+    const a = students.find(s => s.id === idA)
+    const b = students.find(s => s.id === idB)
+    if (!a || !b) return
+    if (!confirm('Merge these 2 registrations into one record? The other will be deleted — this can\'t be undone.')) return
+    setMerging(true)
+    try {
+      const pick = (x, y) => (x && x !== '-' ? x : (y && y !== '-' ? y : ''))
+      const merged = {
+        name: pick(a.name, b.name), phone: pick(a.phone, b.phone),
+        email: pick(a.email, b.email), university: pick(a.university, b.university),
+      }
+      const nameKey  = resolvedKeyFor(activeFields, a.raw, { labelRegex: /name/i, flatKeys: ['name', 'fullName', 'full_name'] })
+      const phoneKey = resolvedKeyFor(activeFields, a.raw, { type: 'phone', labelRegex: /phone|whatsapp|contact/i, flatKeys: ['phone', 'whatsapp', 'contact'] })
+      const emailKey = resolvedKeyFor(activeFields, a.raw, { type: 'email', labelRegex: /email/i, flatKeys: ['email'] })
+      await webinarsService.updateRegistration(a.id, {
+        [nameKey]: merged.name, [phoneKey]: merged.phone, [emailKey]: merged.email, university: merged.university,
+      })
+      await webinarsService.deleteRegistration(b.id)
+      activityLogService.log('registrations_merged', { kept: a.id, removed: b.id, name: merged.name, email: merged.email })
+      setSelected(new Set())
+    } catch (e) { alert('Error: ' + e.message) }
+    finally { setMerging(false) }
+  }
+
   const studentColumns = [
-    { key: 'name', label: 'Name', render: v => <span className="font-semibold text-[#1a1a1a]">{v}</span> },
+    { key: 'select', label: '', render: (v, row) => isFlagged(row) ? (
+      <input type="checkbox" className="w-4 h-4 accent-[#1655c3]" checked={selected.has(row.id)} onChange={() => toggleSelect(row.id)} title="Select for merge" />
+    ) : null },
+    { key: 'name', label: 'Name', render: (v, row) => (
+      <span className="font-semibold text-[#1a1a1a] flex items-center gap-1.5">
+        {isFlagged(row) && <AlertTriangle size={12} className="text-amber-500 shrink-0" />}
+        {v}
+      </span>
+    )},
     { key: 'phone', label: 'Phone' },
     { key: 'email', label: 'Email', render: v => <span className="text-gray-500 text-xs">{v}</span> },
     { key: 'university', label: 'University' },
     { key: 'registeredAt', label: 'Registered', render: v => <span className="text-gray-400 whitespace-nowrap">{formatDateStr(v)}</span> },
-    { key: 'id', label: 'Actions', render: (v, row) => (
-      <button onClick={() => setViewStudent(row)} className="p-1.5 rounded-lg hover:bg-blue-50 text-[#1655c3]" title="View full submission">
-        <Eye size={13} />
-      </button>
+    { key: 'actions', label: 'Actions', render: (v, row) => (
+      <div className="flex items-center gap-1.5">
+        <button onClick={() => setViewStudent(row)} className="p-1.5 rounded-lg hover:bg-blue-50 text-[#1655c3]" title="View full submission">
+          <Eye size={13} />
+        </button>
+        {canWrite && (
+          <button onClick={() => openEditStudent(row)} className="p-1.5 rounded-lg hover:bg-blue-50 text-[#1655c3]" title="Edit name/phone/email">
+            <Edit2 size={13} />
+          </button>
+        )}
+      </div>
     )},
   ]
 
@@ -198,10 +320,25 @@ export default function AdminSubmissions() {
               <button onClick={() => setActiveFolderKey(null)} className="flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-[#1655c3] transition-colors w-fit">
                 <ArrowLeft size={16} /> All Webinars
               </button>
-              <AdminButton variant="ghost" size="sm" onClick={exportFolderCsv} disabled={!students.length}>
-                <Download size={14} className="mr-1.5" /> Export CSV
-              </AdminButton>
+              <div className="flex items-center gap-2">
+                {canDelete && selected.size === 2 && (
+                  <AdminButton variant="primary" size="sm" onClick={handleMerge} disabled={merging}>
+                    <Combine size={14} className="mr-1.5" /> {merging ? 'Merging…' : 'Merge Selected (2)'}
+                  </AdminButton>
+                )}
+                <AdminButton variant="ghost" size="sm" onClick={exportFolderCsv} disabled={!students.length}>
+                  <Download size={14} className="mr-1.5" /> Export CSV
+                </AdminButton>
+              </div>
             </div>
+            {students.some(isFlagged) && (
+              <div className="flex items-center gap-2 bg-amber-50 border border-amber-100 rounded-xl px-4 py-2.5 text-xs text-amber-700">
+                <AlertTriangle size={14} className="shrink-0" />
+                {canDelete
+                  ? 'Rows with a warning icon have an empty name or an email that doesn\'t look valid — tick 2 of them and use "Merge Selected" if they\'re duplicates, or edit a row directly.'
+                  : 'Rows with a warning icon have an empty name or an email that doesn\'t look valid.'}
+              </div>
+            )}
             <DataTable title={activeFolder.label} columns={studentColumns} data={students} searchKey="name"
               emptyMessage="No registrations in this folder" />
           </div>
@@ -237,6 +374,31 @@ export default function AdminSubmissions() {
 
       {viewStudent && viewForm && viewSub && (
         <ResponsesModal form={viewForm} subs={[viewSub]} onClose={() => setViewStudent(null)} />
+      )}
+
+      {editStudent && (
+        <Modal title="Edit Registration" onClose={() => setEditStudent(null)}>
+          <div className="space-y-4">
+            <FormField label="Name">
+              <input className={inputCls} value={editForm.name} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))} />
+            </FormField>
+            <FormField label="Phone">
+              <input className={inputCls} value={editForm.phone} onChange={e => setEditForm(p => ({ ...p, phone: e.target.value }))} />
+            </FormField>
+            <FormField label="Email">
+              <input className={inputCls} type="email" value={editForm.email} onChange={e => setEditForm(p => ({ ...p, email: e.target.value }))} />
+            </FormField>
+            <FormField label="University">
+              <input className={inputCls} value={editForm.university} onChange={e => setEditForm(p => ({ ...p, university: e.target.value }))} />
+            </FormField>
+            <div className="flex gap-3 pt-2">
+              <AdminButton variant="ghost" className="flex-1" onClick={() => setEditStudent(null)}>Cancel</AdminButton>
+              <AdminButton variant="primary" className="flex-1" onClick={saveEditStudent} disabled={savingEdit}>
+                {savingEdit ? 'Saving…' : 'Save'}
+              </AdminButton>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   )

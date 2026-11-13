@@ -10,7 +10,7 @@ import ActionButtons from '../components/ActionButtons'
 import CertPositionEditor from '../components/CertPositionEditor'
 import RichTextEditor from '../components/RichTextEditor'
 import CoverImage from '../../components/CoverImage'
-import { webinarsService, formsService, settingsService, ensureDefaultWebinarForm } from '../../firebase/services'
+import { webinarsService, formsService, settingsService, ensureDefaultWebinarForm, activityLogService } from '../../firebase/services'
 
 const emptySpeaker = () => ({ image: '', name: '', qualification: '' })
 
@@ -24,7 +24,7 @@ const emptyForm = () => ({
   certTemplate: null,
 })
 
-function makeColumns(openEdit, handleDelete) {
+function makeColumns(openEdit, handleDelete, regCounts) {
   return [
     { key: 'webinarImage', label: '', render: (v, row) => (
       v ? <CoverImage src={v} alt="" className="w-10 h-10 rounded-lg" />
@@ -38,7 +38,12 @@ function makeColumns(openEdit, handleDelete) {
     }},
     { key: 'date',       label: 'Date' },
     { key: 'type',       label: 'Type',       render: v => <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: v === 'Free' ? '#dcfce7' : '#dbeafe', color: v === 'Free' ? '#16a34a' : '#1655c3' }}>{v}</span> },
-    { key: 'registered', label: 'Reg.', render: v => <span className="font-bold text-[#1655c3]">{v || 0}</span> },
+    // Live count of real webinarRegistrations docs for this webinar — NOT
+    // the `registered` field on the webinar doc itself, which is a
+    // best-effort increment at submit time that can silently fail/skip
+    // (see WebinarRegister.jsx) and was showing 0 despite real
+    // registrations existing.
+    { key: 'registered', label: 'Reg.', render: (v, row) => <span className="font-bold text-[#1655c3]">{regCounts[row.id] || 0}</span> },
     { key: 'status',     label: 'Status',     render: v => {
       const s = { Completed: 'bg-green-50 text-green-600', Upcoming: 'bg-blue-50 text-[#1655c3]', Live: 'bg-red-50 text-red-500' }
       return <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${s[v] || 'bg-gray-100 text-gray-500'}`}>{v}</span>
@@ -59,10 +64,16 @@ export default function AdminWebinars() {
   const [saving,  setSaving]  = useState(false)
   const [defaultCfg, setDefaultCfg] = useState({ webinarDefaultFormId: '' })
   const [defaultSaved, setDefaultSaved] = useState(false)
+  const [regCounts, setRegCounts] = useState({})
 
   useEffect(() => {
     const unsub = webinarsService.listen(rows => { setData(rows); setLoading(false) })
     const unsub2 = formsService.listen(rows => setForms(rows))
+    const unsub3 = webinarsService.listenRegistrations(rows => {
+      const counts = {}
+      for (const r of rows) { if (r.webinarId) counts[r.webinarId] = (counts[r.webinarId] || 0) + 1 }
+      setRegCounts(counts)
+    })
     settingsService.get().then(async s => {
       let formId = s?.webinarDefaultFormId || ''
       if (!formId) {
@@ -73,7 +84,7 @@ export default function AdminWebinars() {
       }
       setDefaultCfg({ webinarDefaultFormId: formId })
     }).catch(() => {})
-    return () => { unsub(); unsub2() }
+    return () => { unsub(); unsub2(); unsub3() }
   }, [])
 
   const saveDefaultCfg = async (next) => {
@@ -104,8 +115,13 @@ export default function AdminWebinars() {
     try {
       const speakers = form.speakers.filter(s => s.image.trim() || s.name.trim() || s.qualification.trim())
       const payload = { ...form, speakers }
-      if (modal === 'add') await webinarsService.add(payload)
-      else                 await webinarsService.update(editId, payload)
+      if (modal === 'add') {
+        const newId = await webinarsService.add(payload)
+        activityLogService.log('webinar_created', { webinarId: newId, topic: payload.topic })
+      } else {
+        await webinarsService.update(editId, payload)
+        activityLogService.log('webinar_updated', { webinarId: editId, topic: payload.topic })
+      }
       closeModal()
     } catch (e) { alert('Error: ' + e.message) }
     finally { setSaving(false) }
@@ -113,13 +129,20 @@ export default function AdminWebinars() {
 
   const handleDelete = async id => {
     if (!confirm('Delete this webinar?')) return
-    try { await webinarsService.delete(id) } catch (e) { alert('Error: ' + e.message) }
+    try {
+      const topic = data.find(w => w.id === id)?.topic || id
+      await webinarsService.delete(id)
+      activityLogService.log('webinar_deleted', { webinarId: id, topic })
+    } catch (e) { alert('Error: ' + e.message) }
   }
 
-  const columns   = makeColumns(openEdit, handleDelete)
+  const columns   = makeColumns(openEdit, handleDelete, regCounts)
   const completed = data.filter(w => w.status === 'Completed').length
   const upcoming  = data.filter(w => w.status === 'Upcoming').length
-  const totalReg  = data.reduce((a, w) => a + (w.registered || 0), 0)
+  // Sum of ALL real registrations, not just the ones matching a webinar
+  // still in `data` — a registration for a since-deleted webinar still
+  // counts toward "how many people registered, total".
+  const totalReg  = Object.values(regCounts).reduce((a, c) => a + c, 0)
 
   return (
     <div className="p-4 sm:p-6 space-y-6">

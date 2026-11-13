@@ -327,3 +327,114 @@ environment — the actual visual result (images displaying correctly at
 their new WebP paths, lazy-loaded sections still appearing on scroll,
 Suspense fallback not flashing awkwardly, logo `<picture>` fallback)
 still needs manual verification in a browser.
+
+## Prompt 5 — Admin reliability
+
+### 1. Real per-screen routes
+- `admin/AdminPanel.jsx`: the active section (and, for the Content page,
+  its internal tab) now comes from the URL (`/admin/webinars`,
+  `/admin/content/founder`, ...) via `useLocation`, instead of
+  component state that reset on every reload. Refresh, back/forward, and
+  bookmarking a specific admin screen all now land back on the same
+  screen instead of always bouncing to Dashboard.
+- `admin/components/AdminSidebar.jsx`'s `onNav` already called into a
+  callback prop — only `AdminPanel.jsx`'s own `handleNav` changed, now
+  calling `navigate()` instead of `setState`. No sidebar markup changed.
+
+### 2. Webinars "Reg." / "Total Registered" showing 0
+- Root cause found: each webinar's own `registered` counter is a
+  best-effort `increment(1)` fired from `WebinarRegister.jsx` at
+  submission time, wrapped in `.catch(() => {})` — any failure (a rules
+  issue, a stale `webinar` object, anything) silently no-ops, and the
+  153 real registrations never incremented it.
+- Fixed at the source of truth instead of chasing that failure: both the
+  Webinars table's "Reg." column and the "Total Registered" stat card
+  (`admin/pages/AdminWebinars.jsx`) now count live from the real
+  `webinarRegistrations` collection (`webinarsService.listenRegistrations`,
+  new in `services.js`), grouped by `webinarId` — immune to the same
+  failure happening again, and correct retroactively for the 153 that
+  already existed.
+
+### 3. Flag + edit/merge bad submissions
+- `admin/pages/AdminSubmissions.jsx`: a registration is flagged (⚠ icon
+  next to the name) when its resolved name is empty or its resolved
+  email doesn't match a basic email shape — covers "empty name or
+  mismatched email" from the prompt.
+- Added an Edit action (pencil icon) per registration — corrects
+  name/phone/email/university. Writes to whichever field key the
+  webinar's own registration form schema actually resolves (a custom
+  Form-Builder field's key, or the flat fallback key), not blindly to
+  `name`/`email`/`whatsapp`, so the fix is never silently shadowed by a
+  still-present custom field value with higher read priority.
+- Added Merge: tick 2 flagged rows in the same webinar's folder, "Merge
+  Selected" combines them into one record (keeping whichever field is
+  actually filled in from either) and deletes the other.
+  `webinarsService.updateRegistration`/`deleteRegistration` (new) back
+  both actions. Merge is Super-Admin-only (it deletes a record) — same
+  rule as every other delete in the panel (see #5).
+
+### 4. Reports page
+- `admin/pages/AdminReports.jsx` (new): one table of
+  registrations/attendance/certificates per webinar (registrations from
+  the same live count as #2; attendance from the webinar's own
+  `attended` field — there's no UI anywhere else in the panel to set
+  that, which is pre-existing and outside this prompt's scope to build;
+  certificates grouped by source, excluding Revoked, same rule Prompt 2
+  used for the homepage counter) and one table of certificates per
+  course. Courses have no registration/enrollment data model in this
+  app at all (no payments/enrollment flow, by this project's own
+  ground rules) — registrations/attendance show "—" there rather than a
+  fabricated 0.
+- CSV export via `.xlsx` (reuses the exact `XLSX.utils.json_to_sheet` /
+  `XLSX.writeFile` pattern `AdminStudents.jsx`/`AdminCertificates.jsx`
+  already use — same library, no new dependency), one workbook with a
+  Webinars sheet and a Courses sheet.
+- Added to the sidebar (Engagement group) and `adminSections.js` as a
+  grantable section, so a Super Admin can give an Editor/Viewer access
+  to it like any other section.
+
+### 5. Roles (Super Admin / Editor / Viewer) + Activity Log
+- `admin/hooks/useAdminPermissions.js` now also resolves `role`
+  (`'superadmin' | 'editor' | 'viewer'`), `canWrite`, `canDelete`. A
+  restricted admin doc with no `role` field (every one created before
+  this round) or the old literal `'admin'` value defaults to `'editor'`
+  — nobody's existing access silently changed.
+- `admin/components/ActionButtons.jsx` — the shared edit/delete icon
+  pair used across every admin table — now reads these itself: a Viewer
+  never sees Edit or Delete, an Editor never sees Delete. One chokepoint
+  instead of gating ~20 individual admin pages.
+- `admin/pages/AdminUsers.jsx`: invite/edit form now has an Editor/Viewer
+  role picker; the admin list shows each sub-admin's role as a badge.
+  "Only Super Admin can manage admins" was already enforced (page itself
+  is gated to `isSuperAdmin`) — satisfies "Editor can't ... manage
+  admins" with no further change needed there.
+- `services.js`: new `activityLogService` (collection `activityLog`) —
+  `log(action, details)` auto-attaches the signed-in admin's email +
+  timestamp; never blocks the real action if the write itself fails.
+  **Not instrumented on every admin write** — that would touch nearly
+  every admin page for one feature. Covers admin-user management
+  (invite/update/remove) and the two features this same prompt touched
+  (webinar create/update/delete, registration edit/merge). Viewable at
+  the new Super-Admin-only `/admin/activityLog`
+  (`admin/pages/AdminActivityLog.jsx`, new).
+- **Known gap, flagged rather than silently left out:** a Viewer can
+  still see each page's "Add new" button — only Edit/Delete are gated
+  centrally via ActionButtons. Gating every page's own creation button
+  individually would mean touching ~20 files for a role this prompt
+  only asked to partially restrict ("Editor can't delete or manage
+  admins" — Viewer's own restriction level wasn't specified beyond its
+  name). Worth a follow-up if full read-only enforcement matters.
+
+---
+
+**Verification:** every touched/new file passed an `esbuild` syntax
+check, AND the full `npm run build` ran end-to-end successfully (main
+bundle unaffected at 228.62 KB gzip — all of this is inside the
+already-lazy `/admin` chunk). `npm run dev` started cleanly; curl
+confirmed `/`, `/admin`, `/admin/webinars`, `/admin/submissions`,
+`/admin/reports`, `/admin/activityLog`, `/admin/content/founder`,
+`/admin/adminUsers` all return HTTP 200. No real browser available in
+this environment — the actual UI behavior (URL changes on sidebar
+click, registration counts matching real Firestore data, merge/edit
+modals, role-based button hiding) still needs manual verification by
+signing into the real admin panel.

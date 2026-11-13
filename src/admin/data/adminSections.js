@@ -33,6 +33,7 @@ export const ADMIN_SECTIONS = [
   { key: 'news',                label: 'Medical News',    group: 'Engagement' },
   { key: 'forms',                label: 'Form Builder',   group: 'Engagement' },
   { key: 'submissions',          label: 'Submissions',    group: 'Engagement' },
+  { key: 'reports',              label: 'Reports',        group: 'Engagement' },
 
   { key: 'email', label: 'Email Settings', group: 'Settings' },
 ]

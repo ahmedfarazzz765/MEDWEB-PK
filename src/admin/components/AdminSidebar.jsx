@@ -7,7 +7,7 @@ import {
   FileText, UserCheck, LogOut, ChevronLeft, ChevronRight, Shield, Mail,
   FormInput, Star, Inbox, Link2, ToggleRight, GraduationCap,
   Image, Quote, Sparkles, Building2, ShieldCheck, PanelTop, Scale, ClipboardCheck,
-  UserCog, Newspaper,
+  UserCog, Newspaper, BarChart3, ScrollText,
 } from 'lucide-react'
 
 // Each item's `id` is the page key in AdminPanel's `pages` map. Items that
@@ -67,6 +67,7 @@ const GROUPS = [
       { id: 'news',         label: 'Medical News', icon: Newspaper },
       { id: 'forms',        label: 'Form Builder', icon: FormInput },
       { id: 'submissions',  label: 'Submissions',  icon: Inbox },
+      { id: 'reports',      label: 'Reports',      icon: BarChart3 },
     ],
   },
   {
@@ -82,6 +83,7 @@ const GROUPS = [
     superAdminOnly: true,
     items: [
       { id: 'adminUsers', label: 'Admin Users', icon: UserCog },
+      { id: 'activityLog', label: 'Activity Log', icon: ScrollText },
     ],
   },
 ]
@@ -103,7 +105,7 @@ export default function AdminSidebar({ active, activeTab, onNav, permissions }) 
   // flash of a near-empty sidebar that then fills back in a moment later.
   const canSee = (id, tab) => {
     if (id === 'dashboard') return true
-    if (id === 'adminUsers') return !!permissions?.isSuperAdmin
+    if (id === 'adminUsers' || id === 'activityLog') return !!permissions?.isSuperAdmin
     if (!permissions || permissions.loading) return true
     return permissions.canAccess(tab ? `${id}:${tab}` : id)
   }

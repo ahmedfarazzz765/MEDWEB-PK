@@ -46,5 +46,19 @@ export default function useAdminPermissions() {
   // the Admin Users page itself are handled by their callers, not here.
   const canAccess = key => isSuperAdmin || allowedSections.includes(key)
 
-  return { loading, email, isSuperAdmin, allowedSections, canAccess }
+  // A restricted record's role is 'editor' or 'viewer' — anything else
+  // (including a legacy doc with no `role` field, or the old literal
+  // `'admin'` value this field used to always be set to before roles
+  // shipped) defaults to 'editor' so existing sub-admins keep their
+  // current write access instead of silently becoming read-only.
+  const role = isSuperAdmin ? 'superadmin' : (record?.role === 'viewer' ? 'viewer' : 'editor')
+  const isViewer = role === 'viewer'
+  // Only the Super Admin can delete anything or manage other admins —
+  // Editor keeps create/edit, matches Prompt 5's "Editor can't delete or
+  // manage admins" (the admin-management half is already enforced by the
+  // `isSuperAdmin`-only check AdminUsers.jsx itself does).
+  const canDelete = isSuperAdmin
+  const canWrite = !isViewer
+
+  return { loading, email, isSuperAdmin, allowedSections, canAccess, role, isViewer, canDelete, canWrite }
 }

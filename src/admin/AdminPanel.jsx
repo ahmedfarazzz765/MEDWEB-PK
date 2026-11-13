@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import AdminSidebar from './components/AdminSidebar'
 import AdminHeader  from './components/AdminHeader'
 import AccessDenied  from './components/AccessDenied'
@@ -23,6 +23,8 @@ import AdminSubmissions  from './pages/AdminSubmissions'
 import AdminFooter       from './pages/AdminFooter'
 import AdminSections     from './pages/AdminSections'
 import AdminUsers        from './pages/AdminUsers'
+import AdminReports      from './pages/AdminReports'
+import AdminActivityLog  from './pages/AdminActivityLog'
 
 const pages = {
   dashboard:    AdminDashboard,
@@ -45,30 +47,45 @@ const pages = {
   footer:       AdminFooter,
   sections:     AdminSections,
   adminUsers:   AdminUsers,
+  reports:      AdminReports,
+  activityLog:  AdminActivityLog,
 }
 
 // Pages that every signed-in admin can always reach, regardless of their
 // granted-sections list — not part of the assignable permission checklist.
 const ALWAYS_ALLOWED = ['dashboard']
 
+// Section (and, for AdminContent, sub-tab) now live in the URL
+// (/admin/webinars, /admin/content/founder, ...) instead of component
+// state, so refresh/back/bookmark all land back on the same screen —
+// Prompt 5's routing requirement. AdminPanel itself still renders a
+// single element inside the existing `/admin/*` catch-all in App.jsx
+// (adding a real nested <Routes> here would duplicate RequireAuth/layout
+// for no benefit) — the path is just read directly off useLocation.
 export default function AdminPanel() {
-  const [activePage, setActivePage] = useState('dashboard')
-  const [contentTab, setContentTab] = useState('hero')
+  const location = useLocation()
+  const navigate = useNavigate()
+  const segments = location.pathname.replace(/^\/admin\/?/, '').split('/').filter(Boolean)
+  const activePage = segments[0] || 'dashboard'
+  const contentTab = activePage === 'content' ? (segments[1] || 'hero') : 'hero'
   const perms = useAdminPermissions()
   const PageComponent = pages[activePage] || AdminDashboard
 
   const handleNav = (id, tab) => {
-    setActivePage(id)
-    if (tab) setContentTab(tab)
+    navigate(tab ? `/admin/${id}/${tab}` : `/admin/${id}`)
   }
 
   // Mirrors the permission key format used in adminSections.js: plain `id`
   // for most pages, `id:tab` for AdminContent's internal tabs.
   const permissionKey = activePage === 'content' ? `content:${contentTab}` : activePage
 
-  const isAdminUsersPage = activePage === 'adminUsers'
+  // Admin Users AND the Activity Log are Super-Admin-only, not part of the
+  // assignable permission checklist — same reasoning as Admin Users
+  // already had (managing admins/auditing them is more sensitive than any
+  // grantable section).
+  const isSuperAdminOnlyPage = activePage === 'adminUsers' || activePage === 'activityLog'
   const blocked = !perms.loading && (
-    isAdminUsersPage ? !perms.isSuperAdmin
+    isSuperAdminOnlyPage ? !perms.isSuperAdmin
       : !ALWAYS_ALLOWED.includes(activePage) && !perms.canAccess(permissionKey)
   )
 

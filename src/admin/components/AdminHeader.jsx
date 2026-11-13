@@ -19,6 +19,9 @@ const pageTitles = {
   submissions:  { title: 'Submissions',     sub: 'All webinar & form submissions' },
   footer:       { title: 'Footer & Links',  sub: 'Manage footer content & quick links' },
   adminUsers:   { title: 'Admin Users',     sub: 'Manage sub-admin access and permissions' },
+  reports:      { title: 'Reports',         sub: 'Registrations, attendance & certificates per webinar/course' },
+  activityLog:  { title: 'Activity Log',    sub: 'Who did what, and when' },
+  pendingTestimonials: { title: 'Pending Reviews', sub: 'Approve or reject submitted testimonials' },
 }
 
 // AdminContent.jsx is one page with internal tabs — the header title follows

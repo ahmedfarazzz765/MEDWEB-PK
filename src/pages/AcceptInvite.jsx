@@ -43,6 +43,7 @@ export default function AcceptInvite() {
       await adminUsersService.create(invite.email, {
         name: invite.name,
         allowedSections: invite.allowedSections || [],
+        role: invite.role,
       })
       await adminInvitesService.claim(token)
       setState('success')

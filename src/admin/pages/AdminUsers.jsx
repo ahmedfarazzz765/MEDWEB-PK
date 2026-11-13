@@ -6,10 +6,10 @@ import FormField, { inputCls } from '../components/FormField'
 import AdminButton from '../components/AdminButton'
 import AccessDenied from '../components/AccessDenied'
 import useAdminPermissions from '../hooks/useAdminPermissions'
-import { adminUsersService, adminInvitesService } from '../../firebase/services'
+import { adminUsersService, adminInvitesService, activityLogService } from '../../firebase/services'
 import { ADMIN_SECTIONS, ADMIN_SECTION_GROUPS } from '../data/adminSections'
 
-const emptyForm = () => ({ name: '', email: '', allowedSections: [] })
+const emptyForm = () => ({ name: '', email: '', allowedSections: [], role: 'editor' })
 
 function PermissionChecklist({ selected, onToggle }) {
   return (
@@ -60,7 +60,7 @@ export default function AdminUsers() {
   }
 
   const openAdd = () => { setForm(emptyForm()); setEditEmail(null); setError(''); setModal('invite') }
-  const openEdit = row => { setForm({ name: row.name || '', email: row.email, allowedSections: row.allowedSections || [] }); setEditEmail(row.email); setError(''); setModal('edit') }
+  const openEdit = row => { setForm({ name: row.name || '', email: row.email, allowedSections: row.allowedSections || [], role: row.role === 'viewer' ? 'viewer' : 'editor' }); setEditEmail(row.email); setError(''); setModal('edit') }
   const close = () => { setModal(false); setEditEmail(null) }
 
   const toggleSection = key => setForm(p => ({
@@ -76,10 +76,12 @@ export default function AdminUsers() {
     setError('')
     try {
       if (editEmail) {
-        await adminUsersService.update(editEmail, { name: form.name, allowedSections: form.allowedSections })
+        await adminUsersService.update(editEmail, { name: form.name, allowedSections: form.allowedSections, role: form.role })
+        activityLogService.log('admin_user_updated', { targetEmail: editEmail, allowedSections: form.allowedSections, role: form.role })
         close()
       } else {
-        const token = await adminInvitesService.create({ name: form.name, email: form.email, allowedSections: form.allowedSections })
+        const token = await adminInvitesService.create({ name: form.name, email: form.email, allowedSections: form.allowedSections, role: form.role })
+        activityLogService.log('admin_user_invited', { targetEmail: form.email, role: form.role })
         const link = `${window.location.origin}/admin/invite/${token}`
         setJustInvited({ name: form.name, link })
         close()
@@ -90,7 +92,10 @@ export default function AdminUsers() {
 
   const handleDelete = async email => {
     if (!confirm(`Remove admin access for ${email}?`)) return
-    try { await adminUsersService.delete(email) } catch (e) { alert(e.message) }
+    try {
+      await adminUsersService.delete(email)
+      activityLogService.log('admin_user_removed', { targetEmail: email })
+    } catch (e) { alert(e.message) }
   }
 
   const handleRevokeInvite = async token => {
@@ -179,12 +184,15 @@ export default function AdminUsers() {
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold text-[#1a1a1a] text-sm">{row.name}</div>
                   <div className="text-xs text-gray-400 mb-1.5">{row.email}</div>
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${row.role === 'viewer' ? 'bg-amber-50 text-amber-600' : 'bg-blue-50 text-[#1655c3]'}`}>
+                      {row.role === 'viewer' ? 'Viewer' : 'Editor'}
+                    </span>
                     {(row.allowedSections || []).length === 0 ? (
                       <span className="text-[11px] text-gray-400 italic">No sections granted</span>
                     ) : (row.allowedSections || []).map(key => {
                       const s = ADMIN_SECTIONS.find(s => s.key === key)
-                      return <span key={key} className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-[#1655c3]">{s?.label || key}</span>
+                      return <span key={key} className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{s?.label || key}</span>
                     })}
                   </div>
                 </div>
@@ -219,6 +227,21 @@ export default function AdminUsers() {
                   placeholder="jane@medweb.pk"
                 />
               </FormField>
+            </div>
+
+            <div>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Role</p>
+              <div className="flex gap-3">
+                {[['editor', 'Editor — can create & edit granted sections, not delete'], ['viewer', 'Viewer — read-only on granted sections']].map(([val, desc]) => (
+                  <label key={val} className={`flex-1 flex flex-col gap-0.5 p-3 rounded-xl border-2 cursor-pointer transition-colors ${form.role === val ? 'border-[#1655c3] bg-blue-50/50' : 'border-gray-200'}`}>
+                    <span className="flex items-center gap-2 text-sm font-bold text-[#1a1a1a] capitalize">
+                      <input type="radio" name="role" className="accent-[#1655c3]" checked={form.role === val} onChange={() => setForm(p => ({ ...p, role: val }))} />
+                      {val}
+                    </span>
+                    <span className="text-[11px] text-gray-500">{desc}</span>
+                  </label>
+                ))}
+              </div>
             </div>
 
             <div>
