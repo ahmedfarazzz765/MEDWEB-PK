@@ -167,3 +167,25 @@ jobs:
             **/*.webp
             **/*.svg
           state-name: .ftp-deploy-sync-state-assets-jpeg.json
+
+      - name: "Deploy assets/ via FTP (WebP, SVG, GIF images)"
+        id: deploy-assets-webp
+        timeout-minutes: 15
+        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftp
+          timeout: 180000
+          log-level: verbose
+          local-dir: ./dist/assets/
+          server-dir: /public_html/assets/
+          dangerous-clean-slate: false
+          exclude: |
+            **/*.js
+            **/*.css
+            **/*.png
+            **/*.jpg
+            **/*.jpeg
+          state-name: .ftp-deploy-sync-state-assets-webp.json
