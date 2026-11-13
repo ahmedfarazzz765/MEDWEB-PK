@@ -38,154 +38,23 @@ jobs:
           # generate real content instead of just the static routes.
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: npm run build
-      # Retrying (3x, with ftps then plain ftp) never helped — every attempt
-      # failed at the identical point ("creating folder assets/") with the
-      # identical ECONNRESET, which means it's deterministic, not transient.
-      # Retrying a deterministic failure is pointless, so that pattern is
-      # gone. Splitting the deploy instead: everything except assets/ first
-      # (this is the bulk of the site and has never been the thing that
-      # fails), then assets/ on its own with a longer timeout. If assets/
-      # still resets, the rest of the site is already live and only the
-      # assets/ step needs retrying by hand — not a full redeploy, and not
-      # a failed job that reverts nothing.
-      #
-      # SFTP (port 22) would likely be more reliable than FTP here, but
-      # switching to it needs confirming first that Hostinger's plan has
-      # SSH/SFTP access enabled (hPanel → Advanced → SSH Access) and new
-      # FTP_SFTP_* secrets — I have no access to hPanel to check that
-      # myself, so this stays on FTP until that's confirmed.
-      - name: Deploy site (everything except assets/) via FTP
-        id: deploy-main
-        timeout-minutes: 15
-        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          protocol: ftp
-          timeout: 60000
-          log-level: verbose
-          local-dir: ./dist/
-          server-dir: /public_html/
-          exclude: |
-            **/assets/**
-          # Own state-tracking file so this step's diff-against-remote
-          # logic never mixes with the assets/-only step below — they
-          # cover completely different local-dir/server-dir scopes.
-          state-name: .ftp-deploy-sync-state-main.json
-
-      # The main-site step above now succeeds reliably — confirmed by a
-      # real run — and the ECONNRESET is isolated specifically to this
-      # assets/ step, pointing at assets/'s own size/file-count as the
-      # trigger, not the deploy as a whole. Checked the real dist/assets/
-      # output to plan this rather than guessing: it's a FLAT directory
-      # (Vite content-hashes every filename and drops them all in one
-      # place — there are no images/, fonts/ subfolders to split by, so
-      # "split by subfolder" isn't literally possible here). Split by file
-      # TYPE instead, using extension globs that stay stable across builds
-      # even though the hash in each filename changes every build:
-      #   code (js+css)  ~2.8 MB
-      #   PNGs           ~4.7 MB  (the largest group — most likely culprit)
-      #   JPEGs          ~0.4 MB
-      # Each step now transfers well under half of what the single
-      # all-of-assets/ step was sending in one FTP session. Timeout raised
-      # to 180s (from 120s) per step per the request, even though each
-      # step now carries less data. On "passive mode / per-file retry":
-      # I don't have live access to re-check this action's current docs,
-      # and from what I know of it (built on the basic-ftp library) it
-      # doesn't expose a user-facing passive-mode toggle or a connection-
-      # retry-per-file input — there's nothing to enable here. If these
-      # three still reset, that's a real server-side transfer-size/duration
-      # limit on this Hostinger plan, not something any client-side config
-      # here can work around.
-      - name: "Deploy assets/ via FTP (code: js, css)"
-        id: deploy-assets-code
-        timeout-minutes: 15
-        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          protocol: ftp
-          timeout: 180000
-          log-level: verbose
-          local-dir: ./dist/assets/
-          server-dir: /public_html/assets/
-          dangerous-clean-slate: false
-          exclude: |
-            **/*.png
-            **/*.jpg
-            **/*.jpeg
-            **/*.gif
-            **/*.webp
-            **/*.svg
-          state-name: .ftp-deploy-sync-state-assets-code.json
-
-      - name: Deploy assets/ via FTP (PNG images)
-        id: deploy-assets-png
-        timeout-minutes: 15
-        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          protocol: ftp
-          timeout: 180000
-          log-level: verbose
-          local-dir: ./dist/assets/
-          server-dir: /public_html/assets/
-          dangerous-clean-slate: false
-          exclude: |
-            **/*.js
-            **/*.css
-            **/*.jpg
-            **/*.jpeg
-            **/*.gif
-            **/*.webp
-            **/*.svg
-          state-name: .ftp-deploy-sync-state-assets-png.json
-
-      - name: Deploy assets/ via FTP (JPEG images)
-        id: deploy-assets-jpeg
-        timeout-minutes: 15
-        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          protocol: ftp
-          timeout: 180000
-          log-level: verbose
-          local-dir: ./dist/assets/
-          server-dir: /public_html/assets/
-          dangerous-clean-slate: false
-          exclude: |
-            **/*.js
-            **/*.css
-            **/*.png
-            **/*.gif
-            **/*.webp
-            **/*.svg
-          state-name: .ftp-deploy-sync-state-assets-jpeg.json
-
-      - name: "Deploy assets/ via FTP (WebP, SVG, GIF images)"
-        id: deploy-assets-webp
-        timeout-minutes: 15
-        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          protocol: ftp
-          timeout: 180000
-          log-level: verbose
-          local-dir: ./dist/assets/
-          server-dir: /public_html/assets/
-          dangerous-clean-slate: false
-          exclude: |
-            **/*.js
-            **/*.css
-            **/*.png
-            **/*.jpg
-            **/*.jpeg
-          state-name: .ftp-deploy-sync-state-assets-webp.json
+      # Every FTP-Deploy-Action variant (splitting by folder, then by file
+      # type, with longer timeouts each time) hit the identical
+      # ECONNRESET at the identical point — creating a folder — which
+      # means the action's own connection handling (it's built on the
+      # basic-ftp library) is the actual problem, not transfer size/
+      # duration. lftp's `mirror` handles an entire directory tree in one
+      # session with real reconnect/retry built in, so one step now
+      # replaces all of those. `--delete` is deliberately NOT used —
+      # this mirrors local dist/ onto /public_html additively, so a file
+      # that exists on the server but not in this build (e.g. an asset
+      # from a previous Vite content-hash) is left alone rather than
+      # removed.
+      - name: Deploy to Hostinger via lftp
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq lftp
+          lftp -c "set ftp:ssl-allow no; set ftp:passive-mode yes; set net:timeout 60; set net:max-retries 8; set net:reconnect-interval-base 10; set net:reconnect-interval-max 60; open -u \"$FTP_USERNAME\",\"$FTP_PASSWORD\" \"$FTP_SERVER\"; mirror -R --verbose --parallel=2 ./dist /public_html"
