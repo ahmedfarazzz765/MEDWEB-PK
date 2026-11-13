@@ -19,17 +19,19 @@ export const DEFAULT_DESCRIPTION =
   "MEDWEB-PK is Pakistan's medical education platform — live webinars, expert-designed courses, verified certificates, and a nationwide student ambassador network for healthcare students."
 export const DEFAULT_IMAGE = `${SITE_URL}/favicon.png`
 
-export default function SEO({ title, description, path, image, type = 'website', noindex = false, jsonLd }) {
+export default function SEO({ title, description, path, image, type = 'website', noindex = false, jsonLd, keywords }) {
   const fullTitle = title ? `${title} | ${SITE_NAME}` : `${SITE_NAME} — Pakistan's Medical Education Platform`
   const desc = description || DEFAULT_DESCRIPTION
   const canonical = `${SITE_URL}${path || (typeof window !== 'undefined' ? window.location.pathname : '/')}`
   const img = image || DEFAULT_IMAGE
   const jsonLdList = Array.isArray(jsonLd) ? jsonLd : jsonLd ? [jsonLd] : []
+  const keywordsStr = Array.isArray(keywords) ? keywords.join(', ') : keywords
 
   return (
     <Helmet>
       <title>{fullTitle}</title>
       <meta name="description" content={desc} />
+      {keywordsStr && <meta name="keywords" content={keywordsStr} />}
       <link rel="canonical" href={canonical} />
       {noindex && <meta name="robots" content="noindex, nofollow" />}
 

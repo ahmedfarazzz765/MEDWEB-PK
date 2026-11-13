@@ -4,6 +4,7 @@ import ErrorBoundary from './components/ErrorBoundary'
 import PageLoader from './components/PageLoader'
 import WebinarAnnouncementPopup from './components/WebinarAnnouncementPopup'
 import NewsPopup from './components/NewsPopup'
+import CoursePopup from './components/CoursePopup'
 
 // Every route is code-split via React.lazy — previously every page
 // (including the entire /admin area: ~20 admin pages pulling in xlsx,
@@ -68,6 +69,7 @@ function PublicSitePopups() {
     <>
       <WebinarAnnouncementPopup />
       <NewsPopup />
+      <CoursePopup />
     </>
   )
 }

@@ -353,6 +353,79 @@ export async function sendAmbassadorUpdatedEmail({ name, email, changes }) {
   })
 }
 
+// Paid course/workshop enrollment received — sent immediately on submit,
+// before any admin review (mirrors sendWebinarConfirmation's "silently
+// skips if not configured" contract).
+export async function sendCourseEnrollmentReceivedEmail({ name, email, courseTitle, enrollmentId }) {
+  return sendEmail({
+    to_name: name,
+    to_email: email,
+    subject: `Registration Received — ${courseTitle}`,
+    htmlContent: wrapHtml(`
+      <h2 style="margin:0 0 8px;color:#1a1a1a;font-size:20px;">Registration Received ✅</h2>
+      <p style="color:#555;margin:0 0 20px;line-height:1.7;">Hi <strong>${name}</strong>, we've received your enrollment and payment details for:</p>
+      <div style="background:#f7f9fc;border-radius:12px;padding:20px;margin-bottom:20px;">
+        <p style="margin:0;font-weight:700;color:#1655c3;font-size:15px;">${courseTitle}</p>
+      </div>
+      <div style="background:#eff6ff;border:2px solid #1655c3;border-radius:12px;padding:16px;text-align:center;margin-bottom:24px;">
+        <p style="margin:0 0 4px;color:#666;font-size:11px;text-transform:uppercase;letter-spacing:1px;font-weight:700;">Enrollment ID</p>
+        <p style="margin:0;color:#1655c3;font-size:20px;font-weight:900;font-family:monospace;">${enrollmentId}</p>
+      </div>
+      <p style="color:#888;font-size:13px;margin:0;">We will verify your payment and email you once it's confirmed. Please keep your Enrollment ID handy in case you need to contact us.</p>
+      <p style="color:#888;font-size:13px;margin:16px 0 0;">Questions? WhatsApp us at <strong>+92 329 1692899</strong> or email <strong>medwebpk@gmail.com</strong>.</p>
+      <br><p style="color:#888;font-size:13px;margin:0;">— MEDWEB Team</p>
+    `),
+  })
+}
+
+// Payment verified — joining link only ever goes out through this email,
+// never to the public course page/form.
+export async function sendCourseEnrollmentApprovedEmail({ name, email, courseTitle, eventDate, startTime, endTime, platform, joiningLink, enrollmentId }) {
+  const when = [eventDate, [startTime, endTime].filter(Boolean).join(' – ')].filter(Boolean).join(' · ')
+  return sendEmail({
+    to_name: name,
+    to_email: email,
+    subject: `You're Registered! — ${courseTitle}`,
+    htmlContent: wrapHtml(`
+      <h2 style="margin:0 0 8px;color:#1a1a1a;font-size:20px;">Your Registration Is Approved 🎉</h2>
+      <p style="color:#555;margin:0 0 20px;line-height:1.7;">Hi <strong>${name}</strong>, your payment has been verified — you're confirmed for:</p>
+      <div style="background:#f0fdf4;border-radius:12px;padding:20px;margin-bottom:20px;">
+        <p style="margin:0 0 8px;font-weight:700;color:#1655c3;font-size:16px;">${courseTitle}</p>
+        ${when ? `<p style="margin:0 0 4px;color:#666;font-size:13px;">📅 ${when}</p>` : ''}
+        ${platform ? `<p style="margin:0;color:#666;font-size:13px;">💻 ${platform}</p>` : ''}
+      </div>
+      ${joiningLink ? `
+      <div style="text-align:center;margin-bottom:24px;">
+        <a href="${joiningLink}" style="display:inline-block;background:linear-gradient(135deg,#1655c3,#64ac37);color:#fff;text-decoration:none;padding:14px 32px;border-radius:10px;font-weight:700;font-size:14px;">Join the Session →</a>
+      </div>
+      <p style="color:#aaa;font-size:12px;margin:0 0 20px;text-align:center;">Or paste this link in your browser: <a href="${joiningLink}" style="color:#1655c3;">${joiningLink}</a></p>
+      ` : ''}
+      <p style="color:#888;font-size:13px;margin:0;">Enrollment ID: <strong style="font-family:monospace;">${enrollmentId}</strong></p>
+      <p style="color:#888;font-size:13px;margin:16px 0 0;">Questions? WhatsApp us at <strong>+92 329 1692899</strong> or email <strong>medwebpk@gmail.com</strong>.</p>
+      <br><p style="color:#888;font-size:13px;margin:0;">— MEDWEB Team</p>
+    `),
+  })
+}
+
+export async function sendCourseEnrollmentRejectedEmail({ name, email, courseTitle, reason, enrollmentId }) {
+  return sendEmail({
+    to_name: name,
+    to_email: email,
+    subject: `Update on Your Registration — ${courseTitle}`,
+    htmlContent: wrapHtml(`
+      <h2 style="margin:0 0 8px;color:#1a1a1a;font-size:20px;">We Couldn't Verify Your Payment</h2>
+      <p style="color:#555;margin:0 0 16px;line-height:1.7;">Hi <strong>${name}</strong>, we were unable to verify your payment for:</p>
+      <div style="background:#fef2f2;border-radius:12px;padding:20px;margin-bottom:20px;">
+        <p style="margin:0;font-weight:700;color:#1a1a1a;font-size:15px;">${courseTitle}</p>
+      </div>
+      ${reason ? `<p style="color:#555;margin:0 0 16px;line-height:1.7;"><strong>Reason:</strong> ${reason}</p>` : ''}
+      <p style="color:#888;font-size:13px;margin:0;">Enrollment ID: <strong style="font-family:monospace;">${enrollmentId}</strong></p>
+      <p style="color:#888;font-size:13px;margin:16px 0 0;">If you believe this is a mistake or would like to resubmit your payment proof, please contact us on WhatsApp at <strong>+92 329 1692899</strong> or email <strong>medwebpk@gmail.com</strong>.</p>
+      <br><p style="color:#888;font-size:13px;margin:0;">— MEDWEB Team</p>
+    `),
+  })
+}
+
 // Test email from admin Email Settings page
 export async function sendTestEmail(toEmail) {
   cachedConfig = null // force reload latest saved config

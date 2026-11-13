@@ -1,15 +1,20 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, ExternalLink, Star, Users, PlayCircle, Clock, ListChecks } from 'lucide-react'
+import { ArrowLeft, ExternalLink, Star, Users, PlayCircle, Clock, ListChecks, Calendar, MapPin, Award, Banknote } from 'lucide-react'
 import { coursesService } from '../firebase/services'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
 import CoverImage from '../components/CoverImage'
+import CourseEnrollForm from '../components/CourseEnrollForm'
 import SEO, { SITE_URL } from '../components/SEO'
 
 export default function CourseDetailPage() {
-  const { id } = useParams()
+  // Route param is whatever was in the URL — could be the new shareable
+  // slug or an old /courses/<doc-id> link shared before slugs existed.
+  // Try slug first (the common case going forward), fall back to a plain
+  // doc-id lookup so nothing already shared ever breaks.
+  const { id: slugOrId } = useParams()
   const navigate = useNavigate()
   const [course, setCourse] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -17,11 +22,12 @@ export default function CourseDetailPage() {
   useEffect(() => {
     window.scrollTo(0, 0)
     setLoading(true)
-    coursesService.getOne(id)
+    coursesService.getBySlug(slugOrId)
+      .then(c => c || coursesService.getOne(slugOrId))
       .then(c => setCourse(c))
       .catch(() => setCourse(null))
       .finally(() => setLoading(false))
-  }, [id])
+  }, [slugOrId])
 
   if (loading) {
     return (
@@ -55,11 +61,41 @@ export default function CourseDetailPage() {
   const fullDescription = course.fullDescription || course.description
   const instructorInitials = (course.instructor || '?').replace(/^Dr\.?\s*/i, '').split(' ').map(n => n[0]).slice(0, 2).join('')
 
-  const courseJsonLd = {
+  const isWorkshop = course.category === 'Workshop'
+  const canonicalPath = `/courses/${course.slug || course.id}`
+  const seoDescription = course.seoDescription || fullDescription || `${course.title} — a MEDWEB-PK course for medical and pharmacy students.`
+
+  // Workshop-type events carry a real date/time, so they're genuinely an
+  // EducationEvent (startDate/endDate/location/offers all mean something
+  // here); a plain self-paced Course has none of that and keeps the
+  // original Course schema — same startDate-parsed-defensively approach
+  // WebinarDetailPage.jsx already uses, so an unparseable/missing date
+  // never emits invalid structured data.
+  const parseIso = (dateStr, timeStr) => {
+    if (!dateStr) return null
+    const t = new Date(`${dateStr} ${timeStr || ''}`.trim())
+    return isNaN(t.getTime()) ? null : t.toISOString()
+  }
+  const startIso = isWorkshop ? parseIso(course.eventDate, course.startTime) : null
+  const endIso = isWorkshop ? parseIso(course.eventDate, course.endTime) : null
+
+  const courseJsonLd = isWorkshop ? {
+    '@context': 'https://schema.org',
+    '@type': 'EducationEvent',
+    name: course.title,
+    description: seoDescription,
+    ...(startIso ? { startDate: startIso } : {}),
+    ...(endIso ? { endDate: endIso } : {}),
+    eventAttendanceMode: 'https://schema.org/OnlineEventAttendanceMode',
+    location: { '@type': 'VirtualLocation', url: `${SITE_URL}${canonicalPath}` },
+    organizer: { '@type': 'Organization', name: 'MEDWEB-PK', url: SITE_URL },
+    ...(course.instructor ? { performer: { '@type': 'Person', name: course.instructor } } : {}),
+    ...(course.type === 'Paid' && course.fee > 0 ? { offers: { '@type': 'Offer', price: course.fee, priceCurrency: 'PKR', url: `${SITE_URL}${canonicalPath}` } } : {}),
+  } : {
     '@context': 'https://schema.org',
     '@type': 'Course',
     name: course.title,
-    description: fullDescription || `${course.title} — a MEDWEB-PK course for medical and pharmacy students.`,
+    description: seoDescription,
     provider: { '@type': 'Organization', name: 'MEDWEB-PK', sameAs: SITE_URL },
     ...(course.instructor ? { hasCourseInstance: { '@type': 'CourseInstance', courseMode: 'Online', instructor: { '@type': 'Person', name: course.instructor } } } : {}),
     ...(course.rating > 0 ? { aggregateRating: { '@type': 'AggregateRating', ratingValue: course.rating, ratingCount: Math.max(course.students || 1, 1) } } : {}),
@@ -68,10 +104,11 @@ export default function CourseDetailPage() {
   return (
     <div className="font-poppins bg-[#f7f9fc] min-h-screen">
       <SEO
-        title={course.title}
-        description={fullDescription || `${course.title} — a MEDWEB-PK course for medical and pharmacy students.`}
-        path={`/courses/${id}`}
-        image={poster}
+        title={course.seoTitle || course.title}
+        description={seoDescription}
+        keywords={course.seoKeywords}
+        path={canonicalPath}
+        image={course.ogImage || poster}
         type="article"
         jsonLd={courseJsonLd}
       />
@@ -83,7 +120,10 @@ export default function CourseDetailPage() {
           <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-sm text-white/80 hover:text-white mb-6 transition-colors">
             <ArrowLeft size={16} /> Back
           </button>
-          {course.type && <span className="inline-block text-[11px] font-bold text-white bg-white/20 px-3 py-1 rounded-full mb-4">{course.type}</span>}
+          <div className="flex items-center gap-2 mb-4">
+            {isWorkshop && <span className="inline-block text-[11px] font-bold text-white bg-amber-500 px-3 py-1 rounded-full">Workshop</span>}
+            {course.type && <span className="inline-block text-[11px] font-bold text-white bg-white/20 px-3 py-1 rounded-full">{course.type}</span>}
+          </div>
           <h1 className="text-white font-black text-3xl sm:text-4xl lg:text-5xl leading-tight">{course.title}</h1>
           <div className="flex items-center gap-4 mt-4 text-white/85 text-sm flex-wrap">
             {course.rating > 0 && <span className="flex items-center gap-1"><Star size={14} className="fill-white" /> {course.rating}</span>}
@@ -96,6 +136,11 @@ export default function CourseDetailPage() {
                 <span key={i} className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-white/20 text-white">{tag}</span>
               ))}
             </div>
+          )}
+          {course.type === 'Paid' && course.enrollmentOpen !== false && (
+            <a href="#enroll" className="inline-flex items-center gap-2 text-[#1655c3] font-bold px-7 py-3 rounded-full bg-white hover:bg-gray-50 transition-colors text-sm mt-6 shadow-lg">
+              Register Now →
+            </a>
           )}
         </div>
       </div>
@@ -127,8 +172,38 @@ export default function CourseDetailPage() {
               </div>
             )}
 
+            {(course.eventDate || course.platform || (course.type === 'Paid' && course.fee > 0)) && (
+              <div className="grid sm:grid-cols-2 gap-3">
+                {course.eventDate && (
+                  <div className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 bg-gray-50">
+                    <Calendar size={16} className="text-[#1655c3] shrink-0" />
+                    <span className="text-sm text-gray-700">{course.eventDate}{(course.startTime || course.endTime) ? ` · ${[course.startTime, course.endTime].filter(Boolean).join(' – ')}` : ''}</span>
+                  </div>
+                )}
+                {course.platform && (
+                  <div className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 bg-gray-50">
+                    <MapPin size={16} className="text-[#1655c3] shrink-0" />
+                    <span className="text-sm text-gray-700">{course.platform}</span>
+                  </div>
+                )}
+                {course.type === 'Paid' && course.fee > 0 && (
+                  <div className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 bg-gray-50">
+                    <Banknote size={16} className="text-[#1655c3] shrink-0" />
+                    <span className="text-sm text-gray-700 font-bold">PKR {Number(course.fee).toLocaleString()}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
             {fullDescription && (
-              <p className="text-gray-600 text-sm sm:text-[15px] leading-relaxed">{fullDescription}</p>
+              <p className="text-gray-600 text-sm sm:text-[15px] leading-relaxed whitespace-pre-line">{fullDescription}</p>
+            )}
+
+            {course.certificateNote && (
+              <div className="flex items-start gap-3 p-4 rounded-xl border border-amber-100 bg-amber-50">
+                <Award size={18} className="text-amber-500 shrink-0 mt-0.5" />
+                <p className="text-sm text-amber-700">{course.certificateNote}</p>
+              </div>
             )}
 
             {course.driveLink && (
@@ -159,7 +234,12 @@ export default function CourseDetailPage() {
               </div>
             )}
 
-            {course.whatsapp && (
+            {course.type === 'Paid' ? (
+              <div id="enroll" className="border-t border-gray-100 pt-6">
+                <h2 className="font-bold text-[#1a1a1a] text-lg mb-4">Register Now</h2>
+                <CourseEnrollForm course={course} />
+              </div>
+            ) : course.whatsapp && (
               <a
                 href={`https://wa.me/${String(course.whatsapp).replace(/[^0-9]/g, '').replace(/^0/, '92')}?text=${encodeURIComponent('Assalam o Alaikum, I want to enroll in: ' + (course.title || 'a course'))}`}
                 target="_blank" rel="noopener noreferrer"

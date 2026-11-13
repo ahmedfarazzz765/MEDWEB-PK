@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { BookOpen, Users, Star, Plus, X } from 'lucide-react'
+import { BookOpen, Users, Star, Plus, X, Inbox } from 'lucide-react'
 import TagInput from '../components/TagInput'
 import StatCard    from '../components/StatCard'
 import DataTable   from '../components/DataTable'
@@ -10,22 +10,43 @@ import AdminButton from '../components/AdminButton'
 import ActionButtons from '../components/ActionButtons'
 import CoverImage from '../../components/CoverImage'
 import SortableGrid, { SortableItem } from '../components/SortableGrid'
-import { coursesService } from '../../firebase/services'
+import AdminCourseEnrollments from './AdminCourseEnrollments'
+import { coursesService, courseJoiningLinksService } from '../../firebase/services'
 
 const emptyForm = () => ({
   title: '', instructor: '', instructorImage: '', qualification: '', type: 'Free', status: 'Active',
+  category: 'Course', fee: 0,
   description: '', shortDescription: '', fullDescription: '',
   students: 0, revenue: 'PKR 0', rating: 0, imageUrl: '',
   whatsapp: '03291692899', courseDuration: '', tags: [], featured: false,
   posterImage: '', driveLink: '', lectures: [],
+  // Workshop/event details
+  eventDate: '', startTime: '', endTime: '', platform: '', joiningLink: '',
+  // Payment instructions (manual verification — no payment gateway)
+  paymentBankName: '', paymentAccountTitle: '', paymentAccountNumber: '', paymentIban: '', paymentJazzcashEasypaisa: '',
+  certificateNote: '',
+  enrollmentOpen: true, seatLimit: 0,
+  // SEO
+  slug: '', seoTitle: '', seoDescription: '', seoKeywords: '', ogImage: '',
+  // Homepage popup
+  popupEnabled: false, popupStartDate: '', popupEndDate: '',
 })
 
-function makeColumns(openEdit, handleDelete) {
+function makeColumns(openEdit, handleDelete, openEnrollments) {
   return [
     { key: 'imageUrl',   label: '',          render: (v, row) => v ? <CoverImage src={v} alt={row.title || ''} className="w-8 h-8 rounded-lg" /> : <div className="w-8 h-8 rounded-lg bg-blue-50" /> },
-    { key: 'title',      label: 'Title',     render: v => <span className="font-semibold text-[#1a1a1a]">{v}</span> },
+    { key: 'title',      label: 'Title',     render: (v, row) => (
+      <span className="font-semibold text-[#1a1a1a] flex items-center gap-1.5">
+        {v}
+        {row.category === 'Workshop' && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-600">Workshop</span>}
+      </span>
+    )},
     { key: 'instructor', label: 'Instructor',render: v => <span className="text-gray-500 text-xs">{v}</span> },
-    { key: 'type',       label: 'Type',      render: v => <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: v === 'Free' ? '#dcfce7' : '#dbeafe', color: v === 'Free' ? '#16a34a' : '#1655c3' }}>{v}</span> },
+    { key: 'type',       label: 'Type',      render: (v, row) => (
+      <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: v === 'Free' ? '#dcfce7' : '#dbeafe', color: v === 'Free' ? '#16a34a' : '#1655c3' }}>
+        {v}{v === 'Paid' && row.fee > 0 ? ` · PKR ${Number(row.fee).toLocaleString()}` : ''}
+      </span>
+    )},
     { key: 'students',   label: 'Students',  render: v => <span className="font-bold text-[#1655c3]">{(v || 0).toLocaleString()}</span> },
     { key: 'rating',     label: 'Rating',    render: v => v > 0 ? <span className="text-amber-500 font-bold">⭐ {v}</span> : <span className="text-gray-300 text-xs">—</span> },
     { key: 'status',     label: 'Status',    render: v => {
@@ -33,7 +54,14 @@ function makeColumns(openEdit, handleDelete) {
       return <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${m[v]}`}>{v}</span>
     }},
     { key: 'id', label: 'Actions', render: (v, row) => (
-      <ActionButtons onEdit={() => openEdit(row)} onDelete={() => handleDelete(v)} />
+      <div className="flex items-center gap-1.5">
+        {row.type === 'Paid' && (
+          <button onClick={() => openEnrollments(row)} className="p-1.5 rounded-lg hover:bg-blue-50 text-[#1655c3]" title="View enrollments">
+            <Inbox size={14} />
+          </button>
+        )}
+        <ActionButtons onEdit={() => openEdit(row)} onDelete={() => handleDelete(v)} />
+      </div>
     )},
   ]
 }
@@ -45,6 +73,8 @@ export default function AdminCourses() {
   const [form,    setForm]    = useState(emptyForm)
   const [editId,  setEditId]  = useState(null)
   const [saving,  setSaving]  = useState(false)
+  const [enrollmentsFor, setEnrollmentsFor] = useState(null) // course row, or null
+  const [slugTouched, setSlugTouched] = useState(false)
 
   useEffect(() => {
     const unsub = coursesService.listen(rows => { setData(rows); setLoading(false) })
@@ -69,7 +99,7 @@ export default function AdminCourses() {
     coursesService.reorder(reordered).catch(e => alert('Error saving order: ' + e.message))
   }
 
-  const openAdd  = () => { setForm(emptyForm()); setEditId(null); setModal('add') }
+  const openAdd  = () => { setForm(emptyForm()); setEditId(null); setSlugTouched(false); setModal('add') }
   const openEdit = row => {
     setForm({
       title: row.title, instructor: row.instructor, instructorImage: row.instructorImage || '', qualification: row.qualification || '', type: row.type, status: row.status,
@@ -78,16 +108,46 @@ export default function AdminCourses() {
       imageUrl: row.imageUrl || '', whatsapp: row.whatsapp || '03291692899',
       courseDuration: row.courseDuration || '', tags: Array.isArray(row.tags) ? row.tags : [], featured: !!row.featured,
       posterImage: row.posterImage || '', driveLink: row.driveLink || '', lectures: Array.isArray(row.lectures) ? row.lectures : [],
+      category: row.category === 'Workshop' ? 'Workshop' : 'Course', fee: row.fee || 0,
+      eventDate: row.eventDate || '', startTime: row.startTime || '', endTime: row.endTime || '', platform: row.platform || '', joiningLink: '',
+      paymentBankName: row.paymentBankName || '', paymentAccountTitle: row.paymentAccountTitle || '', paymentAccountNumber: row.paymentAccountNumber || '',
+      paymentIban: row.paymentIban || '', paymentJazzcashEasypaisa: row.paymentJazzcashEasypaisa || '',
+      certificateNote: row.certificateNote || '',
+      enrollmentOpen: row.enrollmentOpen !== false, seatLimit: row.seatLimit || 0,
+      slug: row.slug || '', seoTitle: row.seoTitle || '', seoDescription: row.seoDescription || '', seoKeywords: row.seoKeywords || '', ogImage: row.ogImage || '',
+      popupEnabled: !!row.popupEnabled, popupStartDate: row.popupStartDate || '', popupEndDate: row.popupEndDate || '',
     })
-    setEditId(row.id); setModal('edit')
+    setEditId(row.id); setSlugTouched(!!row.slug); setModal('edit')
+    // Joining link lives in its own admin-only-readable doc (see
+    // courseJoiningLinksService in services.js) — never on the course
+    // doc itself, so it has to be fetched separately rather than read
+    // off `row`.
+    courseJoiningLinksService.get(row.id).then(doc => {
+      setForm(prev => ({ ...prev, joiningLink: doc?.joiningLink || '' }))
+    }).catch(() => {})
   }
   const closeModal = () => { setModal(false); setEditId(null) }
   const set = field => e => setForm(prev => ({ ...prev, [field]: e.target.value }))
   const setNum = field => e => setForm(prev => ({ ...prev, [field]: parseFloat(e.target.value) || 0 }))
+  const setCheck = field => e => setForm(prev => ({ ...prev, [field]: e.target.checked }))
   const setImg = url => setForm(prev => ({ ...prev, imageUrl: url }))
   const setInstructorImg = url => setForm(prev => ({ ...prev, instructorImage: url }))
   const setPoster = url => setForm(prev => ({ ...prev, posterImage: url }))
+  const setOgImage = url => setForm(prev => ({ ...prev, ogImage: url }))
   const setTags = tags => setForm(prev => ({ ...prev, tags }))
+
+  // Auto-fills a URL-safe slug from the title the first time it's typed,
+  // same "convenience default the admin can still override" pattern as
+  // blog/news slugs elsewhere in this admin — never overwrites one the
+  // admin already edited by hand (or one already saved on this course).
+  const setTitle = e => {
+    const title = e.target.value
+    setForm(prev => ({
+      ...prev, title,
+      slug: slugTouched ? prev.slug : title.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
+    }))
+  }
+  const setSlug = e => { setSlugTouched(true); setForm(prev => ({ ...prev, slug: e.target.value })) }
 
   const addLecture = () => setForm(prev => ({ ...prev, lectures: [...prev.lectures, { title: '', description: '' }] }))
   const removeLecture = i => setForm(prev => ({ ...prev, lectures: prev.lectures.filter((_, idx) => idx !== i) }))
@@ -99,8 +159,14 @@ export default function AdminCourses() {
     if (!form.title.trim()) return
     setSaving(true)
     try {
-      if (modal === 'add') await coursesService.add(form)
-      else                 await coursesService.update(editId, form)
+      // joiningLink never goes into the public `courses` doc — see
+      // courseJoiningLinksService's own comment for why — written to its
+      // own doc right after, keyed by the course's id.
+      const { joiningLink, ...coursePayload } = form
+      let courseId = editId
+      if (modal === 'add') courseId = await coursesService.add(coursePayload)
+      else                 await coursesService.update(editId, coursePayload)
+      if (joiningLink.trim()) await courseJoiningLinksService.set(courseId, joiningLink.trim())
       closeModal()
     } catch (e) { alert('Error: ' + e.message) }
     finally { setSaving(false) }
@@ -111,7 +177,7 @@ export default function AdminCourses() {
     try { await coursesService.delete(id) } catch (e) { alert('Error: ' + e.message) }
   }
 
-  const columns   = makeColumns(openEdit, handleDelete)
+  const columns   = makeColumns(openEdit, handleDelete, setEnrollmentsFor)
   const active    = data.filter(c => c.status === 'Active').length
   const totalStu  = data.reduce((a, c) => a + (c.students || 0), 0)
   const rated     = data.filter(c => c.rating > 0)
@@ -165,7 +231,7 @@ export default function AdminCourses() {
           <div className="space-y-4">
             <ImageUpload value={form.imageUrl} onChange={setImg} folder="medweb/courses" label="Course Thumbnail" />
             <FormField label="Course Title">
-              <input className={inputCls} value={form.title} onChange={set('title')} placeholder="Clinical Pharmacy Masterclass" />
+              <input className={inputCls} value={form.title} onChange={setTitle} placeholder="Clinical Pharmacy Masterclass" />
             </FormField>
             <div className="grid grid-cols-2 gap-4">
               <FormField label="Instructor">
@@ -176,16 +242,26 @@ export default function AdminCourses() {
               </FormField>
             </div>
             <ImageUpload value={form.instructorImage} onChange={setInstructorImg} folder="medweb/instructors" label="Instructor Image" />
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
+              <FormField label="Category">
+                <select className={inputCls} value={form.category} onChange={set('category')}>
+                  <option>Course</option><option>Workshop</option>
+                </select>
+              </FormField>
               <FormField label="Type">
                 <select className={inputCls} value={form.type} onChange={set('type')}>
                   <option>Free</option><option>Paid</option>
                 </select>
               </FormField>
-              <FormField label="WhatsApp Number (for Enrollment)">
-                <input className={inputCls} value={form.whatsapp} onChange={set('whatsapp')} placeholder="03XXXXXXXXX" />
-              </FormField>
+              {form.type === 'Paid' && (
+                <FormField label="Fee (PKR)">
+                  <input className={inputCls} type="number" min="0" value={form.fee} onChange={setNum('fee')} placeholder="300" />
+                </FormField>
+              )}
             </div>
+            <FormField label="WhatsApp Number (shown on Free courses only — Paid courses use the enrollment form below)">
+              <input className={inputCls} value={form.whatsapp} onChange={set('whatsapp')} placeholder="03XXXXXXXXX" />
+            </FormField>
             <FormField label="Description (legacy — used only if Short/Full Description below are empty)">
               <textarea className={inputCls} rows={2} value={form.description} onChange={set('description')} placeholder="Course description…" />
             </FormField>
@@ -247,6 +323,105 @@ export default function AdminCourses() {
               </div>
             </div>
 
+            {form.type === 'Paid' && (
+              <>
+                <div className="border-t border-gray-100 pt-4 mt-2">
+                  <h4 className="font-bold text-[#1a1a1a] text-sm mb-3">{form.category === 'Workshop' ? 'Workshop' : 'Event'} Details</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField label="Event Date">
+                      <input className={inputCls} value={form.eventDate} onChange={set('eventDate')} placeholder="Friday, 20 November 2026" />
+                    </FormField>
+                    <FormField label="Platform">
+                      <input className={inputCls} value={form.platform} onChange={set('platform')} placeholder="Online via Google Meet" />
+                    </FormField>
+                    <FormField label="Start Time">
+                      <input className={inputCls} value={form.startTime} onChange={set('startTime')} placeholder="8:00 PM PKT" />
+                    </FormField>
+                    <FormField label="End Time">
+                      <input className={inputCls} value={form.endTime} onChange={set('endTime')} placeholder="9:30 PM PKT" />
+                    </FormField>
+                  </div>
+                  <FormField label="Joining Link (Google Meet — admin only, never shown publicly, sent only in the approval email)">
+                    <input className={inputCls} value={form.joiningLink} onChange={set('joiningLink')} placeholder="https://meet.google.com/..." />
+                  </FormField>
+                  <FormField label="Certificate Note">
+                    <textarea className={inputCls} rows={2} value={form.certificateNote} onChange={set('certificateNote')} placeholder="e.g. Mock test + certificate. Certificate for scores above 70%." />
+                  </FormField>
+                </div>
+
+                <div className="border-t border-gray-100 pt-4 mt-2">
+                  <h4 className="font-bold text-[#1a1a1a] text-sm mb-3">Payment Instructions (shown to students before they enroll)</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField label="Bank Name">
+                      <input className={inputCls} value={form.paymentBankName} onChange={set('paymentBankName')} placeholder="e.g. Meezan Bank" />
+                    </FormField>
+                    <FormField label="Account Title">
+                      <input className={inputCls} value={form.paymentAccountTitle} onChange={set('paymentAccountTitle')} />
+                    </FormField>
+                    <FormField label="Account Number">
+                      <input className={inputCls} value={form.paymentAccountNumber} onChange={set('paymentAccountNumber')} />
+                    </FormField>
+                    <FormField label="IBAN">
+                      <input className={inputCls} value={form.paymentIban} onChange={set('paymentIban')} />
+                    </FormField>
+                    <FormField label="JazzCash / Easypaisa Number">
+                      <input className={inputCls} value={form.paymentJazzcashEasypaisa} onChange={set('paymentJazzcashEasypaisa')} placeholder="03XXXXXXXXX" />
+                    </FormField>
+                  </div>
+                </div>
+
+                <div className="border-t border-gray-100 pt-4 mt-2">
+                  <h4 className="font-bold text-[#1a1a1a] text-sm mb-3">Enrollment</h4>
+                  <div className="grid grid-cols-2 gap-4 items-end">
+                    <label className="flex items-center gap-3 cursor-pointer select-none pb-2.5">
+                      <input type="checkbox" checked={form.enrollmentOpen} onChange={setCheck('enrollmentOpen')} className="w-4 h-4 accent-[#1655c3]" />
+                      <span className="text-sm font-semibold text-gray-700">Enrollment Open</span>
+                    </label>
+                    <FormField label="Seat Limit (0 = unlimited)">
+                      <input className={inputCls} type="number" min="0" value={form.seatLimit} onChange={setNum('seatLimit')} />
+                    </FormField>
+                  </div>
+                </div>
+              </>
+            )}
+
+            <div className="border-t border-gray-100 pt-4 mt-2">
+              <h4 className="font-bold text-[#1a1a1a] text-sm mb-3">SEO & Sharing</h4>
+              <FormField label="Slug (used in the shareable link medwebpk.com/courses/…)">
+                <input className={inputCls} value={form.slug} onChange={setSlug} placeholder="amr-revolution-workshop" />
+              </FormField>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField label="SEO Title">
+                  <input className={inputCls} value={form.seoTitle} onChange={set('seoTitle')} placeholder="Leave blank to use Course Title" />
+                </FormField>
+                <FormField label="Keywords (comma-separated)">
+                  <input className={inputCls} value={form.seoKeywords} onChange={set('seoKeywords')} placeholder="antimicrobial resistance workshop, ..." />
+                </FormField>
+              </div>
+              <FormField label="Meta Description">
+                <textarea className={inputCls} rows={2} value={form.seoDescription} onChange={set('seoDescription')} placeholder="Leave blank to use Full Description" />
+              </FormField>
+              <ImageUpload value={form.ogImage} onChange={setOgImage} folder="medweb/courses" label="OG Image (leave blank to use the Poster Image)" />
+            </div>
+
+            <div className="border-t border-gray-100 pt-4 mt-2">
+              <h4 className="font-bold text-[#1a1a1a] text-sm mb-3">Homepage Popup</h4>
+              <label className="flex items-center gap-3 cursor-pointer select-none mb-3">
+                <input type="checkbox" checked={form.popupEnabled} onChange={setCheck('popupEnabled')} className="w-4 h-4 accent-[#1655c3]" />
+                <span className="text-sm font-semibold text-gray-700">Show as a homepage popup</span>
+              </label>
+              {form.popupEnabled && (
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField label="Popup Start Date">
+                    <input className={inputCls} type="date" value={form.popupStartDate} onChange={set('popupStartDate')} />
+                  </FormField>
+                  <FormField label="Popup End Date">
+                    <input className={inputCls} type="date" value={form.popupEndDate} onChange={set('popupEndDate')} />
+                  </FormField>
+                </div>
+              )}
+            </div>
+
             <div className="flex gap-3 pt-2">
               <AdminButton variant="ghost" className="flex-1" onClick={closeModal}>Cancel</AdminButton>
               <AdminButton variant="primary" className="flex-1" onClick={handleSave} disabled={saving}>
@@ -255,6 +430,10 @@ export default function AdminCourses() {
             </div>
           </div>
         </Modal>
+      )}
+
+      {enrollmentsFor && (
+        <AdminCourseEnrollments course={enrollmentsFor} onClose={() => setEnrollmentsFor(null)} />
       )}
     </div>
   )

@@ -32,7 +32,10 @@ export function CourseCard({ c, i }) {
               <BookOpen size={32} style={{ color }} className="opacity-50" />
             </div>
         }
-        {c.type && <span className="absolute top-3 right-3 text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background:color }}>{c.type}</span>}
+        <div className="absolute top-3 right-3 flex flex-col items-end gap-1">
+          {c.category === 'Workshop' && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white bg-amber-500">Workshop</span>}
+          {c.type && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background:color }}>{c.type}</span>}
+        </div>
       </div>
       <div className="p-5 sm:p-6 flex flex-col flex-1">
         <h3 className="font-bold text-[#1a1a1a] text-sm sm:text-base mb-2 leading-snug group-hover:text-[#1655c3] transition-colors">{c.title}</h3>
@@ -62,7 +65,7 @@ export function CourseCard({ c, i }) {
           </div>
         )}
         {c.id ? (
-          <Link to={`/courses/${c.id}`} className="inline-flex items-center gap-1.5 text-sm font-semibold mt-5 group-hover:gap-3 transition-all duration-200" style={{ color }}>
+          <Link to={`/courses/${c.slug || c.id}`} className="inline-flex items-center gap-1.5 text-sm font-semibold mt-5 group-hover:gap-3 transition-all duration-200" style={{ color }}>
             Explore Course <ArrowRight size={15} />
           </Link>
         ) : (

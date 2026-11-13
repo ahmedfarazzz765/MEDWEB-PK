@@ -6,7 +6,7 @@ import {
   getDocs, getDoc, query, where, orderBy, limit,
   serverTimestamp, increment, onSnapshot, runTransaction,
 } from 'firebase/firestore'
-import { db } from './config'
+import { db, auth } from './config'
 
 // ─── Collection names ────────────────────────────────────────────────────────
 const COLS = {
@@ -104,6 +104,19 @@ export const webinarsService = {
   addRegistration: data => add('webinarRegistrations', data),
   getRegistrations: webinarId => getAll('webinarRegistrations', where('webinarId', '==', webinarId), orderBy('createdAt', 'desc')),
   getAllRegistrations: () => getAll('webinarRegistrations', orderBy('createdAt', 'desc')),
+  // Live feed of every registration doc, across all webinars — the ground
+  // truth for "how many registered" (each webinar's own `registered`
+  // counter is a best-effort increment at submit time that can silently
+  // fail/skip, see WebinarRegister.jsx's `.catch(() => {})`). Admin pages
+  // that need a per-webinar count should derive it from this, not from
+  // `w.registered`.
+  listenRegistrations: cb => onSnapshot(
+    query(col('webinarRegistrations'), orderBy('createdAt', 'desc')),
+    snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+    err => { console.error('webinarRegistrations listen error:', err); cb([]) }
+  ),
+  updateRegistration: (id, data) => update('webinarRegistrations', id, data),
+  deleteRegistration: id => remove('webinarRegistrations', id),
   // Ambassador dashboard's own restricted read — filtered by the resolved
   // ambassador's Firebase Auth UID (stored as `referredByUid` at
   // registration time, see WebinarRegister.jsx), not by referral code, so
@@ -130,6 +143,15 @@ export const coursesService = {
   getAll: () => getAll(COLS.courses, orderBy('createdAt', 'desc')).then(applyManualOrder),
   getActive: () => getAll(COLS.courses, where('status', '==', 'Active')).then(applyManualOrder),
   getOne: id => getOne(COLS.courses, id),
+  // The public course page is reached by slug when one is set (shareable,
+  // human-readable link) — falls back to null so the caller can try
+  // getOne(id) next, keeping every link shared before slugs existed
+  // (/courses/<doc-id>) working exactly as before.
+  getBySlug: async slug => {
+    if (!slug) return null
+    const rows = await getAll(COLS.courses, where('slug', '==', slug), limit(1))
+    return rows[0] || null
+  },
   add: data => add(COLS.courses, { ...data, students: 0, rating: 0 }),
   update: (id, data) => update(COLS.courses, id, data),
   delete: id => remove(COLS.courses, id),
@@ -139,6 +161,75 @@ export const coursesService = {
     snap => cb(applyManualOrder(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
     err => console.error("Firebase listen error:", err)
   ),
+}
+
+// ─── COURSE/WORKSHOP ENROLLMENTS (paid, manually verified) ───────────────────
+// A public visitor can only ever create one of these (and read nothing back
+// but their own success screen — the write itself returns the new doc's
+// data straight from this call, never a read of the collection). Only an
+// admin can list/read/approve/reject — same split CERTIFICATE_RULES.md-style
+// reasoning as webinarRegistrations already follows. See CHANGES_ROUND12.md
+// for the exact Firestore rule this collection needs (no local rules file
+// exists in this repo — see Prompt 1's note on blogCategories for why).
+export const courseEnrollmentsService = {
+  // `MW-<SLUG PREFIX>-0001` — the prefix is just the course's own slug's
+  // first hyphen-segment, uppercased (e.g. slug "amr-revolution-workshop"
+  // → "AMR"), so no separate admin-typed "code prefix" field is needed.
+  // The sequence itself lives on the course doc (`enrollmentSeq`) and is
+  // incremented inside the same transaction that reads it, so two
+  // simultaneous enrollments can never collide on the same number.
+  add: async (courseId, data) => {
+    const normEmail = String(data.email || '').trim().toLowerCase()
+    // Duplicate block without letting the public read courseEnrollments:
+    // a data-free marker doc `courseEnrollmentKeys/<courseId>__<email>` is
+    // checked and created in the SAME transaction as the enrollment, so a
+    // second submit with the same email + course is rejected atomically.
+    const keyId = `${courseId}__${normEmail.replace(/[^a-z0-9@._+-]/g, '_')}`
+    const keyRef = doc(db, 'courseEnrollmentKeys', keyId)
+    const courseRef = doc(db, COLS.courses, courseId)
+    const enrollRef = doc(col('courseEnrollments'))
+    const enrollmentId = await runTransaction(db, async tx => {
+      const keySnap = await tx.get(keyRef)
+      if (keySnap.exists()) throw new Error('This email has already been used to enroll in this course.')
+      const snap = await tx.get(courseRef)
+      if (!snap.exists()) throw new Error('Course not found.')
+      const course = snap.data()
+      const seq = (course.enrollmentSeq || 0) + 1
+      const prefix = (course.slug || course.title || 'MW').split(/[-\s]+/)[0].toUpperCase().slice(0, 6) || 'MW'
+      const eid = `MW-${prefix}-${String(seq).padStart(4, '0')}`
+      tx.update(courseRef, { enrollmentSeq: seq })
+      tx.set(keyRef, { courseId, createdAt: serverTimestamp() })
+      tx.set(enrollRef, {
+        ...data, email: normEmail, courseId, courseTitle: course.title || '', courseSlug: course.slug || '',
+        enrollmentId: eid, status: 'Pending', createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+      })
+      return eid
+    })
+    return { id: enrollRef.id, enrollmentId }
+  },
+  getByCourse: courseId => getAll('courseEnrollments', where('courseId', '==', courseId), orderBy('createdAt', 'desc')),
+  listenByCourse: (courseId, cb) => onSnapshot(
+    query(col('courseEnrollments'), where('courseId', '==', courseId), orderBy('createdAt', 'desc')),
+    snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+    err => console.error('Firebase courseEnrollments listen error:', err)
+  ),
+  updateStatus: (id, status, extra = {}) => update('courseEnrollments', id, { status, ...extra }),
+}
+
+// ─── COURSE JOINING LINKS (kept out of the public `courses` doc) ─────────────
+// A Google Meet link must never reach a public visitor's browser. It isn't
+// rendered anywhere in the public UI, but that alone isn't enough —
+// `coursesService.getOne`/`getBySlug` sends the WHOLE course document to
+// any client that reads it (the public course page has to, to show
+// title/date/fee/etc.), so a plain `joiningLink` field on that same doc
+// would still be sitting in the browser's memory/devtools/Network tab for
+// anyone who looks. Stored as its own doc instead, under a collection this
+// repo's Firestore rules need to lock to admin-only read (see
+// CHANGES_ROUND12.md / the session report for the exact rule) — nothing in
+// the public course-detail code path ever calls `.get()` here.
+export const courseJoiningLinksService = {
+  get: courseId => getOne('courseJoiningLinks', courseId),
+  set: (courseId, joiningLink) => setDoc(doc(db, 'courseJoiningLinks', courseId), { joiningLink, updatedAt: serverTimestamp() }, { merge: true }),
 }
 
 // ─── CERTIFICATES ────────────────────────────────────────────────────────────
@@ -872,12 +963,19 @@ export const adminUsersService = {
     snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
     err => console.error('Firebase adminUsers listen error:', err)
   ),
+  // `role` is 'editor' (default — full access to their allowedSections,
+  // minus delete) or 'viewer' (read-only). 'superadmin' is never passed
+  // in here — that marker is reserved for accounts with no doc at all, or
+  // a doc hand-added directly in Firestore (see useAdminPermissions.js).
+  // Pre-existing docs from before roles shipped have no `role` field, not
+  // literally `'editor'` — useAdminPermissions treats that absence the
+  // same as 'editor' so nobody's access silently changed.
   create: (email, data) => {
     const normalized = email.trim().toLowerCase()
     return setDoc(doc(db, 'adminUsers', normalized), {
       ...data,
+      role: data.role === 'viewer' ? 'viewer' : 'editor',
       email: normalized,
-      role: 'admin',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     })
@@ -894,12 +992,13 @@ export const adminUsersService = {
 // account) and claim it exactly once. `claimed` flips to true the moment
 // AcceptInvite.jsx finishes, so a link can't be reused if it leaks.
 export const adminInvitesService = {
-  create: async ({ name, email, allowedSections }) => {
+  create: async ({ name, email, allowedSections, role }) => {
     const token = crypto.randomUUID().replace(/-/g, '')
     await setDoc(doc(db, 'adminInvites', token), {
       name,
       email: email.trim().toLowerCase(),
       allowedSections,
+      role: role === 'viewer' ? 'viewer' : 'editor',
       claimed: false,
       createdAt: serverTimestamp(),
     })
@@ -913,6 +1012,26 @@ export const adminInvitesService = {
   ),
   claim: token => update('adminInvites', token, { claimed: true, claimedAt: serverTimestamp() }),
   delete: token => remove('adminInvites', token),
+}
+
+// ─── ACTIVITY LOG (who / what / when) ────────────────────────────────────────
+// Not instrumented on every single admin write — that would touch nearly
+// every admin page for one feature. Covers the actions an audit trail is
+// actually for: admin-user management (granting/revoking access is the
+// highest-stakes action in the panel) and the two Prompt-5 features that
+// introduced it (webinar CRUD, submission edit/merge). Add more `log(...)`
+// calls at other write sites the same way if the need comes up.
+export const activityLogService = {
+  log: (action, details = {}) => add('activityLog', {
+    action,
+    actorEmail: auth.currentUser?.email || 'unknown',
+    details,
+  }).catch(err => console.error('activityLog write failed:', err)), // never block the real action on this
+  listen: cb => onSnapshot(
+    query(col('activityLog'), orderBy('createdAt', 'desc'), limit(200)),
+    snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+    err => console.error('Firebase activityLog listen error:', err)
+  ),
 }
 
 // ─── DYNAMIC FORM BUILDER ─────────────────────────────────────────────────────

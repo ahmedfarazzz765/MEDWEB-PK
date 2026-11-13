@@ -126,10 +126,10 @@ async function getDynamicItems() {
       const c = d.data()
       if (c.status !== 'Active') return
       items.push({
-        path: `/courses/${d.id}`,
-        title: c.title || 'Course',
-        description: c.fullDescription || c.description || `${c.title || 'This course'} — a MEDWEB-PK course for medical and pharmacy students.`,
-        image: c.posterImage || c.imageUrl,
+        path: `/courses/${c.slug || d.id}`,
+        title: c.seoTitle || c.title || 'Course',
+        description: c.seoDescription || c.fullDescription || c.description || `${c.title || 'This course'} — a MEDWEB-PK course for medical and pharmacy students.`,
+        image: c.ogImage || c.posterImage || c.imageUrl,
       })
     })
     blogPosts.forEach(d => {

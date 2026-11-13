@@ -73,7 +73,7 @@ async function getDynamicUrls() {
     courses.forEach(d => {
       const c = d.data()
       if (c.status !== 'Active') return
-      urls.push(urlEntry(`/courses/${d.id}`, '0.7'))
+      urls.push(urlEntry(`/courses/${c.slug || d.id}`, '0.7'))
     })
     blogPosts.forEach(d => {
       const p = d.data()
