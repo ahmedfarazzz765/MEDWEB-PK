@@ -50,7 +50,7 @@ const STATIC_PAGES = [
   { path: '/ambassadors', title: 'Ambassador Program', description: "Meet MEDWEB-PK's nationwide student ambassador network." },
   { path: '/advisory-board', title: 'Advisory Board', description: "Meet MEDWEB-PK's advisory board of healthcare and education experts." },
   { path: '/blog', title: 'Blog', description: 'Articles and insights from MEDWEB-PK for medical and pharmacy students across Pakistan.' },
-  { path: '/news', title: 'Medical News', description: 'Curated medical news for healthcare students, properly sourced and referenced.' },
+  { path: '/events', title: 'Events & News', description: "MEDWEB-PK's conferences, seminars, workshops, medical camps and curated medical news." },
   { path: '/announcements', title: 'Announcements', description: 'Every event, program, and update MEDWEB-PK has promoted — past and present.' },
   { path: '/privacy-policy', title: 'Privacy Policy', description: "MEDWEB-PK's privacy policy." },
   { path: '/terms-of-service', title: 'Terms of Service', description: "MEDWEB-PK's terms of service." },
@@ -140,7 +140,16 @@ async function getDynamicItems() {
     news.forEach(d => {
       const n = d.data()
       if (!n.slug) return
-      items.push({ path: `/news/${n.slug}`, title: n.metaTitle || n.title, description: n.metaDescription, image: n.imageUrl })
+      // Same `news` collection, /events/ path (Round 13's Events & News
+      // module) — seoTitle/seoDescription/shareImage are the new fields;
+      // metaTitle/metaDescription/imageUrl are what pre-this-round docs
+      // (including the automated news-fetch pipeline) still only have.
+      items.push({
+        path: `/events/${n.slug}`,
+        title: n.seoTitle || n.metaTitle || n.title,
+        description: n.seoDescription || n.metaDescription || n.summary,
+        image: n.shareImage || n.coverImage || n.imageUrl,
+      })
     })
     announcements.forEach(d => {
       const a = d.data()

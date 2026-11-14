@@ -17,6 +17,7 @@ const DEFAULTS = {
     { label: 'Team', href: '/team' },
     { label: 'Certificates', href: '#certificates' },
     { label: 'Blog', href: '#blog' },
+    { label: 'Events', href: '/events' },
     { label: 'Contact', href: '#contact' },
   ],
 }

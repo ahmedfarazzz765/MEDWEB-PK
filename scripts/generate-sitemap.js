@@ -29,7 +29,7 @@ const STATIC_ROUTES = [
   { path: '/ambassadors', priority: '0.6' },
   { path: '/advisory-board', priority: '0.5' },
   { path: '/blog', priority: '0.8' },
-  { path: '/news', priority: '0.8' },
+  { path: '/events', priority: '0.8' },
   { path: '/announcements', priority: '0.6' },
   { path: '/privacy-policy', priority: '0.2' },
   { path: '/terms-of-service', priority: '0.2' },
@@ -81,7 +81,9 @@ async function getDynamicUrls() {
     })
     news.forEach(d => {
       const n = d.data()
-      if (n.slug) urls.push(urlEntry(`/news/${n.slug}`, '0.6'))
+      // `news` collection is also "Events & News" (Round 13) — same
+      // Firestore collection, just /events/ as its public path now.
+      if (n.slug) urls.push(urlEntry(`/events/${n.slug}`, '0.6'))
     })
     announcements.forEach(d => {
       const a = d.data()

@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom'
 import ErrorBoundary from './components/ErrorBoundary'
 import PageLoader from './components/PageLoader'
 import WebinarAnnouncementPopup from './components/WebinarAnnouncementPopup'
@@ -31,8 +31,8 @@ const SpeakersPage          = lazy(() => import('./pages/SpeakersPage'))
 const AmbassadorsListPage   = lazy(() => import('./pages/AmbassadorsListPage'))
 const AdvisoryBoardListPage = lazy(() => import('./pages/AdvisoryBoardListPage'))
 const BlogListPage          = lazy(() => import('./pages/BlogListPage'))
-const NewsListPage          = lazy(() => import('./pages/NewsListPage'))
-const NewsPostPage          = lazy(() => import('./pages/NewsPostPage'))
+const EventsListPage        = lazy(() => import('./pages/EventsListPage'))
+const EventPage             = lazy(() => import('./pages/EventPage'))
 const PrivacyPolicyPage     = lazy(() => import('./pages/PrivacyPolicyPage'))
 const TermsOfServicePage    = lazy(() => import('./pages/TermsOfServicePage'))
 const RefundPolicyPage      = lazy(() => import('./pages/RefundPolicyPage'))
@@ -56,6 +56,14 @@ const AmbassadorLogin         = lazy(() => import('./pages/AmbassadorLogin'))
 const AmbassadorDashboard     = lazy(() => import('./pages/AmbassadorDashboard'))
 const RequireAmbassadorAuth   = lazy(() => import('./ambassador/RequireAmbassadorAuth'))
 const ComingSoonPage          = lazy(() => import('./ambassador/ComingSoonPage'))
+
+// /news/:slug → /events/:slug — same slug, just carried over to the new
+// path (the `news` Firestore collection itself didn't move, only the
+// public route did).
+function NewsSlugRedirect() {
+  const { slug } = useParams()
+  return <Navigate to={`/events/${slug}`} replace />
+}
 
 // Marketing popups belong on the public site only — mounting them
 // unconditionally at the Router root meant refreshing any /admin page
@@ -103,8 +111,13 @@ function App() {
         <Route path="/advisory-board"         element={<AdvisoryBoardListPage />} />
         <Route path="/blog"                   element={<BlogListPage />} />
         <Route path="/blog/:slug"             element={<BlogPostPage />} />
-        <Route path="/news"                   element={<NewsListPage />} />
-        <Route path="/news/:slug"             element={<NewsPostPage />} />
+        <Route path="/events"                 element={<EventsListPage />} />
+        <Route path="/events/:slug"           element={<EventPage />} />
+        {/* News module became Events & News this round — old /news links
+            (shared, indexed, bookmarked) still resolve, just via a redirect
+            instead of their own page. */}
+        <Route path="/news"                   element={<Navigate to="/events" replace />} />
+        <Route path="/news/:slug"             element={<NewsSlugRedirect />} />
         <Route path="/announcements"          element={<AnnouncementsListPage />} />
         <Route path="/announcements/:slug"    element={<AnnouncementPage />} />
         <Route path="/privacy-policy"         element={<PrivacyPolicyPage />} />

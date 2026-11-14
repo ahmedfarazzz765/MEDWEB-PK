@@ -64,7 +64,7 @@ const GROUPS = [
       { id: 'testimonials', label: 'Testimonials', icon: Star },
       { id: 'pendingTestimonials', label: 'Pending Reviews', icon: ClipboardCheck },
       { id: 'blog',         label: 'Blog Posts',   icon: FileText },
-      { id: 'news',         label: 'Medical News', icon: Newspaper },
+      { id: 'events',       label: 'Events & News', icon: Newspaper },
       { id: 'forms',        label: 'Form Builder', icon: FormInput },
       { id: 'submissions',  label: 'Submissions',  icon: Inbox },
       { id: 'reports',      label: 'Reports',      icon: BarChart3 },

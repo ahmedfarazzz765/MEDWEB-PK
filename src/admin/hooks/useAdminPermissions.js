@@ -44,7 +44,11 @@ export default function useAdminPermissions() {
 
   // key is a section key like 'webinars' or 'content:hero'. Dashboard and
   // the Admin Users page itself are handled by their callers, not here.
-  const canAccess = key => isSuperAdmin || allowedSections.includes(key)
+  // 'news' was renamed to 'events' when the News module became Events &
+  // News (Round 13) — an Editor/Viewer already granted the old 'news'
+  // section key keeps working under the new one instead of silently
+  // losing access.
+  const canAccess = key => isSuperAdmin || allowedSections.includes(key) || (key === 'events' && allowedSections.includes('news'))
 
   // A restricted record's role is 'editor' or 'viewer' — anything else
   // (including a legacy doc with no `role` field, or the old literal

@@ -11,7 +11,7 @@ import AdminCertificates from './pages/AdminCertificates'
 import AdminAmbassadors from './pages/AdminAmbassadors'
 import AdminAnnouncements from './pages/AdminAnnouncements'
 import AdminBlog        from './pages/AdminBlog'
-import AdminNews        from './pages/AdminNews'
+import AdminEvents      from './pages/AdminEvents'
 import AdminTeam        from './pages/AdminTeam'
 import AdminAdvisoryBoard from './pages/AdminAdvisoryBoard'
 import AdminEmailSettings from './pages/AdminEmailSettings'
@@ -35,7 +35,7 @@ const pages = {
   ambassadors:  AdminAmbassadors,
   announcements: AdminAnnouncements,
   blog:         AdminBlog,
-  news:         AdminNews,
+  events:       AdminEvents,
   team:         AdminTeam,
   advisory:     AdminAdvisoryBoard,
   email:        AdminEmailSettings,

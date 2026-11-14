@@ -28,6 +28,7 @@ const AdvisoryBoard = lazy(() => import('../sections/AdvisoryBoard'))
 const Ambassadors = lazy(() => import('../sections/Ambassadors'))
 const CertificateVerification = lazy(() => import('../sections/CertificateVerification'))
 const LatestBlog = lazy(() => import('../sections/LatestBlog'))
+const LatestEvents = lazy(() => import('../sections/LatestEvents'))
 const Footer = lazy(() => import('../sections/Footer'))
 
 const ORGANIZATION_JSON_LD = {
@@ -107,6 +108,7 @@ export default function HomePage() {
       {v.ambassadors && <Suspense fallback={null}><Ambassadors /></Suspense>}
       {v.certificateVerification && <Suspense fallback={null}><CertificateVerification /></Suspense>}
       {v.latestBlog && <Suspense fallback={null}><LatestBlog /></Suspense>}
+      <Suspense fallback={null}><LatestEvents /></Suspense>
       {v.footer && <Suspense fallback={null}><Footer /></Suspense>}
     </div>
   )
