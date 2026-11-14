@@ -20,7 +20,7 @@ export default function BlogListPage() {
   const [searchParams, setSearchParams] = useSearchParams()
 
   useEffect(() => {
-    const unsub = blogService.listen(rows => setPosts(rows.filter(r => r.status === 'Published')))
+    const unsub = blogService.listenPublished(setPosts)
     return () => unsub()
   }, [])
 

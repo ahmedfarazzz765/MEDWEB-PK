@@ -99,7 +99,7 @@ export default function CoursesHighlight() {
   const h = useSiteSettings(HEADING_DEFAULTS)
 
   useEffect(() => {
-    const unsub = coursesService.listen(rows => {
+    const unsub = coursesService.listenActive(rows => {
       // Prefer courses that aren't explicitly inactive/draft/archived; if every
       // course happens to be in that state, fall back to showing them anyway
       // rather than hiding real admin-entered courses outright.

@@ -87,7 +87,7 @@ export default function AnnouncementsListPage() {
 
   useEffect(() => {
     window.scrollTo(0, 0)
-    const unsub = announcementsService.listen(setItems)
+    const unsub = announcementsService.listenEnabled(setItems)
     return unsub
   }, [])
 

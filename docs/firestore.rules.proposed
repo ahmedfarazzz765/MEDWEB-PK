@@ -2,19 +2,37 @@ rules_version = '2';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PROPOSED Firestore rules for medwebpk.com — NOT deployed by Claude Code.
-// Paste this into Firebase Console → Firestore Database → Rules → Publish,
-// after reviewing it yourself. This repo has no local firestore.rules file
-// and never has — rules currently live only in the Console (same situation
-// flagged in CHANGES_ROUND12.md Prompt 1 for `blogCategories`).
 //
-// ROLE MODEL — mirrors src/admin/hooks/useAdminPermissions.js exactly, so a
-// signed-in admin's access here matches what the admin UI already shows them:
-//   • No `adminUsers/{email}` doc at all        → Super Admin (full access)
-//   • `adminUsers/{email}.role == 'viewer'`      → read-only everywhere
-//   • `adminUsers/{email}.role == 'editor'`      → full write, see below
-//     (an older doc with no `role` field, or the pre-this-round literal
-//     value 'admin', is treated as 'editor' too — same fallback the client
-//     hook already applies, so nobody's existing access silently changes)
+// BEFORE PUBLISHING: copy the rules currently live in Firebase Console →
+// Firestore Database → Rules into docs/firestore.rules.backup, so there's a
+// one-click revert if anything here turns out wrong after you paste this in.
+// This repo has no local firestore.rules file and never has — rules live
+// only in the Console.
+//
+// ROLE MODEL — mirrors src/admin/hooks/useAdminPermissions.js exactly:
+//   • Email in SUPER_ADMINS below            → Super Admin (full access)
+//   • `adminUsers/{email}.role == 'viewer'`   → read-only everywhere
+//   • `adminUsers/{email}.role == 'editor'`   → full write, see below
+//     (an older doc with no `role` field, or the pre-roles literal value
+//     'admin', is treated as 'editor' too — same fallback the client hook
+//     applies, so nobody's existing access silently changes)
+//
+// SECURITY FIX (Round 13): this file used to treat "signed in, no
+// adminUsers doc at all" as Super Admin. That bootstrap was safe only while
+// the sole people who could ever hold a Firebase Auth account in this
+// project were admins created directly in the Firebase Console. Ambassador
+// Login (AmbassadorAcceptInvite.jsx) now lets a much larger, less-trusted
+// group self-serve real Firebase Auth accounts in the SAME project, and
+// none of them will ever have an adminUsers doc — so without this fix,
+// every ambassador (or literally anyone who ever created ANY Firebase Auth
+// account here) who opened /admin would silently get full access.
+// isSuperAdmin() is now ONLY the hardcoded SUPER_ADMINS list below — keep
+// it byte-for-byte in sync with src/constants/superAdmins.js (rules can't
+// import that file, so the two are necessarily separate hardcoded copies).
+// Anyone else needs a real adminUsers/{email} doc (Editor or Viewer) to be
+// an admin at all; ambassadors get none of that — only what their own
+// dashboard needs, carved out doc-by-doc below where it's genuinely used.
+//
 // This file does NOT also enforce each Editor's individual `allowedSections`
 // checklist (AdminUsers.jsx's per-section grants) — that's a client-side UX
 // restriction already working today; mapping every one of ~25 sections to
@@ -23,19 +41,30 @@ rules_version = '2';
 // dropped: if you want section-level enforcement at the database layer too,
 // ask for it as a follow-up.
 //
+// PUBLIC READ — every public page that lists a status-gated collection
+// (blogPosts, courses, news, testimonials, announcements) now queries with
+// the SAME filter the rule below checks (see each service's `listen*`
+// method in src/firebase/services.js) — Firestore rejects an entire list
+// query outright if it could return a document the rule would deny, it
+// does not just filter the disallowed ones out.
+//
 // PUBLIC WRITE EXCEPTIONS — the public site performs a handful of writes
 // directly from the browser (no backend/Cloud Function exists in this
 // project), found by tracing every public-facing page's service calls:
 //   • webinarRegistrations, courseEnrollments, courseEnrollmentKeys,
 //     newsletterSubscribers, studentDatabase, formSubmissions — a visitor
 //     CREATES their own document (registering, enrolling, subscribing).
-//   • webinars.registered, certificates.verifications,
-//     ambassadors.points/students, blogPosts.views,
-//     settings/emailUsage.count — a visitor action (registering, verifying
-//     a certificate, a referred signup, reading a post, any automated
-//     email send) increments one counter FIELD on an otherwise
-//     admin-owned document. Each gets a narrow exception limited to
-//     exactly those fields — not a general public-write hole on the doc.
+//   • adminUsers, ambassadors — a brand-new invitee (not yet an admin or
+//     ambassador) stamps their own doc once, proven by holding a matching
+//     still-unclaimed invite token (see adminInvites/ambassadorInvites
+//     below) — the same self-serve account-creation flows the old "no doc
+//     = Super Admin" bootstrap used to paper over.
+//   • webinars.registered, certificates.verifications, blogPosts.views,
+//     news.views, ambassadors.points/students, settings/emailUsage.count —
+//     a visitor action (registering, verifying a certificate, reading a
+//     post, a referred signup, any automated email send) increments one
+//     counter FIELD on an otherwise admin-owned document, by exactly +1,
+//     never an arbitrary value.
 // Missing any one of these breaks a real, currently-working feature.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -46,35 +75,34 @@ service cloud.firestore {
     function isSignedIn() {
       return request.auth != null;
     }
+    // The ONLY accounts with unconditional full access. Must be kept
+    // byte-for-byte in sync with src/constants/superAdmins.js.
+    function isSuperAdmin() {
+      return isSignedIn() && request.auth.token.email.lower() in ['medwebpk@gmail.com'];
+    }
     function hasAdminDoc() {
       return exists(/databases/$(database)/documents/adminUsers/$(request.auth.token.email.lower()));
     }
     function adminDoc() {
       return get(/databases/$(database)/documents/adminUsers/$(request.auth.token.email.lower())).data;
     }
-    // Mirrors useAdminPermissions.js exactly: no doc at all, an explicit
-    // `role == 'superadmin'`, or a doc with no `allowedSections` field
-    // (a hand-added Firestore record, per that file's own comment on why)
-    // are all Super Admin. Only a Super Admin may manage other admins or
-    // delete anything — "Editor can't delete or manage admins" (Prompt 5).
-    function isSuperAdmin() {
-      return isSignedIn() && (
-        !hasAdminDoc() ||
-        adminDoc().role == 'superadmin' ||
-        !('allowedSections' in adminDoc())
-      );
+    // Super Admin, OR signed in with a real adminUsers/{email} doc (Editor
+    // or Viewer). Nobody else — an ambassador, or any other signed-in
+    // account with no adminUsers doc, is NOT an admin.
+    function isAdmin() {
+      return isSuperAdmin() || (isSignedIn() && hasAdminDoc());
     }
     function isViewer() {
-      return isSignedIn() && !isSuperAdmin() && adminDoc().role == 'viewer';
+      return isAdmin() && !isSuperAdmin() && adminDoc().role == 'viewer';
     }
     // Super Admin or Editor (role != 'viewer') — the only two outcomes
     // besides Viewer, per useAdminPermissions.js.
     function canWrite() {
-      return isSignedIn() && !isViewer();
+      return isAdmin() && !isViewer();
     }
 
     // Narrow helper for "only these fields changed" — used by every public
-    // counter-increment exception above, so e.g. a certificate's
+    // counter-increment exception below, so e.g. a certificate's
     // `verifications` count can be bumped by an anonymous visitor without
     // opening up the rest of that document to public writes.
     function onlyFieldsChanged(keys) {
@@ -85,90 +113,150 @@ service cloud.firestore {
     match /team/{id}               { allow read: if true; allow write: if canWrite(); }
     match /teamCategories/{id}     { allow read: if true; allow write: if canWrite(); }
     match /advisory/{id}           { allow read: if true; allow write: if canWrite(); }
-    match /blogCategories/{id}     { allow read: if true; allow write: if isSignedIn(); }
+    match /blogCategories/{id}     { allow read: if true; allow write: if isAdmin(); }
 
-    // ── AMBASSADORS — public read; `points`/`students` also bumped by an
-    //    anonymous referred signup (WebinarRegister.jsx addReferralPoint) ─
+    // ── AMBASSADORS — public read; `points`/`students` bumped by exactly
+    //    +1 each on a successful referred signup (addReferralPoint); a
+    //    brand-new ambassador who just created their Firebase Auth account
+    //    (AmbassadorAcceptInvite.jsx) stamps authUid/hasLogin/referralCode
+    //    onto their own pre-existing doc ONCE, proven by a matching
+    //    still-unclaimed ambassadorInvites doc — this is the exact flow
+    //    that used to work only by accident, via the "no adminUsers doc =
+    //    Super Admin" bootstrap this round closes ──────────────────────────
     match /ambassadors/{id} {
       allow read: if true;
-      allow create, delete: if canWrite();
-      allow update: if canWrite() || onlyFieldsChanged(['points', 'students', 'updatedAt']);
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+        || (
+          onlyFieldsChanged(['points', 'students']) &&
+          request.resource.data.points == resource.data.points + 1 &&
+          request.resource.data.students == resource.data.students + 1
+        )
+        || (
+          isSignedIn() &&
+          onlyFieldsChanged(['authUid', 'hasLogin', 'referralCode', 'inviteToken', 'updatedAt']) &&
+          request.resource.data.authUid == request.auth.uid &&
+          exists(/databases/$(database)/documents/ambassadorInvites/$(request.resource.data.inviteToken)) &&
+          get(/databases/$(database)/documents/ambassadorInvites/$(request.resource.data.inviteToken)).data.ambassadorId == id &&
+          get(/databases/$(database)/documents/ambassadorInvites/$(request.resource.data.inviteToken)).data.claimed == false
+        );
     }
-    match /ambassadorInvites/{id}  { allow read, write: if isSignedIn(); }
+    // Same token-is-the-capability trust model as adminInvites — the
+    // invitee opens this before they have any account at all. Structurally
+    // identical to adminInvites (see below), so it gets the same narrow
+    // treatment rather than the blanket isAdmin()-only lock that would
+    // otherwise break ambassador onboarding entirely.
+    match /ambassadorInvites/{id} {
+      allow get: if true;
+      allow list: if false;
+      allow update: if resource.data.claimed == false && onlyFieldsChanged(['claimed', 'claimedAt', 'claimedBy']);
+      allow create, delete: if isAdmin();
+    }
 
     // ── WEBINARS — public read always (no status-based hiding today);
-    //    `registered` also bumped by the public registration flow ────────
+    //    `registered` bumped by exactly +1 per registration ──────────────
     match /webinars/{id} {
       allow read: if true;
       allow create, delete: if canWrite();
-      allow update: if canWrite() || onlyFieldsChanged(['registered', 'updatedAt']);
+      allow update: if canWrite()
+        || (
+          onlyFieldsChanged(['registered']) &&
+          request.resource.data.registered == resource.data.registered + 1
+        );
     }
     match /webinarRegistrations/{id} {
       allow create: if true;   // a visitor registering for a webinar
-      allow read, update, delete: if isSignedIn();
+      // AmbassadorDashboard.jsx reads an ambassador's OWN referred
+      // registrations directly (webinarsService.getRegistrationsByReferrerUid)
+      // — referredByUid is stamped with the ambassador's own authUid at
+      // registration time specifically so this check works without a
+      // second admin-only lookup.
+      allow read: if isAdmin() || (isSignedIn() && resource.data.referredByUid == request.auth.uid);
+      allow update, delete: if isAdmin();
     }
 
-    // ── COURSES — public reads only Active; `enrollmentSeq` is bumped by
-    //    the public enrollment transaction (courseEnrollmentsService.add) ─
+    // ── COURSES — public reads only Active; `enrollmentSeq` bumped by the
+    //    public enrollment transaction (courseEnrollmentsService.add) ────
     match /courses/{id} {
-      allow read: if isSignedIn() || resource.data.status == 'Active';
+      allow read: if isAdmin() || resource.data.status == 'Active';
       allow create, delete: if canWrite();
       allow update: if canWrite() || onlyFieldsChanged(['enrollmentSeq', 'updatedAt']);
     }
     match /courseEnrollments/{id} {
       allow create: if true;   // a visitor enrolling in a paid course/workshop
-      allow read, update, delete: if isSignedIn();
+      allow read, update, delete: if isAdmin();
     }
-    // Data-free duplicate-email marker docs — created/read by the same
-    // anonymous enrollment transaction, never by an admin UI.
+    // Data-free duplicate-email marker docs — a visitor's enrollment
+    // transaction only ever needs to `get` (check existence) and `create`
+    // one; never lists the collection.
     match /courseEnrollmentKeys/{id} {
-      allow create, read: if true;
-      allow update, delete: if isSignedIn();
+      allow get, create: if true;
+      allow list: if false;
+      allow update, delete: if isAdmin();
     }
     // The one field never allowed to reach a public read — see
     // courseJoiningLinksService's own comment in services.js.
-    match /courseJoiningLinks/{id} { allow read, write: if isSignedIn(); }
+    match /courseJoiningLinks/{id} { allow read, write: if isAdmin(); }
 
-    // ── CERTIFICATES — public reads any certificate (verification page
-    //    needs to show "Revoked" too, not just hide it); `verifications`
-    //    bumped by the public verify action ───────────────────────────────
+    // ── CERTIFICATES — public `get` only, no open-ended public `list`.
+    //    The verify-by-code page (certificatesService.getByCode/verify)
+    //    queries with limit(1); the Portfolio page's by-phone/by-email
+    //    certificate listing (certificatesService.getByPhone/getByEmail)
+    //    is capped at limit(20) client-side — both stay under the 20 cap
+    //    here, so neither can be used to dump the whole collection.
+    //    `verifications` bumped by exactly +1 per verify ──────────────────
     match /certificates/{id} {
-      allow read: if true;
-      allow create, delete: if canWrite();
-      allow update: if canWrite() || onlyFieldsChanged(['verifications', 'updatedAt']);
+      allow get: if true;
+      allow list: if request.query.limit <= 20;
+      allow create: if true;
+      allow update: if isAdmin()
+        || (
+          onlyFieldsChanged(['verifications']) &&
+          request.resource.data.verifications == resource.data.verifications + 1
+        );
+      allow delete: if isAdmin();
     }
 
-    // ── BLOG — public reads only Published; `views` bumped by a public
-    //    page view ───────────────────────────────────────────────────────
+    // ── BLOG — public reads only Published; `views` bumped by exactly +1
+    //    per page view ───────────────────────────────────────────────────
     match /blogPosts/{id} {
-      allow read: if isSignedIn() || resource.data.status == 'Published';
+      allow read: if isAdmin() || resource.data.status == 'Published';
       allow create, delete: if canWrite();
-      allow update: if canWrite() || onlyFieldsChanged(['views', 'updatedAt']);
+      allow update: if canWrite()
+        || (
+          onlyFieldsChanged(['views']) &&
+          request.resource.data.views == resource.data.views + 1
+        );
     }
 
-    // ── EVENTS & NEWS (Prompt B) — same Published-only public rule the
-    //    news module it extends already needed; `views` bumped the same
-    //    way blog posts are (if Prompt B wires that in) ───────────────────
+    // ── EVENTS & NEWS — same Published-only public rule the news module it
+    //    extends already needed; `views` bumped the same way blog posts
+    //    are (no public increment call exists yet, but the field would be
+    //    capped the same way the moment one is added) ─────────────────────
     match /news/{id} {
-      allow read: if isSignedIn() || resource.data.status == 'published' || resource.data.status == 'Published';
+      allow read: if isAdmin() || resource.data.status == 'published' || resource.data.status == 'Published';
       allow create, delete: if canWrite();
-      allow update: if canWrite() || onlyFieldsChanged(['views', 'updatedAt']);
+      allow update: if canWrite()
+        || (
+          onlyFieldsChanged(['views']) &&
+          request.resource.data.views == resource.data.views + 1
+        );
     }
 
     // ── TESTIMONIALS — public reads only Approved (default when the field
     //    is absent, matching the client's own `v || 'Approved'` fallback) ─
     match /testimonials/{id} {
-      allow read: if isSignedIn() || resource.data.get('status', 'Approved') == 'Approved';
+      allow read: if isAdmin() || resource.data.get('status', 'Approved') == 'Approved';
       allow write: if canWrite();
     }
     // Admin-only inbox — every doc here is created by an admin action
     // (the "Fetch New Reviews" button), never by a public submission.
-    match /pendingTestimonials/{id} { allow read, write: if isSignedIn(); }
+    match /pendingTestimonials/{id} { allow read, write: if isAdmin(); }
 
     // ── ANNOUNCEMENTS — public reads only enabled ones; slug-based detail
     //    page needs the same ──────────────────────────────────────────────
     match /announcements/{id} {
-      allow read: if isSignedIn() || resource.data.get('enabled', true) != false;
+      allow read: if isAdmin() || resource.data.get('enabled', true) != false;
       allow write: if canWrite();
     }
 
@@ -179,21 +267,36 @@ service cloud.firestore {
     match /forms/{id}            { allow read: if true; allow write: if canWrite(); }
     match /formSubmissions/{id} {
       allow create: if true;
-      allow read, update, delete: if isSignedIn();
+      allow read, update, delete: if isAdmin();
     }
 
     // ── NEWSLETTER — public subscribes; admin manages the list and sends ─
     match /newsletterSubscribers/{id} {
       allow create: if true;
-      allow read, update, delete: if isSignedIn();
+      allow read, update, delete: if isAdmin();
     }
 
     // ── STUDENT DATABASE — upserted anonymously from every registration/
-    //    certificate flow (studentsDbService.upsertFromRegistration etc.);
-    //    not publicly readable — only the admin Students page lists it ───
+    //    certificate/ambassador flow (studentsDbService.upsertFromRegistration
+    //    etc. — including its own internal tx.get(ref), which needs the
+    //    same `get` permission as any other read) and read anonymously by
+    //    the public Portfolio page (getBySlug/getByPhone/getByEmail, each
+    //    capped at limit(1)); the full unfiltered list is admin-only ──────
     match /studentDatabase/{id} {
-      allow create, update: if true;
-      allow read, delete: if isSignedIn();
+      allow get: if true;
+      allow list: if isAdmin() || request.query.limit <= 1;
+      allow create: if true;
+      // Exactly the fields studentsDbService's upsert transaction writes —
+      // see upsertStudent() in services.js. No other field is ever
+      // touched by a public write.
+      allow update: if isAdmin()
+        || onlyFieldsChanged([
+          'name', 'email', 'phone', 'university', 'degree',
+          'registrations', 'registrationCount',
+          'certificates', 'certificateCount',
+          'portfolioSlug', 'createdAt', 'updatedAt',
+        ]);
+      allow delete: if isAdmin();
     }
 
     // ── SITE SETTINGS — one doc per concern under `settings/{docId}`.
@@ -201,33 +304,49 @@ service cloud.firestore {
     //    the one doc a public action (any auto-email send) also updates,
     //    narrowly, for its own counter ──────────────────────────────────────
     match /settings/{docId} {
-      allow read: if docId in ['site', 'sectionVisibility'] || isSignedIn();
+      allow read: if docId in ['site', 'sectionVisibility'] || isAdmin();
       allow write: if (docId == 'emailUsage' && onlyFieldsChanged(['count', 'month', 'updatedAt']))
                    || canWrite();
     }
 
     // ── ADMIN-ONLY, NO PUBLIC ACCESS AT ALL ────────────────────────────────
-    match /customFonts/{id}   { allow read, write: if isSignedIn(); }
-    match /activityLog/{id}   { allow read: if isSuperAdmin(); allow create: if isSignedIn(); allow update, delete: if false; }
+    match /customFonts/{id}   { allow read, write: if isAdmin(); }
+    match /activityLog/{id}   { allow read: if isSuperAdmin(); allow create: if isAdmin(); allow update, delete: if false; }
 
-    // ── ADMIN USER MANAGEMENT — Super Admin only, per Prompt 5 ─────────────
+    // ── ADMIN USER MANAGEMENT — Super Admin only to manage others; a
+    //    brand-new invitee (AcceptInvite.jsx) who just created their own
+    //    Firebase Auth account creates their OWN doc ONCE, proven by a
+    //    matching still-unclaimed adminInvites doc for their exact email —
+    //    the same self-serve flow that used to work only by accident, via
+    //    the "no adminUsers doc = Super Admin" bootstrap this round closes ─
     match /adminUsers/{id} {
       // Every signed-in admin reads their OWN doc on every page load
       // (useAdminPermissions.js resolves their role this way) — only a
-      // Super Admin can read the full list (AdminUsers.jsx itself is
-      // already gated to Super-Admin-only, but the rule shouldn't rely
-      // on that alone).
+      // Super Admin can read the full list.
       allow read: if isSignedIn() && (id == request.auth.token.email.lower() || isSuperAdmin());
-      allow write: if isSuperAdmin();
+      allow create: if isSuperAdmin()
+        || (
+          isSignedIn() &&
+          id == request.auth.token.email.lower() &&
+          request.resource.data.email == id &&
+          exists(/databases/$(database)/documents/adminInvites/$(request.resource.data.inviteToken)) &&
+          get(/databases/$(database)/documents/adminInvites/$(request.resource.data.inviteToken)).data.email == id &&
+          get(/databases/$(database)/documents/adminInvites/$(request.resource.data.inviteToken)).data.claimed == false
+        );
+      allow update, delete: if isSuperAdmin();
     }
     match /adminInvites/{id} {
       // AcceptInvite.jsx is opened by the INVITEE before they have an
       // account — token-gated (the doc ID is the capability), not
-      // auth-gated, same trust model the app's own code comment already
-      // documents for this collection.
-      allow read: if true;
+      // auth-gated. `get` only — no `list`, so a guess can't be checked by
+      // enumeration and nobody but a Super Admin can browse the queue.
+      allow get: if true;
+      allow list: if false;
+      // AcceptInvite.jsx flips `claimed` (and may stamp `claimedAt`/
+      // `claimedBy`) — unauthenticated, but only once: a claimed invite
+      // can never be updated again, so a leaked link can't be replayed.
+      allow update: if resource.data.claimed == false && onlyFieldsChanged(['claimed', 'claimedAt', 'claimedBy']);
       allow create, delete: if isSuperAdmin();
-      allow update: if true; // AcceptInvite.jsx flips `claimed` to true, unauthenticated
     }
   }
 }

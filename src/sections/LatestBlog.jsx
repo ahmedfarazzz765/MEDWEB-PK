@@ -55,10 +55,7 @@ export default function LatestBlog() {
   const h = useSiteSettings(HEADING_DEFAULTS)
 
   useEffect(() => {
-    const unsub = blogService.listen(rows => {
-      const published = rows.filter(r => r.status === 'Published')
-      setPosts(published)
-    })
+    const unsub = blogService.listenPublished(setPosts)
     return () => unsub()
   }, [])
 

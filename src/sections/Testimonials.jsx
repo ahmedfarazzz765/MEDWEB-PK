@@ -67,7 +67,7 @@ export default function Testimonials() {
   const h = useSiteSettings(HEADING_DEFAULTS)
 
   useEffect(() => {
-    const unsub = testimonialsService.listen(rows => {
+    const unsub = testimonialsService.listenApproved(rows => {
       // Approved via Admin > Pending Reviews (pendingTestimonialsService.approve())
       // tags a YouTube-comment-sourced item with category "YouTube Review" —
       // those shouldn't appear as a homepage testimonial even once approved

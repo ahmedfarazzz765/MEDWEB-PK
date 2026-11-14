@@ -161,6 +161,16 @@ export const coursesService = {
     snap => cb(applyManualOrder(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
     err => console.error("Firebase listen error:", err)
   ),
+  // Public-facing listener — Firestore rules only let a non-admin visitor
+  // read `status == 'Active'` courses (Round 13 security fix), so every
+  // public page must query with that same filter or the whole listener is
+  // rejected, not just narrowed. `.listen()` above (unfiltered) stays
+  // admin-only.
+  listenActive: cb => onSnapshot(
+    query(col(COLS.courses), where('status', '==', 'Active'), orderBy('createdAt', 'desc')),
+    snap => cb(applyManualOrder(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
+    err => console.error("Firebase listen error:", err)
+  ),
 }
 
 // ─── COURSE/WORKSHOP ENROLLMENTS (paid, manually verified) ───────────────────
@@ -238,7 +248,7 @@ export const certificatesService = {
   getOne: id => getOne(COLS.certificates, id),
   // Verify by certificate code
   verify: async certId => {
-    const results = await getAll(COLS.certificates, where('certCode', '==', certId))
+    const results = await getAll(COLS.certificates, where('certCode', '==', certId), limit(1))
     if (results.length > 0) {
       // Increment verifications — best-effort. Firestore rules reasonably
       // restrict writes on this collection to admins (so a public visitor
@@ -259,8 +269,12 @@ export const certificatesService = {
   },
   add: data => add(COLS.certificates, { ...data, verifications: 0, status: 'Valid' }),
   // Read-only lookup by code (does NOT increment) — used by the public certificate page
+  // `limit(1)` here (and on `verify` above) isn't just an optimization —
+  // Firestore rules (Round 13 security fix) only allow a public `list` on
+  // `certificates` when the query itself is capped at a small limit, so an
+  // anonymous visitor can never list the whole collection.
   getByCode: async certId => {
-    const results = await getAll(COLS.certificates, where('certCode', '==', certId))
+    const results = await getAll(COLS.certificates, where('certCode', '==', certId), limit(1))
     return results.length > 0 ? results[0] : null
   },
   // All certificates for one student, keyed by PHONE — the primary lookup
@@ -269,14 +283,15 @@ export const certificatesService = {
   // always captured, phone is the one reliable identity field). Certificates
   // issued before phone was captured on the cert doc simply have no `phone`
   // field and won't match here — PortfolioPage.jsx falls back to a
-  // case/whitespace-tolerant email scan for those.
+  // case/whitespace-tolerant email scan for those. Capped at 20 (no real
+  // student has more) to stay inside the rules' public `list` limit.
   getByPhone: phone => {
     const p = normalizePhone(phone)
-    return p ? getAll(COLS.certificates, where('phone', '==', p), orderBy('issuedAt', 'desc')) : Promise.resolve([])
+    return p ? getAll(COLS.certificates, where('phone', '==', p), orderBy('issuedAt', 'desc'), limit(20)) : Promise.resolve([])
   },
   // Legacy/fallback lookup by exact email match — kept for
   // CertificatePage.jsx's best-effort "View Full Portfolio" discovery link.
-  getByEmail: email => getAll(COLS.certificates, where('email', '==', String(email || '').trim().toLowerCase()), orderBy('issuedAt', 'desc')),
+  getByEmail: email => getAll(COLS.certificates, where('email', '==', String(email || '').trim().toLowerCase()), orderBy('issuedAt', 'desc'), limit(20)),
   // Fully random certificate ID — deliberately carries no relationship to
   // the webinar/course title or to any other certificate (unlike the old
   // MEDWEB-{shortCode}-{seq} scheme). Also sidesteps a real permission
@@ -353,13 +368,17 @@ export const ambassadorsService = {
   // issues a login) — reuses the existing Ambassador Code if it looks
   // usable, otherwise mints a short random slug. Never overwrites an
   // existing referralCode.
-  ensureReferralCode: async (id) => {
+  // `extra` lets AmbassadorAcceptInvite.jsx's own unauthenticated-until-now
+  // caller pass `{ inviteToken }` along with the write — Firestore rules
+  // (Round 13 security fix) verify that token against a matching unclaimed
+  // ambassadorInvites doc before allowing this non-admin update.
+  ensureReferralCode: async (id, extra = {}) => {
     const row = await getOne(COLS.ambassadors, id)
     if (!row) throw new Error('Ambassador not found')
     if (row.referralCode) return row.referralCode
     const fromCode = String(row.ambCode || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
     const code = fromCode.length >= 4 ? fromCode : Math.random().toString(36).slice(2, 8).toUpperCase()
-    await update(COLS.ambassadors, id, { referralCode: code })
+    await update(COLS.ambassadors, id, { referralCode: code, ...extra })
     return code
   },
   // +1 point and +1 referred-student count per successful referred
@@ -425,6 +444,18 @@ export const announcementsService = {
   reorder: items => reorderCollection(ANNOUNCEMENTS_COL, items),
   listen: cb => onSnapshot(
     query(col(ANNOUNCEMENTS_COL), orderBy('createdAt', 'desc')),
+    snap => cb(applyManualOrder(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
+    err => console.error("Firebase listen error:", err)
+  ),
+  // Public-facing listener — rules only let a non-admin visitor read
+  // `enabled == true` announcements (Round 13 security fix); `.listen()`
+  // above (unfiltered) stays admin-only. Same missing-field caveat as
+  // testimonialsService.listenApproved: a legacy doc with no `enabled`
+  // field at all won't match this query even though the per-doc rule
+  // treats that as visible. AdminAnnouncements.jsx always writes `enabled`
+  // explicitly, so this only matters for pre-existing legacy rows.
+  listenEnabled: cb => onSnapshot(
+    query(col(ANNOUNCEMENTS_COL), where('enabled', '==', true), orderBy('createdAt', 'desc')),
     snap => cb(applyManualOrder(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
     err => console.error("Firebase listen error:", err)
   ),
@@ -641,6 +672,14 @@ export const blogService = {
     snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
     err => console.error("Firebase listen error:", err)
   ),
+  // Public-facing listener — rules only let a non-admin visitor read
+  // `status == 'Published'` posts (Round 13 security fix); `.listen()`
+  // above (unfiltered) stays admin-only.
+  listenPublished: cb => onSnapshot(
+    query(col(COLS.blog), where('status', '==', 'Published'), orderBy('createdAt', 'desc')),
+    snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+    err => console.error("Firebase listen error:", err)
+  ),
 }
 
 export const blogCategoriesService = {
@@ -699,6 +738,14 @@ export const newsService = {
   delete: id => remove('news', id),
   listen: cb => onSnapshot(
     query(collection(db, 'news'), orderBy('createdAt', 'desc')),
+    snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+    err => console.error("Firebase news listen error:", err)
+  ),
+  // Public-facing listener — rules only let a non-admin visitor read
+  // `status == 'Published'` news/events (Round 13 security fix); `.listen()`
+  // above (unfiltered) stays admin-only.
+  listenPublished: cb => onSnapshot(
+    query(collection(db, 'news'), where('status', '==', 'Published'), orderBy('createdAt', 'desc')),
     snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
     err => console.error("Firebase news listen error:", err)
   ),
@@ -792,6 +839,20 @@ export const testimonialsService = {
   delete: id => remove('testimonials', id),
   listen: cb => onSnapshot(
     query(collection(db, 'testimonials'), orderBy('createdAt', 'desc')),
+    snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+    err => console.error("Firebase listen error:", err)
+  ),
+  // Public-facing listener — rules only let a non-admin visitor read
+  // `status == 'Approved'` testimonials (Round 13 security fix); `.listen()`
+  // above (unfiltered) stays admin-only. NOTE: unlike the per-doc rule
+  // (which treats a MISSING `status` field as Approved, matching the old
+  // client-side `r.status || 'Approved'` fallback), this `where()` query
+  // can't match docs that have no `status` field at all — any testimonial
+  // written before that field existed won't appear here even though the
+  // rule would allow reading it directly by ID. `add()` above always sets
+  // `status: 'Approved'`, so this only matters for pre-existing legacy rows.
+  listenApproved: cb => onSnapshot(
+    query(collection(db, 'testimonials'), where('status', '==', 'Approved'), orderBy('createdAt', 'desc')),
     snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
     err => console.error("Firebase listen error:", err)
   ),

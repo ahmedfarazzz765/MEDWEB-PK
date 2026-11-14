@@ -2,23 +2,30 @@ import { useEffect, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
 import { auth } from '../firebase/config'
-import { ambassadorsService } from '../firebase/services'
+import { ambassadorsService, adminUsersService } from '../firebase/services'
+import { SUPER_ADMINS } from '../constants/superAdmins'
 import { Shield } from 'lucide-react'
 
-// Gates every /admin route behind a real Firebase Auth session. Firestore
-// rules already block unauthenticated data access, but the admin UI itself
-// shouldn't render for anyone who isn't signed in.
+// Gates every /admin route behind a real Firebase Auth session AND real
+// admin status. Firestore rules already block unauthenticated/non-admin
+// data access (see docs/firestore.rules.proposed), but the admin UI
+// itself shouldn't even render for anyone who isn't signed in — or,
+// since Round 13, for anyone signed in who isn't actually an admin
+// either (see below).
 //
-// IMPORTANT: adminUsersService's bootstrap rule treats any signed-in user
-// with no adminUsers doc as a Super Admin (see the comment above that
-// service) — that was safe when the only people who could ever hold a
-// Firebase Auth account in this project were admins created directly in the
-// Firebase Console. Ambassador Login (AmbassadorAcceptInvite.jsx) now lets a
-// much larger, less-trusted group self-serve real Firebase Auth accounts in
-// the SAME project, and none of them will ever have an adminUsers doc — so
-// without this explicit check, every ambassador who ever logs in and then
-// happens to open /admin would silently become a full Super Admin. This
-// check must run before the adminUsers bootstrap logic ever gets a chance.
+// SECURITY FIX (Round 13): "signed in, no adminUsers doc = Super Admin"
+// is gone — that bootstrap was safe only while the sole people who could
+// ever hold a Firebase Auth account in this project were admins created
+// directly in the Firebase Console. Ambassador Login
+// (AmbassadorAcceptInvite.jsx) now lets a much larger, less-trusted
+// group self-serve real Firebase Auth accounts in the SAME project, and
+// none of them will ever have an adminUsers doc — so without an explicit
+// check, every ambassador (or, before this fix, literally anyone who
+// ever created ANY Firebase Auth account here) who opened /admin would
+// silently get full access. Checked in this exact order: ambassador
+// first (clearest, most likely real-world case), then real admin status
+// (Super Admin by hardcoded email, or a genuine adminUsers doc) — anyone
+// failing both is signed out and sent to /admin/login, same as before.
 export default function RequireAuth({ children }) {
   const [checking, setChecking] = useState(true)
   const [user, setUser] = useState(null)
@@ -34,6 +41,13 @@ export default function RequireAuth({ children }) {
           // Super Admin bootstrap — end their admin-side session outright.
           await signOut(auth)
           setIsAmbassador(true)
+          setUser(null)
+          return
+        }
+        const email = (u.email || '').toLowerCase()
+        const isAdmin = SUPER_ADMINS.includes(email) || !!(await adminUsersService.getByEmail(email))
+        if (!isAdmin) {
+          await signOut(auth)
           setUser(null)
         } else {
           setUser(u)

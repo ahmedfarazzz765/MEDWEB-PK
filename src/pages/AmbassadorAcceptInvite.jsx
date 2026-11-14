@@ -41,11 +41,16 @@ export default function AmbassadorAcceptInvite() {
     setError('')
     try {
       const cred = await createUserWithEmailAndPassword(auth, invite.email, password)
-      const referralCode = await ambassadorsService.ensureReferralCode(invite.ambassadorId)
+      // `inviteToken` on both writes below is how Firestore rules (Round 13
+      // security fix) verify this not-yet-an-ambassador account is allowed
+      // to stamp its own authUid onto the ambassador doc — it proves a
+      // matching, still-unclaimed ambassadorInvites doc exists.
+      const referralCode = await ambassadorsService.ensureReferralCode(invite.ambassadorId, { inviteToken: token })
       await ambassadorsService.update(invite.ambassadorId, {
         authUid: cred.user.uid,
         hasLogin: true,
         referralCode,
+        inviteToken: token,
       })
       await ambassadorInvitesService.claim(token)
       setState('success')

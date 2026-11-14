@@ -40,10 +40,15 @@ export default function AcceptInvite() {
     setError('')
     try {
       await createUserWithEmailAndPassword(auth, invite.email, password)
+      // `inviteToken` is how Firestore rules (Round 13 security fix) verify
+      // this not-yet-an-admin account is allowed to create its own
+      // adminUsers doc — it proves a matching, still-unclaimed adminInvites
+      // doc exists for this exact email.
       await adminUsersService.create(invite.email, {
         name: invite.name,
         allowedSections: invite.allowedSections || [],
         role: invite.role,
+        inviteToken: token,
       })
       await adminInvitesService.claim(token)
       setState('success')

@@ -17,7 +17,7 @@ export default function CoursesListPage() {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
 
   useEffect(() => {
-    const unsub = coursesService.listen(rows => {
+    const unsub = coursesService.listenActive(rows => {
       // Full catalog — not narrowed to "featured" like the homepage teaser,
       // since "See All Courses" should mean the complete list.
       const visible = rows.filter(r => !['Inactive', 'Draft', 'Hidden', 'Archived'].includes(r.status))

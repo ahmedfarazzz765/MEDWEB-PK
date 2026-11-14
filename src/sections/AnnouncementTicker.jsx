@@ -15,7 +15,7 @@ export default function AnnouncementTicker() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    const unsub = announcementsService.listen(rows => {
+    const unsub = announcementsService.listenEnabled(rows => {
       setItems(rows.filter(isAnnouncementActive))
     })
     return unsub

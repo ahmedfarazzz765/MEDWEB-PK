@@ -38,7 +38,7 @@ export default function CoursePopup() {
   const [show, setShow] = useState(false)
 
   useEffect(() => {
-    const unsub = coursesService.listen(rows => {
+    const unsub = coursesService.listenActive(rows => {
       const qualifying = rows.filter(isWithinWindow)
       if (!qualifying.length) { setCourse(null); return }
       qualifying.sort((a, b) => new Date(b.popupStartDate || 0) - new Date(a.popupStartDate || 0))

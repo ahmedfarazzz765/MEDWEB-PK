@@ -36,7 +36,7 @@ export default function EventsListPage() {
   const reduceMotion = useReducedMotion()
 
   useEffect(() => {
-    const unsub = newsService.listen(rows => setItems(rows.filter(r => r.status === 'Published')))
+    const unsub = newsService.listenPublished(setItems)
     return () => unsub()
   }, [])
 
