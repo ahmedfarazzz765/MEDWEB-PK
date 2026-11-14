@@ -8,11 +8,13 @@ import ImageUpload from '../components/ImageUpload'
 import AdminButton from '../components/AdminButton'
 import ActionButtons from '../components/ActionButtons'
 import CoverImage from '../../components/CoverImage'
+import useAdminPermissions from '../hooks/useAdminPermissions'
 import { testimonialsService } from '../../firebase/services'
 
 const emptyForm = () => ({ name: '', uni: '', role: '', text: '', img: '', stars: 5, status: 'Approved', category: '' })
 
 export default function AdminTestimonials() {
+  const { canWrite } = useAdminPermissions()
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(false)
@@ -59,7 +61,11 @@ export default function AdminTestimonials() {
     { key: 'uni', label: 'University / Role', render: (v, row) => <span className="text-gray-500 text-xs">{v || row.role || '-'}</span> },
     { key: 'stars', label: 'Stars', render: v => <span className="text-yellow-500 text-xs">{'★'.repeat(v || 5)}</span> },
     { key: 'status', label: 'Status', render: (v, row) => (
-      <button onClick={() => toggleStatus(row)} className={`text-xs font-bold px-2 py-0.5 rounded-full ${v === 'Approved' ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'}`}>{v || 'Approved'}</button>
+      canWrite ? (
+        <button onClick={() => toggleStatus(row)} className={`text-xs font-bold px-2 py-0.5 rounded-full ${v === 'Approved' ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'}`}>{v || 'Approved'}</button>
+      ) : (
+        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${v === 'Approved' ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'}`}>{v || 'Approved'}</span>
+      )
     )},
     { key: 'id', label: 'Actions', render: (v, row) => (
       <ActionButtons onEdit={() => openEdit(row)} onDelete={() => handleDelete(v)} />
@@ -75,7 +81,7 @@ export default function AdminTestimonials() {
       </div>
 
       <DataTable title="Testimonials" columns={columns} data={data} searchKey="name" emptyMessage="No testimonials yet — click Add Testimonial to create one"
-        actions={<AdminButton size="sm" onClick={openAdd}>+ Add Testimonial</AdminButton>}
+        actions={canWrite && <AdminButton size="sm" onClick={openAdd}>+ Add Testimonial</AdminButton>}
       />
 
       {modal && (

@@ -8,6 +8,7 @@ import ImageUpload from '../components/ImageUpload'
 import AdminButton from '../components/AdminButton'
 import ActionButtons from '../components/ActionButtons'
 import CoverImage from '../../components/CoverImage'
+import useAdminPermissions from '../hooks/useAdminPermissions'
 import { advisoryService } from '../../firebase/services'
 
 const emptyForm = () => ({ name: '', role: '', qualification: '', status: 'Active', imageUrl: '' })
@@ -27,6 +28,7 @@ function makeColumns(openEdit, handleDelete) {
 }
 
 export default function AdminAdvisoryBoard() {
+  const { canWrite } = useAdminPermissions()
   const [data,    setData]    = useState([])
   const [loading, setLoading] = useState(true)
   const [modal,   setModal]   = useState(false)
@@ -97,7 +99,7 @@ export default function AdminAdvisoryBoard() {
       </div>
 
       <DataTable title="Advisory Board Members" columns={columns} data={data} searchKey="name" emptyMessage="No advisory board members yet — click Add Advisor to create one"
-        actions={<AdminButton size="sm" onClick={openAdd}>+ Add Advisor</AdminButton>}
+        actions={canWrite && <AdminButton size="sm" onClick={openAdd}>+ Add Advisor</AdminButton>}
       />
 
       {modal && (

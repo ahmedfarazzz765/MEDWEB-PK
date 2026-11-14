@@ -9,6 +9,7 @@ import AdminButton from '../components/AdminButton'
 import ActionButtons from '../components/ActionButtons'
 import CoverImage from '../../components/CoverImage'
 import SortableGrid, { SortableItem } from '../components/SortableGrid'
+import useAdminPermissions from '../hooks/useAdminPermissions'
 import { teamService, teamCategoriesService, settingsService, formsService } from '../../firebase/services'
 
 export const PRESET_CATEGORIES = [
@@ -103,6 +104,7 @@ function makeMemberColumns(openEdit, handleDelete) {
 }
 
 export default function AdminTeam() {
+  const { canWrite } = useAdminPermissions()
   const [activeTab, setActiveTab] = useState('members') // 'members' | 'categories'
   const [data, setData] = useState([])
   const [dbCategories, setDbCategories] = useState([])
@@ -382,9 +384,9 @@ export default function AdminTeam() {
         </div>
 
         {activeTab === 'members' ? (
-          <AdminButton size="sm" onClick={openAddMember}>+ Add Member</AdminButton>
+          canWrite && <AdminButton size="sm" onClick={openAddMember}>+ Add Member</AdminButton>
         ) : (
-          <AdminButton size="sm" onClick={openAddCategory}>+ Add Category Card</AdminButton>
+          canWrite && <AdminButton size="sm" onClick={openAddCategory}>+ Add Category Card</AdminButton>
         )}
       </div>
 

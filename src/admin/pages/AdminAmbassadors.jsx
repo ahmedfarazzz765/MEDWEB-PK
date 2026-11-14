@@ -10,6 +10,7 @@ import ActionButtons from '../components/ActionButtons'
 import AmbassadorLetterSettings from '../components/AmbassadorLetterSettings'
 import CoverImage from '../../components/CoverImage'
 import SortableGrid, { SortableItem } from '../components/SortableGrid'
+import useAdminPermissions from '../hooks/useAdminPermissions'
 import { ambassadorsService, settingsService, formsService, studentsDbService, ambassadorInvitesService, ambassadorRanksService, webinarsService } from '../../firebase/services'
 import { computeAmbassadorRank, DEFAULT_RANK_THRESHOLDS } from '../../lib/ambassadorRank'
 import {
@@ -98,7 +99,7 @@ function StarPicker({ value, onChange }) {
   )
 }
 
-function makeColumns(openEdit, handleDelete, rankThresholds, onIssueLogin, issuingLogin, onViewReferrals) {
+function makeColumns(openEdit, handleDelete, rankThresholds, onIssueLogin, issuingLogin, onViewReferrals, canWrite) {
   return [
     { key: 'imageUrl',   label: '',           render: (v, row) => v ? <CoverImage src={v} alt={row.name || ''} bias="center 25%" className="w-8 h-8 rounded-full" /> : <div className="w-8 h-8 rounded-full bg-blue-50" /> },
     { key: 'name',       label: 'Name',        render: v => <span className="font-semibold text-[#1a1a1a]">{v}</span> },
@@ -130,7 +131,7 @@ function makeColumns(openEdit, handleDelete, rankThresholds, onIssueLogin, issui
         <button onClick={() => onViewReferrals(row)} title="View referrals" className="p-1.5 rounded-lg hover:bg-blue-50 text-[#1655c3] transition-colors">
           <Users size={14} />
         </button>
-        {!row.hasLogin && (
+        {canWrite && !row.hasLogin && (
           <button onClick={() => onIssueLogin(row)} disabled={issuingLogin === row.id || !!row.inviteSentAt}
             title={row.inviteSentAt ? 'Invite already sent' : 'Issue Login'}
             className="p-1.5 rounded-lg hover:bg-blue-50 text-[#1655c3] transition-colors disabled:opacity-30 disabled:hover:bg-transparent">
@@ -143,6 +144,7 @@ function makeColumns(openEdit, handleDelete, rankThresholds, onIssueLogin, issui
 }
 
 export default function AdminAmbassadors() {
+  const { canWrite } = useAdminPermissions()
   const [data,    setData]    = useState([])
   const [loading, setLoading] = useState(true)
   const [modal,   setModal]   = useState(false)
@@ -338,7 +340,7 @@ export default function AdminAmbassadors() {
     } catch (e) { alert('Error: ' + e.message) }
   }
 
-  const columns  = makeColumns(openEdit, handleDelete, rankThresholds, handleIssueLogin, issuingLogin, openReferrals)
+  const columns  = makeColumns(openEdit, handleDelete, rankThresholds, handleIssueLogin, issuingLogin, openReferrals, canWrite)
   const active   = data.filter(a => a.status === 'Active').length
   const cities   = [...new Set(data.map(a => a.city))].length
   const referred = data.reduce((acc, a) => acc + (a.students || 0), 0)
@@ -472,7 +474,7 @@ export default function AdminAmbassadors() {
       )}
 
       <DataTable title="All Ambassadors" columns={columns} data={data} searchKey="name" emptyMessage="No ambassadors yet — click Add Ambassador to create one"
-        actions={<AdminButton size="sm" onClick={openAdd}>+ Add Ambassador</AdminButton>}
+        actions={canWrite && <AdminButton size="sm" onClick={openAdd}>+ Add Ambassador</AdminButton>}
       />
 
       {modal && (

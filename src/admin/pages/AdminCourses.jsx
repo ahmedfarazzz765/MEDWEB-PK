@@ -11,6 +11,7 @@ import ActionButtons from '../components/ActionButtons'
 import CoverImage from '../../components/CoverImage'
 import SortableGrid, { SortableItem } from '../components/SortableGrid'
 import AdminCourseEnrollments from './AdminCourseEnrollments'
+import useAdminPermissions from '../hooks/useAdminPermissions'
 import { coursesService, courseJoiningLinksService, formsService } from '../../firebase/services'
 import { karachiLocalToIso, karachiLocalToMs, isoToKarachiLocal } from '../../lib/karachiTime'
 
@@ -76,6 +77,7 @@ function makeColumns(openEdit, handleDelete, openEnrollments) {
 }
 
 export default function AdminCourses() {
+  const { canWrite } = useAdminPermissions()
   const [data,    setData]    = useState([])
   const [loading, setLoading] = useState(true)
   const [modal,   setModal]   = useState(false)
@@ -263,7 +265,7 @@ export default function AdminCourses() {
       </SortableGrid>
 
       <DataTable title="All Courses" columns={columns} data={data} searchKey="title" emptyMessage="No courses yet — click Add Course to create one"
-        actions={<AdminButton size="sm" onClick={openAdd}>+ Add Course</AdminButton>}
+        actions={canWrite && <AdminButton size="sm" onClick={openAdd}>+ Add Course</AdminButton>}
       />
 
       {modal && (

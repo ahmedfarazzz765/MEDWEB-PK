@@ -2,6 +2,7 @@ import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from 
 import { SortableContext, arrayMove, useSortable, rectSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { GripVertical } from 'lucide-react'
+import useAdminPermissions from '../hooks/useAdminPermissions'
 
 // Shared drag-and-drop reordering wrapper — used by Admin Courses, Team, and
 // Ambassadors (the 3 sections with manual `order` reordering; Webinars and
@@ -10,7 +11,14 @@ import { GripVertical } from 'lucide-react'
 // `items` must be the array currently rendered (each needs a stable `id`).
 // On drop, calls `onReorder(reorderedItems)` — the caller is responsible for
 // the optimistic setState + persisting via <collection>Service.reorder().
+//
+// Reordering is a write action — reads `canWrite` itself (same chokepoint
+// pattern as ActionButtons.jsx) so a Viewer never gets a working drag
+// context, rather than gating each of the 4 call sites individually.
+// Plain non-interactive layout when it doesn't apply, children (and their
+// own SortableItem grip handles, see below) render unchanged either way.
 export default function SortableGrid({ items, onReorder, className = '', children }) {
+  const { canWrite } = useAdminPermissions()
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
   const handleDragEnd = ({ active, over }) => {
@@ -20,6 +28,8 @@ export default function SortableGrid({ items, onReorder, className = '', childre
     if (oldIndex === -1 || newIndex === -1) return
     onReorder(arrayMove(items, oldIndex, newIndex))
   }
+
+  if (!canWrite) return <div className={className}>{children}</div>
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -35,7 +45,8 @@ export default function SortableGrid({ items, onReorder, className = '', childre
 // rather than making the whole card draggable, so clicks on buttons/links
 // inside the card (Edit, Delete, etc.) keep working normally.
 export function SortableItem({ id, className = '', children }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
+  const { canWrite } = useAdminPermissions()
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled: !canWrite })
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -45,16 +56,18 @@ export function SortableItem({ id, className = '', children }) {
 
   return (
     <div ref={setNodeRef} style={style} className={`relative ${className}`}>
-      <button
-        type="button"
-        {...attributes}
-        {...listeners}
-        onClick={e => e.stopPropagation()}
-        title="Drag to reorder"
-        className="absolute top-2 right-2 z-10 w-7 h-7 rounded-lg bg-white/90 border border-gray-200 shadow-sm flex items-center justify-center text-gray-400 hover:text-[#1655c3] hover:border-[#1655c3]/40 cursor-grab active:cursor-grabbing touch-none"
-      >
-        <GripVertical size={14} />
-      </button>
+      {canWrite && (
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          onClick={e => e.stopPropagation()}
+          title="Drag to reorder"
+          className="absolute top-2 right-2 z-10 w-7 h-7 rounded-lg bg-white/90 border border-gray-200 shadow-sm flex items-center justify-center text-gray-400 hover:text-[#1655c3] hover:border-[#1655c3]/40 cursor-grab active:cursor-grabbing touch-none"
+        >
+          <GripVertical size={14} />
+        </button>
+      )}
       {children}
     </div>
   )

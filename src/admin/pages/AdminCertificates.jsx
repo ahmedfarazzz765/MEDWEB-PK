@@ -12,6 +12,7 @@ import CertPositionEditor from '../components/CertPositionEditor'
 import CertificateTemplate, { TEMPLATES } from '../../components/CertificateTemplate'
 import AdminButton from '../components/AdminButton'
 import ResponsesModal from '../components/ResponsesModal'
+import useAdminPermissions from '../hooks/useAdminPermissions'
 import { certificatesService, webinarsService, coursesService, formsService, settingsService } from '../../firebase/services'
 import { issueManualCertificate } from '../../lib/certificateGenerator'
 import { DEFAULT_CERT_FONT } from '../../constants/certificateFonts'
@@ -116,6 +117,7 @@ function PreviewBox({ form, scale = 0.46 }) {
 }
 
 export default function AdminCertificates() {
+  const { canWrite } = useAdminPermissions()
   const [data,    setData]    = useState([])
   const [webinars,setWebinars]= useState([])
   const [courses, setCourses] = useState([])
@@ -481,11 +483,11 @@ export default function AdminCertificates() {
         <button onClick={() => setPreview(row)} className="p-1.5 rounded-lg hover:bg-blue-50 text-[#1655c3]" title="Preview"><Eye size={13} /></button>
         <button onClick={() => copyLink(row.certCode)} className="p-1.5 rounded-lg hover:bg-blue-50 text-[#64ac37]" title="Copy public link"><Copy size={13} /></button>
         <button onClick={() => printCert(row)} className="p-1.5 rounded-lg hover:bg-blue-50 text-[#1655c3]" title="Download / Print"><Download size={13} /></button>
-        <button onClick={() => openEdit(row)} className="p-1.5 rounded-lg hover:bg-blue-50 text-[#1655c3]" title="Edit"><Edit2 size={13} /></button>
+        {canWrite && <button onClick={() => openEdit(row)} className="p-1.5 rounded-lg hover:bg-blue-50 text-[#1655c3]" title="Edit"><Edit2 size={13} /></button>}
         {row.submissionId && (
           <button onClick={() => setViewSubCert(row)} className="p-1.5 rounded-lg hover:bg-blue-50 text-[#1655c3]" title="View Submission"><FileText size={13} /></button>
         )}
-        {row.status === 'Valid' && <button onClick={() => handleRevoke(v)} className="p-1.5 rounded-lg hover:bg-red-50 text-red-400" title="Revoke"><XCircle size={13} /></button>}
+        {canWrite && row.status === 'Valid' && <button onClick={() => handleRevoke(v)} className="p-1.5 rounded-lg hover:bg-red-50 text-red-400" title="Revoke"><XCircle size={13} /></button>}
       </div>
     )},
   ]
@@ -551,7 +553,7 @@ export default function AdminCertificates() {
           </div>
           <DataTable title={activeFolder.label} columns={columns} data={activeFolder.certs} searchKey="recipient"
             emptyMessage="No certificates in this folder"
-            actions={<AdminButton size="sm" onClick={openIssue}>+ Issue Certificate</AdminButton>}
+            actions={canWrite && <AdminButton size="sm" onClick={openIssue}>+ Issue Certificate</AdminButton>}
           />
         </div>
       ) : (
@@ -564,7 +566,7 @@ export default function AdminCertificates() {
           }))}
           onOpen={setActiveFolderKey}
           emptyMessage="No certificates yet — click Issue Certificate to create one"
-          actions={<AdminButton size="sm" onClick={openIssue}>+ Issue Certificate</AdminButton>}
+          actions={canWrite && <AdminButton size="sm" onClick={openIssue}>+ Issue Certificate</AdminButton>}
         />
       )}
 

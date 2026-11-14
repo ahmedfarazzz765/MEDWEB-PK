@@ -7,6 +7,7 @@ import FormField, { inputCls } from '../components/FormField'
 import ImageUpload from '../components/ImageUpload'
 import AdminButton from '../components/AdminButton'
 import CoverImage from '../../components/CoverImage'
+import useAdminPermissions from '../hooks/useAdminPermissions'
 import { settingsService } from '../../firebase/services'
 
 // Matches what's actually live on the homepage today (verified against the
@@ -139,6 +140,7 @@ const TABS = [
 ]
 
 export default function AdminContent({ initialTab }) {
+  const { canWrite } = useAdminPermissions()
   const [s, setS] = useState(null)
   const [saving, setSaving] = useState(false)
   const [savedTab, setSavedTab] = useState('')
@@ -206,7 +208,7 @@ export default function AdminContent({ initialTab }) {
   const addPartner = () => setS(p => ({ ...p, partners: [...p.partners, { name: 'New Partner', logoImage: '' }] }))
   const delPartner = i => setS(p => ({ ...p, partners: p.partners.filter((_, idx) => idx !== i) }))
 
-  const SaveBtn = ({ tab: tabId }) => (
+  const SaveBtn = ({ tab: tabId }) => canWrite && (
     <AdminButton variant="primary" size="sm" onClick={() => save(tabId)} disabled={saving}>
       {saving ? 'Saving…' : savedTab === tabId ? 'Saved ✓' : 'Save Changes'}
     </AdminButton>

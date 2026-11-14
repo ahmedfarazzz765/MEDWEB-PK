@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Plus, X } from 'lucide-react'
 import FormField, { inputCls } from '../components/FormField'
 import AdminButton from '../components/AdminButton'
+import useAdminPermissions from '../hooks/useAdminPermissions'
 import { settingsService } from '../../firebase/services'
 
 const DEFAULT_LINKS = [
@@ -17,6 +18,7 @@ const DEFAULT_LINKS = [
 const DEFAULT_PROGRAMS = ['Clinical Pharmacy Masterclass', 'Drug Therapy Series', '100 Vital Drugs', 'How to Treat Series', 'Ambassador Program', 'Certificate Verification']
 
 export default function AdminFooter() {
+  const { canWrite } = useAdminPermissions()
   const [s, setS] = useState(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState('')
@@ -56,7 +58,7 @@ export default function AdminFooter() {
   const addProgram = () => setS(p => ({ ...p, footerPrograms: [...p.footerPrograms, 'New Program'] }))
   const delProgram = i => setS(p => ({ ...p, footerPrograms: p.footerPrograms.filter((_, idx) => idx !== i) }))
 
-  const SaveBtn = ({ tab }) => (
+  const SaveBtn = ({ tab }) => canWrite && (
     <AdminButton variant="primary" size="sm" onClick={() => save(tab)} disabled={saving}>
       {saving ? 'Saving…' : saved === tab ? 'Saved ✓' : 'Save Changes'}
     </AdminButton>

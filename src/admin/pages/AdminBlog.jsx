@@ -13,6 +13,7 @@ import { blogService, blogCategoriesService, newsletterService } from '../../fir
 import { sendNewsletterEmail, getRemainingEmailQuota } from '../../firebase/email'
 import { DEFAULT_BLOG_CATEGORIES } from '../../constants/blogCategories'
 import CoverImage from '../../components/CoverImage'
+import useAdminPermissions from '../hooks/useAdminPermissions'
 
 // `content` is now rich-text HTML (see RichTextEditor.jsx) — this fallback
 // (used only when the admin left Excerpt blank) strips tags first so a
@@ -44,7 +45,7 @@ function uniqueSlug(base, existingSlugs) {
   return slug
 }
 
-function makeColumns(openEdit, handlePublish, handleDelete) {
+function makeColumns(openEdit, handlePublish, handleDelete, canWrite) {
   return [
     { key: 'imageUrl', label: '',          render: (v, row) => v ? <CoverImage src={v} alt={row.title || ''} className="w-8 h-8 rounded-lg" /> : <div className="w-8 h-8 rounded-lg bg-blue-50" /> },
     { key: 'title',    label: 'Title',     render: v => <span className="font-semibold text-[#1a1a1a]">{v}</span> },
@@ -55,15 +56,16 @@ function makeColumns(openEdit, handlePublish, handleDelete) {
     { key: 'status',   label: 'Status',    render: v => <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${v === 'Published' ? 'bg-green-50 text-green-600' : 'bg-yellow-50 text-yellow-600'}`}>{v}</span> },
     { key: 'id',       label: 'Actions',   render: (v, row) => (
       <div className="flex gap-1">
-        <button onClick={() => openEdit(row)} className="p-1.5 rounded-lg hover:bg-blue-50 text-[#1655c3]"><Edit2 size={13} /></button>
-        {row.status === 'Draft' && <button onClick={() => handlePublish(v)} className="px-2 py-1 rounded-lg hover:bg-green-50 text-green-600 text-[10px] font-bold">Pub</button>}
-        <button onClick={() => handleDelete(v)} className="p-1.5 rounded-lg hover:bg-red-50 text-red-400"><Trash2 size={13} /></button>
+        {canWrite && <button onClick={() => openEdit(row)} className="p-1.5 rounded-lg hover:bg-blue-50 text-[#1655c3]"><Edit2 size={13} /></button>}
+        {canWrite && row.status === 'Draft' && <button onClick={() => handlePublish(v)} className="px-2 py-1 rounded-lg hover:bg-green-50 text-green-600 text-[10px] font-bold">Pub</button>}
+        <ActionButtons onDelete={() => handleDelete(v)} />
       </div>
     )},
   ]
 }
 
 export default function AdminBlog() {
+  const { canWrite } = useAdminPermissions()
   const [activeTab, setActiveTab] = useState('posts') // 'posts' | 'categories'
   const [data,    setData]    = useState([])
   const [dbCategories, setDbCategories] = useState([])
@@ -293,7 +295,7 @@ export default function AdminBlog() {
     setSendModal(prev => prev ? { ...prev, phase: 'done', sent, failed, failedEmails } : prev)
   }
 
-  const columns   = makeColumns(openEdit, handlePublish, handleDelete)
+  const columns   = makeColumns(openEdit, handlePublish, handleDelete, canWrite)
   const published = data.filter(b => b.status === 'Published').length
   const drafts    = data.filter(b => b.status === 'Draft').length
   const totalViews= data.reduce((a, b) => a + (b.views || 0), 0)
@@ -352,13 +354,13 @@ export default function AdminBlog() {
 
       {activeTab === 'posts' ? (
         <DataTable title="All Blog Posts" columns={columns} data={data} searchKey="title" emptyMessage="No blog posts yet — click New Post to write one"
-          actions={<AdminButton size="sm" onClick={openAdd}>+ New Post</AdminButton>}
+          actions={canWrite && <AdminButton size="sm" onClick={openAdd}>+ New Post</AdminButton>}
         />
       ) : (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-[#1a1a1a] text-sm">Blog Categories</h3>
-            <AdminButton size="sm" onClick={openAddCategory}>+ Add Category</AdminButton>
+            {canWrite && <AdminButton size="sm" onClick={openAddCategory}>+ Add Category</AdminButton>}
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {categoryNames.map(name => {

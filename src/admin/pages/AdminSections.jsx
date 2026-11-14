@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Eye, EyeOff, Sparkles } from 'lucide-react'
 import AdminButton from '../components/AdminButton'
+import useAdminPermissions from '../hooks/useAdminPermissions'
 import { sectionVisibilityService, settingsService } from '../../firebase/services'
 
 const SECTIONS = [
@@ -22,6 +23,7 @@ const SECTIONS = [
 ]
 
 export default function AdminSections() {
+  const { canWrite } = useAdminPermissions()
   const [v, setV] = useState(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -90,7 +92,7 @@ export default function AdminSections() {
           </div>
           <button
             onClick={toggleIntro}
-            disabled={!introLoaded || introSaving}
+            disabled={!introLoaded || introSaving || !canWrite}
             className="relative w-11 h-6 rounded-full flex-shrink-0 transition-colors duration-200 disabled:opacity-50"
             style={{ background: introOn ? '#1655c3' : '#d1d5db' }}
             aria-label="Toggle Launch Intro Animation"
@@ -109,9 +111,11 @@ export default function AdminSections() {
             <h3 className="font-black text-[#1a1a1a]">Homepage Sections</h3>
             <p className="text-xs text-gray-500 mt-1">Turn any section off to hide it from the live site instantly — its content stays saved, nothing is deleted.</p>
           </div>
-          <AdminButton variant="primary" size="sm" onClick={save} disabled={saving}>
-            {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save Changes'}
-          </AdminButton>
+          {canWrite && (
+            <AdminButton variant="primary" size="sm" onClick={save} disabled={saving}>
+              {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save Changes'}
+            </AdminButton>
+          )}
         </div>
         <p className="text-xs text-gray-400 mt-3 mb-5">{visibleCount} of {SECTIONS.length} sections visible</p>
 
@@ -131,7 +135,8 @@ export default function AdminSections() {
                 </div>
                 <button
                   onClick={() => toggle(s.key)}
-                  className="relative w-11 h-6 rounded-full flex-shrink-0 transition-colors duration-200"
+                  disabled={!canWrite}
+                  className="relative w-11 h-6 rounded-full flex-shrink-0 transition-colors duration-200 disabled:opacity-50"
                   style={{ background: on ? '#1655c3' : '#d1d5db' }}
                   aria-label={`Toggle ${s.label}`}
                 >

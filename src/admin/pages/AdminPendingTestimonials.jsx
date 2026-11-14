@@ -6,6 +6,7 @@ import FormField, { inputCls } from '../components/FormField'
 import { pendingTestimonialsService, testimonialsService, youtubeFetchStateService } from '../../firebase/services'
 import { fetchYouTubeReviews } from '../lib/reviewFetchers'
 import CoverImage from '../../components/CoverImage'
+import useAdminPermissions from '../hooks/useAdminPermissions'
 
 function StarPicker({ value, onChange }) {
   return (
@@ -85,6 +86,7 @@ function AddGoogleReviewForm() {
 }
 
 function PendingCard({ item, onApprove, onReject, busy }) {
+  const { canWrite } = useAdminPermissions()
   const isGoogle = item.source === 'Google'
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex flex-col gap-3">
@@ -124,19 +126,22 @@ function PendingCard({ item, onApprove, onReject, busy }) {
         </a>
       )}
 
-      <div className="flex gap-2 pt-1">
-        <AdminButton size="sm" variant="success" className="flex-1" disabled={busy} onClick={() => onApprove(item)}>
-          <Check size={13} className="mr-1" /> Approve
-        </AdminButton>
-        <AdminButton size="sm" variant="danger" className="flex-1" disabled={busy} onClick={() => onReject(item)}>
-          <X size={13} className="mr-1" /> Reject
-        </AdminButton>
-      </div>
+      {canWrite && (
+        <div className="flex gap-2 pt-1">
+          <AdminButton size="sm" variant="success" className="flex-1" disabled={busy} onClick={() => onApprove(item)}>
+            <Check size={13} className="mr-1" /> Approve
+          </AdminButton>
+          <AdminButton size="sm" variant="danger" className="flex-1" disabled={busy} onClick={() => onReject(item)}>
+            <X size={13} className="mr-1" /> Reject
+          </AdminButton>
+        </div>
+      )}
     </div>
   )
 }
 
 export default function AdminPendingTestimonials() {
+  const { canWrite } = useAdminPermissions()
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
   const [fetching, setFetching] = useState(false)
@@ -206,15 +211,17 @@ export default function AdminPendingTestimonials() {
               Pulls new comments from <span className="font-semibold text-[#1655c3]">MEDWEB's own YouTube channel</span> (@medwebpk) into the queue below. Only checks for comments posted since the last fetch. Run manually whenever you want to check for new ones.
             </p>
           </div>
-          <AdminButton onClick={handleFetch} disabled={fetching}>
-            <RefreshCw size={14} className={`mr-1.5 ${fetching ? 'animate-spin' : ''}`} /> {fetching ? 'Fetching…' : 'Fetch New Reviews'}
-          </AdminButton>
+          {canWrite && (
+            <AdminButton onClick={handleFetch} disabled={fetching}>
+              <RefreshCw size={14} className={`mr-1.5 ${fetching ? 'animate-spin' : ''}`} /> {fetching ? 'Fetching…' : 'Fetch New Reviews'}
+            </AdminButton>
+          )}
         </div>
         {lastFetchSummary && !error && <p className="text-xs text-green-600 font-semibold mt-3">{lastFetchSummary}</p>}
         {error && <p className="text-xs text-red-500 font-semibold mt-3">{error}</p>}
       </div>
 
-      <AddGoogleReviewForm />
+      {canWrite && <AddGoogleReviewForm />}
 
       {loading ? (
         <p className="text-sm text-gray-400 text-center py-10">Loading…</p>

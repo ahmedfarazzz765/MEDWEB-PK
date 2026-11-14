@@ -10,6 +10,7 @@ import ActionButtons from '../components/ActionButtons'
 import CertPositionEditor from '../components/CertPositionEditor'
 import RichTextEditor from '../components/RichTextEditor'
 import CoverImage from '../../components/CoverImage'
+import useAdminPermissions from '../hooks/useAdminPermissions'
 import { webinarsService, formsService, settingsService, ensureDefaultWebinarForm, activityLogService } from '../../firebase/services'
 
 const emptySpeaker = () => ({ image: '', name: '', qualification: '' })
@@ -55,6 +56,7 @@ function makeColumns(openEdit, handleDelete, regCounts) {
 }
 
 export default function AdminWebinars() {
+  const { canWrite } = useAdminPermissions()
   const [data,    setData]    = useState([])
   const [forms,   setForms]   = useState([])
   const [loading, setLoading] = useState(true)
@@ -157,7 +159,7 @@ export default function AdminWebinars() {
         </p>
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-gray-600 whitespace-nowrap">Default Form:</span>
-          <select className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-gray-50"
+          <select className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-gray-50" disabled={!canWrite}
             value={defaultCfg.webinarDefaultFormId}
             onChange={e => saveDefaultCfg({ webinarDefaultFormId: e.target.value })}>
             <option value="">None (falls back to the built-in registration page)</option>
@@ -174,7 +176,7 @@ export default function AdminWebinars() {
       </div>
 
       <DataTable title="All Webinars" columns={columns} data={data} searchKey="topic" emptyMessage="No webinars yet — click Schedule Webinar to add one"
-        actions={<AdminButton size="sm" onClick={openAdd}>+ Schedule Webinar</AdminButton>}
+        actions={canWrite && <AdminButton size="sm" onClick={openAdd}>+ Schedule Webinar</AdminButton>}
       />
 
       {modal && (

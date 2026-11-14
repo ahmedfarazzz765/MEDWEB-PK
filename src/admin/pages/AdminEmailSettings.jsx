@@ -4,6 +4,7 @@ import { settingsService } from '../../firebase/services'
 import { sendTestEmail, BREVO_MONTHLY_QUOTA } from '../../firebase/email'
 import FormField, { inputCls } from '../components/FormField'
 import AdminButton from '../components/AdminButton'
+import useAdminPermissions from '../hooks/useAdminPermissions'
 
 const emptyEmail = () => ({
   enabled: false,
@@ -13,6 +14,7 @@ const emptyEmail = () => ({
 })
 
 export default function AdminEmailSettings() {
+  const { canWrite } = useAdminPermissions()
   const [email, setEmail]       = useState(emptyEmail())
   const [loading, setLoading]   = useState(true)
   const [saving, setSaving]     = useState(false)
@@ -119,11 +121,13 @@ export default function AdminEmailSettings() {
           </FormField>
         </div>
 
-        <AdminButton variant={saved ? 'success' : 'primary'} className="w-full" onClick={handleSave} disabled={saving}>
-          {saved
-            ? <><CheckCircle size={16} className="mr-2" /> Saved!</>
-            : <><Save size={16} className="mr-2" /> {saving ? 'Saving…' : 'Save Settings'}</>}
-        </AdminButton>
+        {canWrite && (
+          <AdminButton variant={saved ? 'success' : 'primary'} className="w-full" onClick={handleSave} disabled={saving}>
+            {saved
+              ? <><CheckCircle size={16} className="mr-2" /> Saved!</>
+              : <><Save size={16} className="mr-2" /> {saving ? 'Saving…' : 'Save Settings'}</>}
+          </AdminButton>
+        )}
       </div>
 
       {/* Test */}
@@ -140,7 +144,7 @@ export default function AdminEmailSettings() {
           />
           <button
             onClick={handleTest}
-            disabled={testing}
+            disabled={testing || !canWrite}
             className="px-5 py-3 rounded-xl text-sm font-bold text-[#1655c3] border-2 border-[#1655c3] hover:bg-[#1655c3] hover:text-white transition-all flex items-center justify-center gap-2 disabled:opacity-60 flex-shrink-0"
           >
             <Send size={15} /> {testing ? 'Sending…' : 'Send Test'}

@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
-import { FileText, Trash2, Edit2, Plus, Link2, Eye, Download, X, Star, Copy } from 'lucide-react'
+import { FileText, Plus, Link2, Eye, Download, X, Star, Copy } from 'lucide-react'
 import StatCard from '../components/StatCard'
 import DataTable from '../components/DataTable'
 import Modal from '../components/Modal'
 import FormField, { inputCls } from '../components/FormField'
 import AdminButton from '../components/AdminButton'
+import ActionButtons from '../components/ActionButtons'
 import ResponsesModal from '../components/ResponsesModal'
+import useAdminPermissions from '../hooks/useAdminPermissions'
 import { formsService } from '../../firebase/services'
 import { LINK_ICON_OPTIONS } from '../../constants/linkIcons'
 
@@ -27,6 +29,7 @@ const uid = () => Math.random().toString(36).slice(2, 8)
 const emptyForm = () => ({ title: '', description: '', status: 'Active', fields: [], successConfig: { message: '', links: [] } })
 
 export default function AdminForms() {
+  const { canWrite } = useAdminPermissions()
   const [data, setData]       = useState([])
   const [subs, setSubs]       = useState([])
   const [loading, setLoading] = useState(true)
@@ -137,15 +140,18 @@ export default function AdminForms() {
     { key: 'fields', label: 'Fields', render: v => <span className="text-gray-500 text-xs">{(v || []).length}</span> },
     { key: 'id', label: 'Responses', render: v => <span className="font-bold text-[#1655c3]">{subCount(v)}</span> },
     { key: 'status', label: 'Status', render: (v, row) => (
-      <button onClick={() => toggleStatus(row)} className={`text-xs font-bold px-2 py-0.5 rounded-full ${v === 'Active' ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'}`}>{v}</button>
+      canWrite ? (
+        <button onClick={() => toggleStatus(row)} className={`text-xs font-bold px-2 py-0.5 rounded-full ${v === 'Active' ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'}`}>{v}</button>
+      ) : (
+        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${v === 'Active' ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'}`}>{v}</span>
+      )
     )},
     { key: 'id', label: 'Actions', render: (v, row) => (
       <div className="flex gap-1.5">
         <button onClick={() => setViewSubs(row)} className="p-1.5 rounded-lg hover:bg-blue-50 text-[#1655c3]" title="Responses"><Eye size={13} /></button>
         <button onClick={() => copyLink(v)} className="p-1.5 rounded-lg hover:bg-blue-50 text-[#64ac37]" title="Copy link"><Link2 size={13} /></button>
-        <button onClick={() => openEdit(row)} className="p-1.5 rounded-lg hover:bg-blue-50 text-[#1655c3]" title="Edit"><Edit2 size={13} /></button>
-        <button onClick={() => openDuplicate(row)} className="p-1.5 rounded-lg hover:bg-blue-50 text-[#1655c3]" title="Duplicate"><Copy size={13} /></button>
-        <button onClick={() => handleDelete(v)} className="p-1.5 rounded-lg hover:bg-red-50 text-red-400" title="Delete"><Trash2 size={13} /></button>
+        {canWrite && <button onClick={() => openDuplicate(row)} className="p-1.5 rounded-lg hover:bg-blue-50 text-[#1655c3]" title="Duplicate"><Copy size={13} /></button>}
+        <ActionButtons onEdit={() => openEdit(row)} onDelete={() => handleDelete(v)} />
       </div>
     )},
   ]
@@ -159,7 +165,7 @@ export default function AdminForms() {
       </div>
 
       <DataTable title="Form Builder" columns={columns} data={data} searchKey="title" emptyMessage="No forms yet — click Create Form to build one"
-        actions={<AdminButton size="sm" onClick={openAdd}>+ Create Form</AdminButton>}
+        actions={canWrite && <AdminButton size="sm" onClick={openAdd}>+ Create Form</AdminButton>}
       />
 
       {/* BUILDER MODAL */}

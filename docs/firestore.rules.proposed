@@ -1,0 +1,233 @@
+rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROPOSED Firestore rules for medwebpk.com — NOT deployed by Claude Code.
+// Paste this into Firebase Console → Firestore Database → Rules → Publish,
+// after reviewing it yourself. This repo has no local firestore.rules file
+// and never has — rules currently live only in the Console (same situation
+// flagged in CHANGES_ROUND12.md Prompt 1 for `blogCategories`).
+//
+// ROLE MODEL — mirrors src/admin/hooks/useAdminPermissions.js exactly, so a
+// signed-in admin's access here matches what the admin UI already shows them:
+//   • No `adminUsers/{email}` doc at all        → Super Admin (full access)
+//   • `adminUsers/{email}.role == 'viewer'`      → read-only everywhere
+//   • `adminUsers/{email}.role == 'editor'`      → full write, see below
+//     (an older doc with no `role` field, or the pre-this-round literal
+//     value 'admin', is treated as 'editor' too — same fallback the client
+//     hook already applies, so nobody's existing access silently changes)
+// This file does NOT also enforce each Editor's individual `allowedSections`
+// checklist (AdminUsers.jsx's per-section grants) — that's a client-side UX
+// restriction already working today; mapping every one of ~25 sections to
+// its collection(s) here would roughly quadruple this file for a
+// restriction the UI already applies. Flagged as a known gap, not silently
+// dropped: if you want section-level enforcement at the database layer too,
+// ask for it as a follow-up.
+//
+// PUBLIC WRITE EXCEPTIONS — the public site performs a handful of writes
+// directly from the browser (no backend/Cloud Function exists in this
+// project), found by tracing every public-facing page's service calls:
+//   • webinarRegistrations, courseEnrollments, courseEnrollmentKeys,
+//     newsletterSubscribers, studentDatabase, formSubmissions — a visitor
+//     CREATES their own document (registering, enrolling, subscribing).
+//   • webinars.registered, certificates.verifications,
+//     ambassadors.points/students, blogPosts.views,
+//     settings/emailUsage.count — a visitor action (registering, verifying
+//     a certificate, a referred signup, reading a post, any automated
+//     email send) increments one counter FIELD on an otherwise
+//     admin-owned document. Each gets a narrow exception limited to
+//     exactly those fields — not a general public-write hole on the doc.
+// Missing any one of these breaks a real, currently-working feature.
+// ─────────────────────────────────────────────────────────────────────────────
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Role helpers ──────────────────────────────────────────────────────
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function hasAdminDoc() {
+      return exists(/databases/$(database)/documents/adminUsers/$(request.auth.token.email.lower()));
+    }
+    function adminDoc() {
+      return get(/databases/$(database)/documents/adminUsers/$(request.auth.token.email.lower())).data;
+    }
+    // Mirrors useAdminPermissions.js exactly: no doc at all, an explicit
+    // `role == 'superadmin'`, or a doc with no `allowedSections` field
+    // (a hand-added Firestore record, per that file's own comment on why)
+    // are all Super Admin. Only a Super Admin may manage other admins or
+    // delete anything — "Editor can't delete or manage admins" (Prompt 5).
+    function isSuperAdmin() {
+      return isSignedIn() && (
+        !hasAdminDoc() ||
+        adminDoc().role == 'superadmin' ||
+        !('allowedSections' in adminDoc())
+      );
+    }
+    function isViewer() {
+      return isSignedIn() && !isSuperAdmin() && adminDoc().role == 'viewer';
+    }
+    // Super Admin or Editor (role != 'viewer') — the only two outcomes
+    // besides Viewer, per useAdminPermissions.js.
+    function canWrite() {
+      return isSignedIn() && !isViewer();
+    }
+
+    // Narrow helper for "only these fields changed" — used by every public
+    // counter-increment exception above, so e.g. a certificate's
+    // `verifications` count can be bumped by an anonymous visitor without
+    // opening up the rest of that document to public writes.
+    function onlyFieldsChanged(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+
+    // ── PEOPLE / CONTENT — public reads everything (no draft concept) ────
+    match /team/{id}               { allow read: if true; allow write: if canWrite(); }
+    match /teamCategories/{id}     { allow read: if true; allow write: if canWrite(); }
+    match /advisory/{id}           { allow read: if true; allow write: if canWrite(); }
+    match /blogCategories/{id}     { allow read: if true; allow write: if isSignedIn(); }
+
+    // ── AMBASSADORS — public read; `points`/`students` also bumped by an
+    //    anonymous referred signup (WebinarRegister.jsx addReferralPoint) ─
+    match /ambassadors/{id} {
+      allow read: if true;
+      allow create, delete: if canWrite();
+      allow update: if canWrite() || onlyFieldsChanged(['points', 'students', 'updatedAt']);
+    }
+    match /ambassadorInvites/{id}  { allow read, write: if isSignedIn(); }
+
+    // ── WEBINARS — public read always (no status-based hiding today);
+    //    `registered` also bumped by the public registration flow ────────
+    match /webinars/{id} {
+      allow read: if true;
+      allow create, delete: if canWrite();
+      allow update: if canWrite() || onlyFieldsChanged(['registered', 'updatedAt']);
+    }
+    match /webinarRegistrations/{id} {
+      allow create: if true;   // a visitor registering for a webinar
+      allow read, update, delete: if isSignedIn();
+    }
+
+    // ── COURSES — public reads only Active; `enrollmentSeq` is bumped by
+    //    the public enrollment transaction (courseEnrollmentsService.add) ─
+    match /courses/{id} {
+      allow read: if isSignedIn() || resource.data.status == 'Active';
+      allow create, delete: if canWrite();
+      allow update: if canWrite() || onlyFieldsChanged(['enrollmentSeq', 'updatedAt']);
+    }
+    match /courseEnrollments/{id} {
+      allow create: if true;   // a visitor enrolling in a paid course/workshop
+      allow read, update, delete: if isSignedIn();
+    }
+    // Data-free duplicate-email marker docs — created/read by the same
+    // anonymous enrollment transaction, never by an admin UI.
+    match /courseEnrollmentKeys/{id} {
+      allow create, read: if true;
+      allow update, delete: if isSignedIn();
+    }
+    // The one field never allowed to reach a public read — see
+    // courseJoiningLinksService's own comment in services.js.
+    match /courseJoiningLinks/{id} { allow read, write: if isSignedIn(); }
+
+    // ── CERTIFICATES — public reads any certificate (verification page
+    //    needs to show "Revoked" too, not just hide it); `verifications`
+    //    bumped by the public verify action ───────────────────────────────
+    match /certificates/{id} {
+      allow read: if true;
+      allow create, delete: if canWrite();
+      allow update: if canWrite() || onlyFieldsChanged(['verifications', 'updatedAt']);
+    }
+
+    // ── BLOG — public reads only Published; `views` bumped by a public
+    //    page view ───────────────────────────────────────────────────────
+    match /blogPosts/{id} {
+      allow read: if isSignedIn() || resource.data.status == 'Published';
+      allow create, delete: if canWrite();
+      allow update: if canWrite() || onlyFieldsChanged(['views', 'updatedAt']);
+    }
+
+    // ── EVENTS & NEWS (Prompt B) — same Published-only public rule the
+    //    news module it extends already needed; `views` bumped the same
+    //    way blog posts are (if Prompt B wires that in) ───────────────────
+    match /news/{id} {
+      allow read: if isSignedIn() || resource.data.status == 'published' || resource.data.status == 'Published';
+      allow create, delete: if canWrite();
+      allow update: if canWrite() || onlyFieldsChanged(['views', 'updatedAt']);
+    }
+
+    // ── TESTIMONIALS — public reads only Approved (default when the field
+    //    is absent, matching the client's own `v || 'Approved'` fallback) ─
+    match /testimonials/{id} {
+      allow read: if isSignedIn() || resource.data.get('status', 'Approved') == 'Approved';
+      allow write: if canWrite();
+    }
+    // Admin-only inbox — every doc here is created by an admin action
+    // (the "Fetch New Reviews" button), never by a public submission.
+    match /pendingTestimonials/{id} { allow read, write: if isSignedIn(); }
+
+    // ── ANNOUNCEMENTS — public reads only enabled ones; slug-based detail
+    //    page needs the same ──────────────────────────────────────────────
+    match /announcements/{id} {
+      allow read: if isSignedIn() || resource.data.get('enabled', true) != false;
+      allow write: if canWrite();
+    }
+
+    // ── FORM BUILDER — public needs to read a form by ID to render it
+    //    (no status gate today — an inactive form is still reachable by
+    //    direct link, matching current behavior); submissions are a public
+    //    create, admin-only read afterward ─────────────────────────────────
+    match /forms/{id}            { allow read: if true; allow write: if canWrite(); }
+    match /formSubmissions/{id} {
+      allow create: if true;
+      allow read, update, delete: if isSignedIn();
+    }
+
+    // ── NEWSLETTER — public subscribes; admin manages the list and sends ─
+    match /newsletterSubscribers/{id} {
+      allow create: if true;
+      allow read, update, delete: if isSignedIn();
+    }
+
+    // ── STUDENT DATABASE — upserted anonymously from every registration/
+    //    certificate flow (studentsDbService.upsertFromRegistration etc.);
+    //    not publicly readable — only the admin Students page lists it ───
+    match /studentDatabase/{id} {
+      allow create, update: if true;
+      allow read, delete: if isSignedIn();
+    }
+
+    // ── SITE SETTINGS — one doc per concern under `settings/{docId}`.
+    //    Public reads the ones the homepage actually uses; `emailUsage` is
+    //    the one doc a public action (any auto-email send) also updates,
+    //    narrowly, for its own counter ──────────────────────────────────────
+    match /settings/{docId} {
+      allow read: if docId in ['site', 'sectionVisibility'] || isSignedIn();
+      allow write: if (docId == 'emailUsage' && onlyFieldsChanged(['count', 'month', 'updatedAt']))
+                   || canWrite();
+    }
+
+    // ── ADMIN-ONLY, NO PUBLIC ACCESS AT ALL ────────────────────────────────
+    match /customFonts/{id}   { allow read, write: if isSignedIn(); }
+    match /activityLog/{id}   { allow read: if isSuperAdmin(); allow create: if isSignedIn(); allow update, delete: if false; }
+
+    // ── ADMIN USER MANAGEMENT — Super Admin only, per Prompt 5 ─────────────
+    match /adminUsers/{id} {
+      // Every signed-in admin reads their OWN doc on every page load
+      // (useAdminPermissions.js resolves their role this way) — only a
+      // Super Admin can read the full list (AdminUsers.jsx itself is
+      // already gated to Super-Admin-only, but the rule shouldn't rely
+      // on that alone).
+      allow read: if isSignedIn() && (id == request.auth.token.email.lower() || isSuperAdmin());
+      allow write: if isSuperAdmin();
+    }
+    match /adminInvites/{id} {
+      // AcceptInvite.jsx is opened by the INVITEE before they have an
+      // account — token-gated (the doc ID is the capability), not
+      // auth-gated, same trust model the app's own code comment already
+      // documents for this collection.
+      allow read: if true;
+      allow create, delete: if isSuperAdmin();
+      allow update: if true; // AcceptInvite.jsx flips `claimed` to true, unauthenticated
+    }
+  }
+}

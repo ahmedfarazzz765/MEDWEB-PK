@@ -10,6 +10,7 @@ import ActionButtons from '../components/ActionButtons'
 import CoverImage from '../../components/CoverImage'
 import SortableGrid, { SortableItem } from '../components/SortableGrid'
 import TagInput from '../components/TagInput'
+import useAdminPermissions from '../hooks/useAdminPermissions'
 import { announcementsService } from '../../firebase/services'
 import { isAnnouncementActive } from '../../lib/announcements'
 
@@ -32,6 +33,7 @@ const emptyForm = () => ({
 })
 
 export default function AdminAnnouncements() {
+  const { canWrite } = useAdminPermissions()
   const [data,    setData]    = useState([])
   const [loading, setLoading] = useState(true)
   const [modal,   setModal]   = useState(false)
@@ -139,9 +141,11 @@ export default function AdminAnnouncements() {
       )
     }},
     { key: 'enabled', label: 'Toggle', render: (v, row) => (
-      <button onClick={() => toggleEnabled(row)} className="p-1.5 rounded-lg hover:bg-blue-50 text-[#1655c3]" title={v === false ? 'Enable' : 'Disable'}>
-        {v === false ? <EyeOff size={14} /> : <Eye size={14} />}
-      </button>
+      canWrite ? (
+        <button onClick={() => toggleEnabled(row)} className="p-1.5 rounded-lg hover:bg-blue-50 text-[#1655c3]" title={v === false ? 'Enable' : 'Disable'}>
+          {v === false ? <EyeOff size={14} /> : <Eye size={14} />}
+        </button>
+      ) : (v === false ? <EyeOff size={14} className="text-gray-300" /> : <Eye size={14} className="text-gray-300" />)
     )},
     { key: 'id2', label: 'Actions', render: (v, row) => (
       <ActionButtons onEdit={() => openEdit(row)} onDelete={() => handleDelete(row.id)} />
@@ -183,7 +187,7 @@ export default function AdminAnnouncements() {
       )}
 
       <DataTable title="All Announcements" columns={columns} data={data} searchKey="title" emptyMessage="No announcements yet — click Add Announcement to create one"
-        actions={<AdminButton size="sm" onClick={openAdd}>+ Add Announcement</AdminButton>}
+        actions={canWrite && <AdminButton size="sm" onClick={openAdd}>+ Add Announcement</AdminButton>}
       />
 
       {modal && (
