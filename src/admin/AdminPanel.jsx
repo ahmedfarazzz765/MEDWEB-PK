@@ -98,7 +98,7 @@ export default function AdminPanel() {
         permissions={perms}
       />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <AdminHeader page={activePage} tab={contentTab} />
+        <AdminHeader page={activePage} tab={contentTab} permissions={perms} />
         <main key={activePage} className="flex-1 overflow-y-auto animate-page-fade-in">
           {perms.loading ? null
             : blocked ? <AccessDenied />

@@ -36,10 +36,21 @@ const contentTabTitles = {
   legal:       { title: 'Legal Pages',                sub: 'Privacy Policy, Terms, Refund Policy' },
 }
 
-export default function AdminHeader({ page, tab }) {
+// Was previously a hardcoded "Admin" / "Super Admin" label here, with no
+// connection to the real signed-in account at all — every admin, at every
+// role, always saw the literal text "Super Admin" regardless of their
+// actual permissions. That's exactly what made the sidebar bug upstream
+// so confusing to diagnose (the header looked right while the sidebar
+// behaved as if it wasn't).
+const ROLE_LABELS = { superadmin: 'Super Admin', editor: 'Editor', viewer: 'Viewer' }
+
+export default function AdminHeader({ page, tab, permissions }) {
   const { title, sub } = page === 'content'
     ? (contentTabTitles[tab] || contentTabTitles.hero)
     : (pageTitles[page] || pageTitles.dashboard)
+
+  const roleLabel = ROLE_LABELS[permissions?.role] || (permissions?.loading ? 'Checking…' : 'Admin')
+  const initial = (permissions?.email || 'A').charAt(0).toUpperCase()
 
   return (
     <header className="sticky top-0 z-30 bg-white border-b border-gray-100 shadow-sm">
@@ -69,11 +80,11 @@ export default function AdminHeader({ page, tab }) {
           {/* Admin avatar */}
           <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5">
             <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-black bg-[#1655c3]">
-              A
+              {initial}
             </div>
             <div className="hidden sm:block">
-              <div className="text-xs font-bold text-[#1a1a1a]">Admin</div>
-              <div className="text-[10px] text-gray-400">Super Admin</div>
+              <div className="text-xs font-bold text-[#1a1a1a] truncate max-w-[140px]">{permissions?.email || 'Admin'}</div>
+              <div className="text-[10px] text-gray-400">{roleLabel}</div>
             </div>
           </div>
         </div>

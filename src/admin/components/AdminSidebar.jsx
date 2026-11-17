@@ -103,8 +103,18 @@ export default function AdminSidebar({ active, activeTab, onNav, permissions }) 
 
   // While permissions are still loading, show everything rather than a
   // flash of a near-empty sidebar that then fills back in a moment later.
+  //
+  // The `isSuperAdmin` check below is NOT redundant with
+  // `permissions.canAccess()`'s own internal `isSuperAdmin ||` check —
+  // it's a second, independent guard specifically so a Super Admin can
+  // never end up with a hidden sidebar no matter what canAccess() does
+  // internally (a future change to that function, a bad `allowedSections`
+  // value, anything) — this one line is the actual guarantee "Super Admin
+  // always sees every page" rests on, not an implementation detail of
+  // useAdminPermissions.js.
   const canSee = (id, tab) => {
     if (id === 'dashboard') return true
+    if (permissions?.isSuperAdmin) return true
     if (id === 'adminUsers' || id === 'activityLog') return !!permissions?.isSuperAdmin
     if (!permissions || permissions.loading) return true
     return permissions.canAccess(tab ? `${id}:${tab}` : id)
