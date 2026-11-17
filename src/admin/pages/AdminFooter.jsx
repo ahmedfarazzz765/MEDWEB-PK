@@ -3,6 +3,8 @@ import { Plus, X } from 'lucide-react'
 import FormField, { inputCls } from '../components/FormField'
 import AdminButton from '../components/AdminButton'
 import useAdminPermissions from '../hooks/useAdminPermissions'
+import { useToast } from '../components/Toast'
+import { useConfirm } from '../components/ConfirmDialog'
 import { settingsService } from '../../firebase/services'
 
 const DEFAULT_LINKS = [
@@ -19,6 +21,8 @@ const DEFAULT_PROGRAMS = ['Clinical Pharmacy Masterclass', 'Drug Therapy Series'
 
 export default function AdminFooter() {
   const { canWrite } = useAdminPermissions()
+  const toast = useToast()
+  const confirmDialog = useConfirm()
   const [s, setS] = useState(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState('')
@@ -47,7 +51,7 @@ export default function AdminFooter() {
   const save = async (tab) => {
     setSaving(true)
     try { await settingsService.update(s); setSaved(tab); setTimeout(() => setSaved(''), 2000) }
-    catch (e) { alert(e.message) } finally { setSaving(false) }
+    catch (e) { toast.error(e.message) } finally { setSaving(false) }
   }
 
   const setLink = (i, patch) => setS(p => ({ ...p, quickLinks: p.quickLinks.map((l, idx) => idx === i ? { ...l, ...patch } : l) }))
@@ -66,7 +70,7 @@ export default function AdminFooter() {
 
   return (
     <div className="p-4 sm:p-6 space-y-6">
-      <section className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6">
+      <section className="glass-solid p-5 sm:p-6">
         <div className="flex items-center justify-between mb-5">
           <h3 className="font-black text-[#1a1a1a]">Footer Content</h3>
           <SaveBtn tab="footer" />
@@ -89,7 +93,7 @@ export default function AdminFooter() {
         </div>
       </section>
 
-      <section className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6">
+      <section className="glass-solid p-5 sm:p-6">
         <div className="flex items-center justify-between mb-5">
           <h3 className="font-black text-[#1a1a1a]">Quick Links</h3>
           <SaveBtn tab="links" />
@@ -108,7 +112,7 @@ export default function AdminFooter() {
         </div>
       </section>
 
-      <section className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6">
+      <section className="glass-solid p-5 sm:p-6">
         <div className="flex items-center justify-between mb-5">
           <h3 className="font-black text-[#1a1a1a]">Programs & Courses (Footer List)</h3>
           <SaveBtn tab="programs" />

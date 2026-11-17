@@ -8,6 +8,8 @@ import AdminButton from '../components/AdminButton'
 import ActionButtons from '../components/ActionButtons'
 import ResponsesModal from '../components/ResponsesModal'
 import useAdminPermissions from '../hooks/useAdminPermissions'
+import { useToast } from '../components/Toast'
+import { useConfirm } from '../components/ConfirmDialog'
 import { formsService } from '../../firebase/services'
 import { LINK_ICON_OPTIONS } from '../../constants/linkIcons'
 
@@ -30,6 +32,8 @@ const emptyForm = () => ({ title: '', description: '', status: 'Active', fields:
 
 export default function AdminForms() {
   const { canWrite } = useAdminPermissions()
+  const toast = useToast()
+  const confirmDialog = useConfirm()
   const [data, setData]       = useState([])
   const [subs, setSubs]       = useState([])
   const [loading, setLoading] = useState(true)
@@ -118,29 +122,29 @@ export default function AdminForms() {
   }))
 
   const handleSave = async () => {
-    if (!form.title.trim()) { alert('Form title is required'); return }
+    if (!form.title.trim()) { toast.error('Form title is required'); return }
     setSaving(true)
     try {
       if (editId) await formsService.update(editId, form)
       else        await formsService.add(form)
       close()
-    } catch (e) { alert('Error: ' + e.message) }
+    } catch (e) { toast.error('Error: ' + e.message) }
     finally { setSaving(false) }
   }
 
   const handleDelete = async id => {
-    if (!confirm('Delete this form? Submissions are kept.')) return
-    try { await formsService.delete(id) } catch (e) { alert(e.message) }
+    if (!await confirmDialog('Delete this form? Submissions are kept.')) return
+    try { await formsService.delete(id) } catch (e) { toast.error(e.message) }
   }
 
   const toggleStatus = async row => {
-    try { await formsService.update(row.id, { status: row.status === 'Active' ? 'Inactive' : 'Active' }) } catch (e) { alert(e.message) }
+    try { await formsService.update(row.id, { status: row.status === 'Active' ? 'Inactive' : 'Active' }) } catch (e) { toast.error(e.message) }
   }
 
   const copyLink = id => {
     const url = `${window.location.origin}/form/${id}`
     navigator.clipboard?.writeText(url)
-    alert('Form link copied:\n' + url)
+    toast.success('Form link copied.')
   }
 
   const subCount = id => subs.filter(s => s.formId === id).length

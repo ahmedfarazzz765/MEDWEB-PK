@@ -9,12 +9,16 @@ import AdminButton from '../components/AdminButton'
 import ActionButtons from '../components/ActionButtons'
 import CoverImage from '../../components/CoverImage'
 import useAdminPermissions from '../hooks/useAdminPermissions'
+import { useToast } from '../components/Toast'
+import { useConfirm } from '../components/ConfirmDialog'
 import { testimonialsService } from '../../firebase/services'
 
 const emptyForm = () => ({ name: '', uni: '', role: '', text: '', img: '', stars: 5, status: 'Approved', category: '' })
 
 export default function AdminTestimonials() {
   const { canWrite } = useAdminPermissions()
+  const toast = useToast()
+  const confirmDialog = useConfirm()
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(false)
@@ -33,23 +37,23 @@ export default function AdminTestimonials() {
   const set = f => e => setForm(p => ({ ...p, [f]: e.target.value }))
 
   const handleSave = async () => {
-    if (!form.name.trim() || !form.text.trim()) { alert('Name and testimonial text are required'); return }
+    if (!form.name.trim() || !form.text.trim()) { toast.error('Name and testimonial text are required'); return }
     setSaving(true)
     try {
       const payload = { ...form, stars: Number(form.stars) || 5 }
       if (editId) await testimonialsService.update(editId, payload)
       else await testimonialsService.add(payload)
       close()
-    } catch (e) { alert(e.message) } finally { setSaving(false) }
+    } catch (e) { toast.error(e.message) } finally { setSaving(false) }
   }
 
   const handleDelete = async id => {
-    if (!confirm('Delete this testimonial?')) return
-    try { await testimonialsService.delete(id) } catch (e) { alert(e.message) }
+    if (!await confirmDialog('Delete this testimonial?')) return
+    try { await testimonialsService.delete(id) } catch (e) { toast.error(e.message) }
   }
 
   const toggleStatus = async row => {
-    try { await testimonialsService.update(row.id, { status: row.status === 'Approved' ? 'Hidden' : 'Approved' }) } catch (e) { alert(e.message) }
+    try { await testimonialsService.update(row.id, { status: row.status === 'Approved' ? 'Hidden' : 'Approved' }) } catch (e) { toast.error(e.message) }
   }
 
   const columns = [

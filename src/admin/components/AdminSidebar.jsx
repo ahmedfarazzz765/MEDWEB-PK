@@ -5,7 +5,7 @@ import { auth } from '../../firebase/config'
 import useAdminBadgeCounts from '../hooks/useAdminBadgeCounts'
 import {
   LayoutDashboard, Users, Video, BookOpen, Award, Megaphone,
-  FileText, UserCheck, LogOut, ChevronLeft, ChevronRight, Shield, Mail,
+  FileText, UserCheck, LogOut, ChevronLeft, ChevronRight, ChevronDown, Shield, Mail,
   FormInput, Star, Inbox, Link2, ToggleRight, GraduationCap,
   Image, Quote, Sparkles, Building2, ShieldCheck, PanelTop, Scale, ClipboardCheck,
   UserCog, Newspaper, BarChart3, ScrollText, X,
@@ -15,38 +15,17 @@ import {
 // point into AdminContent.jsx's internal tabs also carry a `tab`, so the
 // same page can be reached at a specific sub-section directly from the
 // sidebar without giving each sub-section its own route.
+//
+// Round 15 B: reordered/regrouped per the new brief exactly (Overview ->
+// Programs -> People -> Engagement -> Website Content (collapsible,
+// collapsed by default) -> Settings -> Admin) — this is a pure navigation
+// reorganization, no page/route/permission was added, removed or renamed.
 const GROUPS = [
   {
     label: 'Overview',
     accent: '#7dd3fc',
     items: [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    ],
-  },
-  {
-    label: 'Content',
-    accent: '#6ee7b7',
-    items: [
-      { id: 'sections', label: 'Homepage Sections',      icon: ToggleRight },
-      { id: 'announcements', label: 'Announcements',     icon: Megaphone },
-      { id: 'content',  label: 'Hero',                    icon: Image,       tab: 'hero' },
-      { id: 'content',  label: 'Founder Message',         icon: Quote,       tab: 'founder' },
-      { id: 'content',  label: 'Why MEDWEB',              icon: Sparkles,    tab: 'why' },
-      { id: 'content',  label: 'Trusted Partners',        icon: Building2,   tab: 'partners' },
-      { id: 'content',  label: 'Certificate Verification',icon: ShieldCheck, tab: 'certificate' },
-      { id: 'content',  label: 'Navbar & WelcomeBar',     icon: PanelTop,    tab: 'navbar' },
-      { id: 'content',  label: 'Legal Pages',             icon: Scale,       tab: 'legal' },
-      { id: 'footer',   label: 'Footer',                  icon: Link2 },
-    ],
-  },
-  {
-    label: 'People',
-    accent: '#c4b5fd',
-    items: [
-      { id: 'students',    label: 'Students',       icon: Users },
-      { id: 'team',        label: 'Team',           icon: UserCheck },
-      { id: 'advisory',    label: 'Advisory Board', icon: GraduationCap },
-      { id: 'ambassadors', label: 'Ambassadors',    icon: Megaphone },
     ],
   },
   {
@@ -59,16 +38,43 @@ const GROUPS = [
     ],
   },
   {
+    label: 'People',
+    accent: '#c4b5fd',
+    items: [
+      { id: 'students',    label: 'Students',       icon: Users },
+      { id: 'submissions', label: 'Submissions',    icon: Inbox },
+      { id: 'ambassadors', label: 'Ambassadors',    icon: Megaphone },
+      { id: 'advisory',    label: 'Advisory Board', icon: GraduationCap },
+      { id: 'team',        label: 'Team',           icon: UserCheck },
+    ],
+  },
+  {
     label: 'Engagement',
     accent: '#f9a8d4',
     items: [
       { id: 'testimonials', label: 'Testimonials', icon: Star },
       { id: 'pendingTestimonials', label: 'Pending Reviews', icon: ClipboardCheck, badgeKey: 'pendingReviews' },
-      { id: 'blog',         label: 'Blog Posts',   icon: FileText },
       { id: 'events',       label: 'Events & News', icon: Newspaper, badgeKey: 'autoNewsDrafts' },
+      { id: 'blog',         label: 'Blog Posts',   icon: FileText },
       { id: 'forms',        label: 'Form Builder', icon: FormInput },
-      { id: 'submissions',  label: 'Submissions',  icon: Inbox },
       { id: 'reports',      label: 'Reports',      icon: BarChart3 },
+    ],
+  },
+  {
+    label: 'Website Content',
+    accent: '#6ee7b7',
+    collapsible: true,
+    items: [
+      { id: 'content',  label: 'Hero',                    icon: Image,       tab: 'hero' },
+      { id: 'sections', label: 'Homepage Sections',      icon: ToggleRight },
+      { id: 'announcements', label: 'Announcements',     icon: Megaphone },
+      { id: 'content',  label: 'Founder Message',         icon: Quote,       tab: 'founder' },
+      { id: 'content',  label: 'Why MEDWEB',              icon: Sparkles,    tab: 'why' },
+      { id: 'content',  label: 'Trusted Partners',        icon: Building2,   tab: 'partners' },
+      { id: 'content',  label: 'Certificate Verification',icon: ShieldCheck, tab: 'certificate' },
+      { id: 'content',  label: 'Navbar & WelcomeBar',     icon: PanelTop,    tab: 'navbar' },
+      { id: 'content',  label: 'Legal Pages',             icon: Scale,       tab: 'legal' },
+      { id: 'footer',   label: 'Footer',                  icon: Link2 },
     ],
   },
   {
@@ -91,6 +97,16 @@ const GROUPS = [
 
 export default function AdminSidebar({ active, activeTab, onNav, permissions, mobileOpen, onCloseMobile }) {
   const [collapsed, setCollapsed] = useState(false)
+  // Collapsed by default (Round 15 B) — any collapsible group an admin has
+  // expanded stays expanded for the rest of the session (not persisted
+  // beyond that; reloading goes back to collapsed, matching "collapsed by
+  // default" literally rather than only on first-ever visit).
+  const [expandedGroups, setExpandedGroups] = useState(() => new Set())
+  const toggleGroup = label => setExpandedGroups(prev => {
+    const next = new Set(prev)
+    if (next.has(label)) next.delete(label); else next.add(label)
+    return next
+  })
   const navigate = useNavigate()
   const badges = useAdminBadgeCounts()
 
@@ -132,8 +148,10 @@ export default function AdminSidebar({ active, activeTab, onNav, permissions, mo
         <div className="fixed inset-0 bg-black/40 z-30 lg:hidden" onClick={onCloseMobile} />
       )}
       <aside
-        className={`flex flex-col h-screen sticky top-0 lg:sticky transition-all duration-300 shadow-2xl z-40 bg-admin-navy
-          fixed lg:relative inset-y-0 left-0 ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
+        className={`flex flex-col h-screen transition-all duration-300 z-40
+          bg-admin-navy/70 backdrop-blur-xl border-r border-white/10 shadow-2xl
+          fixed inset-y-0 left-0 lg:sticky lg:top-0 lg:left-auto lg:inset-y-auto
+          ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
         style={{ width: collapsed ? 72 : 250, minWidth: collapsed ? 72 : 250 }}
       >
       {/* Logo */}
@@ -165,23 +183,38 @@ export default function AdminSidebar({ active, activeTab, onNav, permissions, mo
         {GROUPS.map((group, gi) => {
           const visibleItems = group.items.filter(({ id, tab }) => canSee(id, tab))
           if (visibleItems.length === 0) return null
+          // A collapsible group auto-expands when the active page lives
+          // inside it (e.g. reached via the command palette or a direct
+          // URL), even though it's collapsed by default otherwise.
+          const groupHasActive = visibleItems.some(({ id, tab }) => active === id && (!tab || activeTab === tab))
+          const isExpanded = !group.collapsible || expandedGroups.has(group.label) || groupHasActive
           return (
           <div key={group.label} className={gi > 0 ? 'mt-3 pt-3 border-t border-white/10' : ''}>
             {!collapsed && (
-              <div className="flex items-center gap-2 px-4 mb-1.5">
-                <span className="w-1.5 h-1.5 rounded-full" style={{ background: group.accent }} />
-                <span className="text-[10px] font-bold tracking-wider uppercase" style={{ color: group.accent }}>
-                  {group.label}
-                </span>
-              </div>
+              group.collapsible ? (
+                <button onClick={() => toggleGroup(group.label)} className="w-full flex items-center gap-2 px-4 mb-1.5 group/header">
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: group.accent }} />
+                  <span className="text-[10px] font-bold tracking-wider uppercase flex-1 text-left" style={{ color: group.accent }}>
+                    {group.label}
+                  </span>
+                  <ChevronDown size={12} className={`text-white/40 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                </button>
+              ) : (
+                <div className="flex items-center gap-2 px-4 mb-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: group.accent }} />
+                  <span className="text-[10px] font-bold tracking-wider uppercase" style={{ color: group.accent }}>
+                    {group.label}
+                  </span>
+                </div>
+              )
             )}
-            {visibleItems.map(({ id, tab, label, icon: Icon, badgeKey }) => {
+            {isExpanded && visibleItems.map(({ id, tab, label, icon: Icon, badgeKey }) => {
               const isActive = active === id && (!tab || activeTab === tab)
               return (
                 <button
                   key={label}
                   onClick={() => { onNav(id, tab); onCloseMobile?.() }}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 transition-all duration-200 relative group border-r-[3px] ${
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 transition-all duration-200 relative group border-l-[3px] ${
                     isActive ? 'bg-white/15 border-[#95d348]' : 'bg-transparent border-transparent hover:bg-white/5'
                   }`}
                 >

@@ -8,6 +8,7 @@ import AdminButton from '../components/AdminButton'
 import FormField, { inputCls } from '../components/FormField'
 import useAdminPermissions from '../hooks/useAdminPermissions'
 import { useToast } from '../components/Toast'
+import { useConfirm } from '../components/ConfirmDialog'
 import { studentsDbService } from '../../firebase/services'
 
 const PAGE_SIZE = 200
@@ -48,6 +49,7 @@ function makeColumns(openProfile) {
 export default function AdminStudents() {
   const { canDelete } = useAdminPermissions()
   const toast = useToast()
+  const confirmDialog = useConfirm()
   const [data,    setData]    = useState([])
   const [loading, setLoading] = useState(true)
   const [pageSize, setPageSize] = useState(PAGE_SIZE)
@@ -176,7 +178,7 @@ export default function AdminStudents() {
   }
 
   const mergePair = async (keepId, removeId) => {
-    if (!confirm('Merge these two records into one? Every registration/certificate/enrollment from both is kept — nothing is lost. The duplicate record is then deleted. This cannot be undone.')) return
+    if (!await confirmDialog('Merge these two records into one? Every registration/certificate/enrollment from both is kept — nothing is lost. The duplicate record is then deleted. This cannot be undone.')) return
     setMergingId(removeId)
     try {
       await studentsDbService.mergeDuplicates(keepId, removeId)

@@ -4,6 +4,7 @@ import FormField from './FormField'
 import LetterBodyRichEditor from './LetterBodyRichEditor'
 import LetterPositionEditor, { DEFAULT_BODY_POS, DEFAULT_DATE_POS } from './LetterPositionEditor'
 import { settingsService } from '../../firebase/services'
+import { useToast } from './Toast'
 
 const DEFAULT_BODY_TEXT =
 `<p>Dear {name},</p>
@@ -67,6 +68,7 @@ const emptyCfg = () => ({
 // positions, reused by src/lib/ambassadorLetterGenerator.js for every
 // ambassador's download.
 export default function AmbassadorLetterSettings() {
+  const toast = useToast()
   const [cfg, setCfg] = useState(emptyCfg())
   const [saved, setSaved] = useState(false)
   const [loaded, setLoaded] = useState(false)
@@ -91,13 +93,13 @@ export default function AmbassadorLetterSettings() {
       await settingsService.update({ ambassadorLetter: next })
       setSaved(true)
       setTimeout(() => setSaved(false), 1500)
-    } catch (e) { alert(e.message) }
+    } catch (e) { toast.error(e.message) }
   }
 
   if (!loaded) return null
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+    <div className="glass-solid p-5">
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-black text-[#1a1a1a] text-sm">Ambassador Letter Settings</h3>
         {saved && <span className="text-xs font-bold text-green-600">Saved ✓</span>}

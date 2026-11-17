@@ -9,6 +9,8 @@ import AdminButton from '../components/AdminButton'
 import ActionButtons from '../components/ActionButtons'
 import CoverImage from '../../components/CoverImage'
 import useAdminPermissions from '../hooks/useAdminPermissions'
+import { useToast } from '../components/Toast'
+import { useConfirm } from '../components/ConfirmDialog'
 import { advisoryService } from '../../firebase/services'
 
 const emptyForm = () => ({ name: '', role: '', qualification: '', status: 'Active', imageUrl: '' })
@@ -29,6 +31,8 @@ function makeColumns(openEdit, handleDelete) {
 
 export default function AdminAdvisoryBoard() {
   const { canWrite } = useAdminPermissions()
+  const toast = useToast()
+  const confirmDialog = useConfirm()
   const [data,    setData]    = useState([])
   const [loading, setLoading] = useState(true)
   const [modal,   setModal]   = useState(false)
@@ -57,13 +61,13 @@ export default function AdminAdvisoryBoard() {
       if (modal === 'add') await advisoryService.add(form)
       else                 await advisoryService.update(editId, form)
       closeModal()
-    } catch (e) { alert('Error: ' + e.message) }
+    } catch (e) { toast.error('Error: ' + e.message) }
     finally { setSaving(false) }
   }
 
   const handleDelete = async id => {
-    if (!confirm('Remove advisory board member?')) return
-    try { await advisoryService.delete(id) } catch (e) { alert('Error: ' + e.message) }
+    if (!await confirmDialog('Remove advisory board member?')) return
+    try { await advisoryService.delete(id) } catch (e) { toast.error('Error: ' + e.message) }
   }
 
   const columns = makeColumns(openEdit, handleDelete)
@@ -80,7 +84,7 @@ export default function AdminAdvisoryBoard() {
         {data.map((m, i) => {
           const col = colors[i % colors.length]
           return (
-            <div key={m.id || i} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex items-center gap-4 hover:shadow-md transition-shadow">
+            <div key={m.id || i} className="glass-solid p-5 flex items-center gap-4 hover:shadow-md transition-shadow">
               {m.imageUrl
                 ? <CoverImage src={m.imageUrl} alt={m.name || ""} bias="center 25%" className="w-12 h-12 rounded-2xl shrink-0" />
                 : <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-black text-base shrink-0" style={{ background: col }}>

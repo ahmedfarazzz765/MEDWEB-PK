@@ -14,6 +14,8 @@ import { sendNewsletterEmail, getRemainingEmailQuota } from '../../firebase/emai
 import { DEFAULT_BLOG_CATEGORIES } from '../../constants/blogCategories'
 import CoverImage from '../../components/CoverImage'
 import useAdminPermissions from '../hooks/useAdminPermissions'
+import { useToast } from '../components/Toast'
+import { useConfirm } from '../components/ConfirmDialog'
 
 // `content` is now rich-text HTML (see RichTextEditor.jsx) — this fallback
 // (used only when the admin left Excerpt blank) strips tags first so a
@@ -66,6 +68,8 @@ function makeColumns(openEdit, handlePublish, handleDelete, canWrite) {
 
 export default function AdminBlog() {
   const { canWrite } = useAdminPermissions()
+  const toast = useToast()
+  const confirmDialog = useConfirm()
   const [activeTab, setActiveTab] = useState('posts') // 'posts' | 'categories'
   const [data,    setData]    = useState([])
   const [dbCategories, setDbCategories] = useState([])
@@ -180,7 +184,7 @@ export default function AdminBlog() {
         setEditorContent(existing?.content || '')
         setContentEditorOpen(true)
       }
-    } catch (e) { alert('Error: ' + e.message) }
+    } catch (e) { toast.error('Error: ' + e.message) }
     finally { setSaving(false) }
   }
 
@@ -202,7 +206,7 @@ export default function AdminBlog() {
     try {
       await blogService.update(editorPost.id, { content: editorContent, status: 'Draft' })
       setEditorPost(prev => ({ ...prev, status: 'Draft' }))
-    } catch (e) { alert('Error: ' + e.message) }
+    } catch (e) { toast.error('Error: ' + e.message) }
     finally { setEditorSaving(false) }
   }
 
@@ -218,7 +222,7 @@ export default function AdminBlog() {
         maybeNotifySubscribers({ ...editorPost, content: editorContent, status: 'Published' })
       }
       closeContentEditor()
-    } catch (e) { alert('Error: ' + e.message) }
+    } catch (e) { toast.error('Error: ' + e.message) }
     finally { setEditorSaving(false) }
   }
 
@@ -227,11 +231,11 @@ export default function AdminBlog() {
       await blogService.publish(id)
       const post = data.find(p => p.id === id)
       if (post) maybeNotifySubscribers({ ...post, status: 'Published' })
-    } catch (e) { alert('Error: ' + e.message) }
+    } catch (e) { toast.error('Error: ' + e.message) }
   }
   const handleDelete = async id => {
-    if (!confirm('Delete post?')) return
-    try { await blogService.delete(id) } catch (e) { alert('Error: ' + e.message) }
+    if (!await confirmDialog('Delete post?')) return
+    try { await blogService.delete(id) } catch (e) { toast.error('Error: ' + e.message) }
   }
 
   // --- Category Handlers ---
@@ -246,13 +250,13 @@ export default function AdminBlog() {
       if (catModal === 'add') await blogCategoriesService.add({ name: catForm.name.trim() })
       else                     await blogCategoriesService.update(catEditId, { name: catForm.name.trim() })
       closeCatModal()
-    } catch (e) { alert('Error: ' + e.message) }
+    } catch (e) { toast.error('Error: ' + e.message) }
     finally { setCatSaving(false) }
   }
 
   const handleDeleteCategory = async id => {
-    if (!confirm('Delete this category? Posts already assigned to it keep their category text.')) return
-    try { await blogCategoriesService.delete(id) } catch (e) { alert('Error: ' + e.message) }
+    if (!await confirmDialog('Delete this category? Posts already assigned to it keep their category text.')) return
+    try { await blogCategoriesService.delete(id) } catch (e) { toast.error('Error: ' + e.message) }
   }
 
   // Runs entirely in this admin's own open tab — loops through active
@@ -310,7 +314,7 @@ export default function AdminBlog() {
       </div>
 
       {data.filter(b => b.views > 0).length > 0 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+        <div className="glass-solid p-5">
           <h3 className="font-bold text-[#1a1a1a] text-sm mb-4">Top Posts by Views</h3>
           <div className="space-y-3">
             {[...data].filter(b => b.views > 0).sort((a, b) => b.views - a.views).slice(0, 5).map((post, i) => {
@@ -357,7 +361,7 @@ export default function AdminBlog() {
           actions={canWrite && <AdminButton size="sm" onClick={openAdd}>+ New Post</AdminButton>}
         />
       ) : (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 space-y-4">
+        <div className="glass-solid p-5 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-[#1a1a1a] text-sm">Blog Categories</h3>
             {canWrite && <AdminButton size="sm" onClick={openAddCategory}>+ Add Category</AdminButton>}

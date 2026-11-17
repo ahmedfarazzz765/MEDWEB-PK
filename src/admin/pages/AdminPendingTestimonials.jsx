@@ -7,6 +7,8 @@ import { pendingTestimonialsService, testimonialsService, youtubeFetchStateServi
 import { fetchYouTubeReviews } from '../lib/reviewFetchers'
 import CoverImage from '../../components/CoverImage'
 import useAdminPermissions from '../hooks/useAdminPermissions'
+import { useToast } from '../components/Toast'
+import { useConfirm } from '../components/ConfirmDialog'
 
 function StarPicker({ value, onChange }) {
   return (
@@ -47,11 +49,11 @@ function AddGoogleReviewForm() {
       setForm(emptyGoogleForm())
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
-    } catch (e) { alert(e.message) } finally { setSaving(false) }
+    } catch (e) { toast.error(e.message) } finally { setSaving(false) }
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+    <div className="glass-solid p-5">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <MapPin size={16} className="text-[#1655c3]" />
@@ -87,9 +89,11 @@ function AddGoogleReviewForm() {
 
 function PendingCard({ item, onApprove, onReject, busy }) {
   const { canWrite } = useAdminPermissions()
+  const toast = useToast()
+  const confirmDialog = useConfirm()
   const isGoogle = item.source === 'Google'
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex flex-col gap-3">
+    <div className="glass-solid p-4 flex flex-col gap-3">
       <div className="flex items-center gap-2">
         <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${isGoogle ? 'bg-blue-50 text-[#1655c3]' : 'bg-red-50 text-red-500'}`}>
           {isGoogle ? <MapPin size={10} /> : <Youtube size={10} />} {item.source}
@@ -142,6 +146,8 @@ function PendingCard({ item, onApprove, onReject, busy }) {
 
 export default function AdminPendingTestimonials() {
   const { canWrite } = useAdminPermissions()
+  const toast = useToast()
+  const confirmDialog = useConfirm()
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
   const [fetching, setFetching] = useState(false)
@@ -185,13 +191,13 @@ export default function AdminPendingTestimonials() {
 
   const handleApprove = async item => {
     setBusyId(item.id)
-    try { await pendingTestimonialsService.approve(item) } catch (e) { alert(e.message) }
+    try { await pendingTestimonialsService.approve(item) } catch (e) { toast.error(e.message) }
     finally { setBusyId(null) }
   }
 
   const handleReject = async item => {
     setBusyId(item.id)
-    try { await pendingTestimonialsService.reject(item.id) } catch (e) { alert(e.message) }
+    try { await pendingTestimonialsService.reject(item.id) } catch (e) { toast.error(e.message) }
     finally { setBusyId(null) }
   }
 
@@ -203,7 +209,7 @@ export default function AdminPendingTestimonials() {
         <StatCard icon={Youtube} label="YouTube Comments" value={loading ? '…' : youtubeCount} color="#ef4444" bg="#fef2f2" />
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+      <div className="glass-solid p-5">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h3 className="font-black text-[#1a1a1a] text-sm mb-1">Fetch New Reviews</h3>

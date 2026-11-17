@@ -5,6 +5,8 @@ import { sendTestEmail, BREVO_MONTHLY_QUOTA } from '../../firebase/email'
 import FormField, { inputCls } from '../components/FormField'
 import AdminButton from '../components/AdminButton'
 import useAdminPermissions from '../hooks/useAdminPermissions'
+import { useToast } from '../components/Toast'
+import { useConfirm } from '../components/ConfirmDialog'
 
 const emptyEmail = () => ({
   enabled: false,
@@ -15,6 +17,8 @@ const emptyEmail = () => ({
 
 export default function AdminEmailSettings() {
   const { canWrite } = useAdminPermissions()
+  const toast = useToast()
+  const confirmDialog = useConfirm()
   const [email, setEmail]       = useState(emptyEmail())
   const [loading, setLoading]   = useState(true)
   const [saving, setSaving]     = useState(false)
@@ -40,7 +44,7 @@ export default function AdminEmailSettings() {
       setTimeout(() => setSaved(false), 2500)
     } catch (err) {
       console.error(err)
-      alert('Failed to save: ' + (err?.message || err))
+      toast.error('Failed to save: ' + (err?.message || err))
     } finally { setSaving(false) }
   }
 
@@ -95,7 +99,7 @@ export default function AdminEmailSettings() {
         </ol>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6 space-y-4">
+      <div className="glass-solid p-5 sm:p-6 space-y-4">
         <label className="flex items-center gap-3 cursor-pointer select-none">
           <input type="checkbox" checked={email.enabled} onChange={set('enabled')} className="w-4 h-4 accent-[#1655c3]" />
           <span className="text-sm font-semibold text-gray-700">Enable automatic emails</span>
@@ -131,7 +135,7 @@ export default function AdminEmailSettings() {
       </div>
 
       {/* Test */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6 mt-5">
+      <div className="glass-solid p-5 sm:p-6 mt-5">
         <h3 className="font-bold text-[#1a1a1a] mb-1">Send a test email</h3>
         <p className="text-xs text-gray-500 mb-3">Saves your settings, then sends a test to confirm everything works.</p>
         <div className="flex flex-col sm:flex-row gap-3">

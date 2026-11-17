@@ -5,6 +5,8 @@ import DataTable from '../components/DataTable'
 import Modal from '../components/Modal'
 import AdminButton from '../components/AdminButton'
 import useAdminPermissions from '../hooks/useAdminPermissions'
+import { useToast } from '../components/Toast'
+import { useConfirm } from '../components/ConfirmDialog'
 import { courseEnrollmentsService, coursesService, courseJoiningLinksService, activityLogService } from '../../firebase/services'
 import { sendCourseEnrollmentApprovedEmail, sendCourseEnrollmentRejectedEmail } from '../../firebase/email'
 import {
@@ -29,6 +31,8 @@ function downloadCsv(filename, header, rows) {
 // one course and there's no cross-course view asked for.
 export default function AdminCourseEnrollments({ course, onClose }) {
   const { canWrite } = useAdminPermissions()
+  const toast = useToast()
+  const confirmDialog = useConfirm()
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState('All')
@@ -41,7 +45,7 @@ export default function AdminCourseEnrollments({ course, onClose }) {
   const [counts, setCounts] = useState({ Pending: 0, Approved: 0, Rejected: 0 })
   const [googleAuth, setGoogleAuth] = useState({ connected: false, email: null })
   const [connecting, setConnecting] = useState(false)
-  const [toast, setToast] = useState(null) // { text, retryRow } | null
+  const [gcBanner, setGcBanner] = useState(null) // { text, retryRow } | null
   const [bulkSyncing, setBulkSyncing] = useState(false)
   const [contactBusyId, setContactBusyId] = useState(null)
 
@@ -50,7 +54,7 @@ export default function AdminCourseEnrollments({ course, onClose }) {
   const handleConnectGoogle = async () => {
     setConnecting(true)
     try { await connectGoogleContacts() }
-    catch (e) { setToast({ text: 'Google Contacts connection failed: ' + e.message }) }
+    catch (e) { setGcBanner({ text: 'Google Contacts connection failed: ' + e.message }) }
     finally { setConnecting(false) }
   }
 
@@ -67,15 +71,15 @@ export default function AdminCourseEnrollments({ course, onClose }) {
       await courseEnrollmentsService.saveContactInfo(row.id, { contactResourceName: resourceName })
       setRows(prev => prev.map(r => r.id === row.id ? { ...r, contactSaved: true, contactResourceName: resourceName } : r))
     } catch (e) {
-      setToast({ text: `Couldn't save contact for ${nameOf(row)}: ${e.message}`, retryRow: row })
+      setGcBanner({ text: `Couldn't save contact for ${nameOf(row)}: ${e.message}`, retryRow: row })
     } finally {
       setContactBusyId(null)
     }
   }
 
   const retryToast = () => {
-    if (toast?.retryRow) saveContactForEnrollment(toast.retryRow)
-    setToast(null)
+    if (gcBanner?.retryRow) saveContactForEnrollment(gcBanner.retryRow)
+    setGcBanner(null)
   }
 
   // Sequential with a 300ms gap between each — the People API has
@@ -90,7 +94,7 @@ export default function AdminCourseEnrollments({ course, onClose }) {
         await saveContactForEnrollment(row)
         await new Promise(res => setTimeout(res, 300))
       }
-      setToast({ text: `Synced ${targets.length} contact${targets.length === 1 ? '' : 's'}.` })
+      setGcBanner({ text: `Synced ${targets.length} contact${targets.length === 1 ? '' : 's'}.` })
     } finally {
       setBulkSyncing(false)
     }
@@ -154,13 +158,13 @@ export default function AdminCourseEnrollments({ course, onClose }) {
         communityLink: course.communityLink || '', communityName: course.communityName || '',
       }).catch(() => {})
       saveContactForEnrollment(row).catch(() => {})
-    } catch (e) { alert('Error: ' + e.message) }
+    } catch (e) { toast.error('Error: ' + e.message) }
     finally { setBusyId(null) }
   }
 
   const openReject = row => { setRejectTarget(row); setRejectReason('') }
   const confirmReject = async () => {
-    if (!rejectReason.trim()) { alert('Please enter a reason for rejecting this enrollment.'); return }
+    if (!rejectReason.trim()) { toast.error('Please enter a reason for rejecting this enrollment.'); return }
     setBusyId(rejectTarget.id)
     try {
       await courseEnrollmentsService.updateStatus(rejectTarget.id, 'Rejected', { rejectionReason: rejectReason.trim() })
@@ -171,7 +175,7 @@ export default function AdminCourseEnrollments({ course, onClose }) {
         reason: rejectReason.trim(), enrollmentId: rejectTarget.enrollmentId,
       }).catch(() => {})
       setRejectTarget(null)
-    } catch (e) { alert('Error: ' + e.message) }
+    } catch (e) { toast.error('Error: ' + e.message) }
     finally { setBusyId(null) }
   }
 
@@ -281,12 +285,12 @@ export default function AdminCourseEnrollments({ course, onClose }) {
           </div>
         </div>
 
-        {toast && (
+        {gcBanner && (
           <div className="flex items-center justify-between gap-3 text-xs font-semibold bg-amber-50 text-amber-700 rounded-xl px-4 py-2.5">
-            <span>{toast.text}</span>
+            <span>{gcBanner.text}</span>
             <div className="flex items-center gap-3 shrink-0">
-              {toast.retryRow && <button onClick={retryToast} className="underline">Retry save contact</button>}
-              <button onClick={() => setToast(null)} className="text-amber-400 hover:text-amber-600"><XIcon size={13} /></button>
+              {gcBanner.retryRow && <button onClick={retryToast} className="underline">Retry save contact</button>}
+              <button onClick={() => setGcBanner(null)} className="text-amber-400 hover:text-amber-600"><XIcon size={13} /></button>
             </div>
           </div>
         )}

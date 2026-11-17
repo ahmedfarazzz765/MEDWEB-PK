@@ -8,7 +8,7 @@ import { Folder } from 'lucide-react'
 // `key`/`label`/`sublabel`/`count` mean.
 export default function FolderGrid({ title, items, onOpen, actions, emptyMessage }) {
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+    <div className="glass-solid p-5">
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-bold text-[#1a1a1a] text-base">{title}</h3>
         {actions}

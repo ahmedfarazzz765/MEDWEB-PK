@@ -13,6 +13,7 @@ import {
   Link2, Image as ImageIcon, List, ListOrdered, AlignLeft, AlignCenter, AlignRight, Quote, Undo2, Redo2,
 } from 'lucide-react'
 import { uploadToCloudinary } from '../../firebase/cloudinary'
+import { useToast } from './Toast'
 
 // Curated, not exhaustive — matches the site's own typography (Poppins)
 // plus a small set of formal/serif/mono alternates for occasional emphasis.
@@ -50,6 +51,7 @@ const btnCls = active =>
 // surface (the full-page blog editor) without changing the compact default
 // used anywhere this is embedded in a small modal.
 export default function RichTextEditor({ value, onChange, folder = 'medweb/blog/content', contentHeightClass = 'max-h-[400px] overflow-y-auto' }) {
+  const toast = useToast()
   const fileInputRef = useRef(null)
 
   const editor = useEditor({
@@ -113,7 +115,7 @@ export default function RichTextEditor({ value, onChange, folder = 'medweb/blog/
       const url = await uploadToCloudinary(file, folder)
       editor.chain().focus().setImage({ src: url }).run()
     } catch (err) {
-      alert('Image upload failed: ' + err.message)
+      toast.error('Image upload failed: ' + err.message)
     } finally {
       e.target.value = ''
     }

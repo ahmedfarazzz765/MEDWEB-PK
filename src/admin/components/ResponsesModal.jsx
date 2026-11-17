@@ -6,6 +6,8 @@ import { inputCls } from './FormField'
 import AdminButton from './AdminButton'
 import { toIsoString, formsService } from '../../firebase/services'
 import useAdminPermissions from '../hooks/useAdminPermissions'
+import { useToast } from './Toast'
+import { useConfirm } from './ConfirmDialog'
 
 const formatDateStr = (val) => {
   const str = toIsoString(val)
@@ -31,6 +33,8 @@ const CERT_STATUS_STYLES = {
 
 export default function ResponsesModal({ form, subs: initialSubs, onClose }) {
   const { canDelete } = useAdminPermissions()
+  const toast = useToast()
+  const confirmDialog = useConfirm()
   const [q, setQ] = useState('')
   const [subs, setSubs] = useState(initialSubs)
   const [deletingId, setDeletingId] = useState(null)
@@ -73,12 +77,12 @@ export default function ResponsesModal({ form, subs: initialSubs, onClose }) {
   // AdminForms.jsx's real "Responses" use of this modal.
   const canDeleteHere = canDelete && !showCertColumn
   const handleDelete = async sub => {
-    if (!confirm('Delete this response? This cannot be undone.')) return
+    if (!await confirmDialog('Delete this response? This cannot be undone.')) return
     setDeletingId(sub.id)
     try {
       await formsService.deleteSubmission(sub.id)
       setSubs(prev => prev.filter(s => s.id !== sub.id))
-    } catch (e) { alert('Error: ' + e.message) }
+    } catch (e) { toast.error('Error: ' + e.message) }
     finally { setDeletingId(null) }
   }
 

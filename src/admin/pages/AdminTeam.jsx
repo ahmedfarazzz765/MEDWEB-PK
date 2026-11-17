@@ -10,6 +10,8 @@ import ActionButtons from '../components/ActionButtons'
 import CoverImage from '../../components/CoverImage'
 import SortableGrid, { SortableItem } from '../components/SortableGrid'
 import useAdminPermissions from '../hooks/useAdminPermissions'
+import { useToast } from '../components/Toast'
+import { useConfirm } from '../components/ConfirmDialog'
 import { teamService, teamCategoriesService, settingsService, formsService } from '../../firebase/services'
 
 export const PRESET_CATEGORIES = [
@@ -105,6 +107,8 @@ function makeMemberColumns(openEdit, handleDelete) {
 
 export default function AdminTeam() {
   const { canWrite } = useAdminPermissions()
+  const toast = useToast()
+  const confirmDialog = useConfirm()
   const [activeTab, setActiveTab] = useState('members') // 'members' | 'categories'
   const [data, setData] = useState([])
   const [dbCategories, setDbCategories] = useState([])
@@ -184,7 +188,7 @@ export default function AdminTeam() {
   // global `order` field.
   const handleReorderMembers = reordered => {
     setData(reordered) // optimistic
-    teamService.reorder(reordered).catch(e => alert('Error saving order: ' + e.message))
+    teamService.reorder(reordered).catch(e => toast.error('Error saving order: ' + e.message))
   }
 
   // Backfill: any category card saved before drag-reorder existed gets an
@@ -202,7 +206,7 @@ export default function AdminTeam() {
 
   const handleReorderCategories = reordered => {
     setDbCategories(reordered) // optimistic
-    teamCategoriesService.reorder(reordered).catch(e => alert('Error saving order: ' + e.message))
+    teamCategoriesService.reorder(reordered).catch(e => toast.error('Error saving order: ' + e.message))
   }
 
   // All unique category names from DB + Presets
@@ -274,18 +278,18 @@ export default function AdminTeam() {
       }
       setMemberModal(false)
     } catch (e) {
-      alert('Error: ' + e.message)
+      toast.error('Error: ' + e.message)
     } finally {
       setSaving(false)
     }
   }
 
   const handleDeleteMember = async id => {
-    if (!confirm('Remove team member?')) return
+    if (!await confirmDialog('Remove team member?')) return
     try {
       await teamService.delete(id)
     } catch (e) {
-      alert('Error: ' + e.message)
+      toast.error('Error: ' + e.message)
     }
   }
 
@@ -311,7 +315,7 @@ export default function AdminTeam() {
 
   const handleSaveCategory = async () => {
     if (!catForm.name.trim()) return
-    if (catForm.applyEnabled && !catForm.applyFormId) { alert('Select a form to link, or disable Apply Now.'); return }
+    if (catForm.applyEnabled && !catForm.applyFormId) { toast.error('Select a form to link, or disable Apply Now.'); return }
 
     const payload = {
       name: catForm.name.trim(),
@@ -331,18 +335,18 @@ export default function AdminTeam() {
       }
       setCatModal(false)
     } catch (e) {
-      alert('Error: ' + e.message)
+      toast.error('Error: ' + e.message)
     } finally {
       setSaving(false)
     }
   }
 
   const handleDeleteCategory = async id => {
-    if (!confirm('Delete this category card?')) return
+    if (!await confirmDialog('Delete this category card?')) return
     try {
       await teamCategoriesService.delete(id)
     } catch (e) {
-      alert('Error: ' + e.message)
+      toast.error('Error: ' + e.message)
     }
   }
 
@@ -432,7 +436,7 @@ export default function AdminTeam() {
                 {data.map((m, i) => {
                   const col = colors[i % colors.length]
                   return (
-                    <SortableItem key={m.id || i} id={m.id || i} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex items-center gap-4 hover:shadow-md transition-shadow overflow-hidden">
+                    <SortableItem key={m.id || i} id={m.id || i} className="glass-solid p-5 flex items-center gap-4 hover:shadow-md transition-shadow overflow-hidden">
                       {m.imageUrl ? (
                         <CoverImage src={m.imageUrl} alt={m.name || ""} bias="center 25%" className="w-12 h-12 rounded-2xl shrink-0" />
                       ) : (
@@ -463,7 +467,7 @@ export default function AdminTeam() {
               {filteredMembers.map((m, i) => {
                 const col = colors[i % colors.length]
                 return (
-                  <div key={m.id || i} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex items-center gap-4 hover:shadow-md transition-shadow relative overflow-hidden">
+                  <div key={m.id || i} className="glass-solid p-5 flex items-center gap-4 hover:shadow-md transition-shadow relative overflow-hidden">
                     {m.imageUrl ? (
                       <CoverImage src={m.imageUrl} alt={m.name || ""} bias="center 25%" className="w-12 h-12 rounded-2xl shrink-0" />
                     ) : (

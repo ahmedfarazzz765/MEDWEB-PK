@@ -275,7 +275,21 @@ export const webinarsService = {
   // date-range query, not a full-collection read: even the 365-day toggle
   // only ever reads docs created in that window, never the whole
   // collection's history.
-  getRegistrationsSince: sinceMs => getAll('webinarRegistrations', where('createdAt', '>=', new Date(sinceMs)), orderBy('createdAt', 'desc'), limit(2000)),
+  // No `where()` on a date field and no `orderBy` requirement — Round 15
+  // bug: the dashboard's charts and "Registrations This Month" KPI showed
+  // 0 despite 195+ real registrations existing. Root cause: a server-side
+  // `where('createdAt', '>=', ...)` / `orderBy('createdAt', ...)` silently
+  // returns nothing for any doc where that exact field is missing or a
+  // different type than Firestore expects for the comparison — and this
+  // collection's documents don't uniformly have one shape (some only ever
+  // got `registeredAt` as a plain ISO string, not `createdAt` as a real
+  // Timestamp, depending on which code path/era wrote them). Fetches up to
+  // `limitN` registrations with NO date filtering at all; the caller
+  // normalizes every doc's date with toIsoString() (handles Timestamp/ISO
+  // string/epoch number alike) and buckets/filters client-side instead.
+  // 195 total today — limitN is a safety cap for future growth, not an
+  // expected-size assumption.
+  getAllRegistrationsCapped: (limitN = 5000) => getAll('webinarRegistrations', limit(limitN)),
   // Live feed of every registration doc, across all webinars — the ground
   // truth for "how many registered" (each webinar's own `registered`
   // counter is a best-effort increment at submit time that can silently
@@ -764,10 +778,14 @@ export const studentsDbService = {
   ),
   getCount: () => getCountFromServer(col(STUDENT_DB_COL)).then(s => s.data().count),
   // Capped sample (default 500) for the dashboard's "Students by
-  // University/City" donut — a representative recent slice, not an
-  // exhaustive scan. The donut/caption makes clear it's based on a sample
-  // when the real total exceeds this.
-  getSample: (limitN = 500) => getAll(STUDENT_DB_COL, orderBy('updatedAt', 'desc'), limit(limitN)),
+  // University/City" donut — a representative slice, not an exhaustive
+  // scan. Deliberately NO orderBy('updatedAt') here (Round 15 fix):
+  // ordering by a field excludes any document that doesn't have it at
+  // all, and not every studentDatabase doc across this collection's
+  // history is guaranteed to carry `updatedAt` — that silently dropped
+  // students from this sample and from the donut, with no error. A bare
+  // limit() has no such requirement.
+  getSample: (limitN = 500) => getAll(STUDENT_DB_COL, limit(limitN)),
   // Merges `removeId` into `keepId`: unions registrations/certificates/
   // enrollments (deduped by webinarId/certCode/courseId, same rule each
   // upsertFrom* method already uses), fills in any blank name/email/
@@ -1053,15 +1071,18 @@ export const advisoryService = {
 // .length/.filter() them — an aggregation count query is billed far more
 // cheaply than fetching N whole documents, and the dashboard never needed
 // anything but these counts anyway.
+// NOTE: registrationsThisMonth/registrationsLastMonth are NOT computed
+// here with a server-side `where('createdAt', ...)` count query anymore —
+// that's exactly what caused Round 15's "Registrations This Month shows 0"
+// bug (see getAllRegistrationsCapped's comment). AdminDashboard.jsx derives
+// both from the same capped, unfiltered registrations fetch the charts
+// already use, normalizing dates with toIsoString() client-side instead.
 export async function getDashboardStats() {
   const count = snap => snap.data().count
-  const now = new Date()
-  const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-  const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
   const [
     students, webinars, upcomingWebinars, courses, activeCourses,
     certs, validCerts, ambassadors, activeAmbassadors,
-    regsThisMonth, regsLastMonth, pendingEnrollments, publishedBlog, publishedEvents,
+    totalRegistrations, pendingEnrollments, publishedBlog, publishedEvents,
   ] = await Promise.all([
     getCountFromServer(col(STUDENT_DB_COL)),
     getCountFromServer(col(COLS.webinars)),
@@ -1072,8 +1093,10 @@ export async function getDashboardStats() {
     getCountFromServer(query(col(COLS.certificates), where('status', '==', 'Valid'))),
     getCountFromServer(col(COLS.ambassadors)),
     getCountFromServer(query(col(COLS.ambassadors), where('status', '==', 'Active'))),
-    getCountFromServer(query(col('webinarRegistrations'), where('createdAt', '>=', startOfThisMonth))),
-    getCountFromServer(query(col('webinarRegistrations'), where('createdAt', '>=', startOfLastMonth), where('createdAt', '<', startOfThisMonth))),
+    // No where() — a plain count of the whole collection is immune to the
+    // field-shape issue and is what AdminDashboard.jsx cross-checks its
+    // client-side fetch's row count against (console.warn if they diverge).
+    getCountFromServer(col('webinarRegistrations')),
     getCountFromServer(query(col('courseEnrollments'), where('status', '==', 'Pending'))),
     getCountFromServer(query(col(COLS.blog), where('status', '==', 'Published'))),
     getCountFromServer(query(collection(db, 'news'), where('status', '==', 'Published'))),
@@ -1086,8 +1109,7 @@ export async function getDashboardStats() {
     activeCourses: count(activeCourses),
     validCerts: count(validCerts),
     activeAmbassadors: count(activeAmbassadors),
-    registrationsThisMonth: count(regsThisMonth),
-    registrationsLastMonth: count(regsLastMonth),
+    totalRegistrations: count(totalRegistrations),
     pendingEnrollments: count(pendingEnrollments),
     publishedPosts: count(publishedBlog) + count(publishedEvents),
   }
@@ -1408,10 +1430,31 @@ export async function ensureDefaultWebinarForm() {
   })
 }
 
-// Helper to safely convert Firestore Timestamps, Date objects, or string values to ISO strings
+// Helper to safely convert Firestore Timestamps, Date objects, epoch numbers,
+// or string values to ISO strings — the ONE place every chart/KPI on the
+// admin dashboard reads a date through (Round 15: the dashboard's charts
+// and "Registrations This Month" KPI showed 0 despite 195+ real
+// registrations existing, traced to date fields that aren't uniformly one
+// type across the collection's history — some docs predate a given field,
+// some store it differently. Never assume a single shape again here.)
 export function toIsoString(val) {
-  if (!val) return ''
-  if (typeof val === 'string') return val
+  if (val === null || val === undefined || val === '') return ''
+  if (typeof val === 'string') {
+    // A bare numeric string (epoch ms, rare but seen in older ad-hoc writes)
+    // — only treat it as epoch millis if it parses to a sane recent-ish
+    // range, so a genuine ISO string is never misread.
+    if (/^\d{10,13}$/.test(val)) return toIsoString(Number(val))
+    const d = new Date(val)
+    return isNaN(d.getTime()) ? '' : val
+  }
+  if (typeof val === 'number') {
+    // Firestore/JS epoch convention is milliseconds; a 10-digit number is
+    // almost certainly seconds (Unix epoch seconds, as some external
+    // imports/webhooks use) rather than ms — ms would be 13 digits for any
+    // date after 2001.
+    const ms = val < 10_000_000_000 ? val * 1000 : val
+    try { return new Date(ms).toISOString() } catch { return '' }
+  }
   if (typeof val.toDate === 'function') {
     try { return val.toDate().toISOString() } catch (e) { return '' }
   }

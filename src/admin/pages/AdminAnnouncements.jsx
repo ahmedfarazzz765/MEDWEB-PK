@@ -11,6 +11,8 @@ import CoverImage from '../../components/CoverImage'
 import SortableGrid, { SortableItem } from '../components/SortableGrid'
 import TagInput from '../components/TagInput'
 import useAdminPermissions from '../hooks/useAdminPermissions'
+import { useToast } from '../components/Toast'
+import { useConfirm } from '../components/ConfirmDialog'
 import { announcementsService } from '../../firebase/services'
 import { isAnnouncementActive } from '../../lib/announcements'
 
@@ -34,6 +36,8 @@ const emptyForm = () => ({
 
 export default function AdminAnnouncements() {
   const { canWrite } = useAdminPermissions()
+  const toast = useToast()
+  const confirmDialog = useConfirm()
   const [data,    setData]    = useState([])
   const [loading, setLoading] = useState(true)
   const [modal,   setModal]   = useState(false)
@@ -61,7 +65,7 @@ export default function AdminAnnouncements() {
 
   const handleReorder = reordered => {
     setData(reordered) // optimistic
-    announcementsService.reorder(reordered).catch(e => alert('Error saving order: ' + e.message))
+    announcementsService.reorder(reordered).catch(e => toast.error('Error saving order: ' + e.message))
   }
 
   const openAdd  = () => { setForm(emptyForm()); setEditId(null); setModal('add') }
@@ -85,8 +89,8 @@ export default function AdminAnnouncements() {
   const setImg = url => setForm(prev => ({ ...prev, imageUrl: url }))
 
   const handleSave = async () => {
-    if (!form.title.trim()) { alert('Title is required'); return }
-    if (form.linkType === 'external' && !form.externalUrl.trim()) { alert('External URL is required for an external link'); return }
+    if (!form.title.trim()) { toast.error('Title is required'); return }
+    if (form.linkType === 'external' && !form.externalUrl.trim()) { toast.error('External URL is required for an external link'); return }
     setSaving(true)
     try {
       const existingSlugs = new Set(data.filter(a => a.id !== editId).map(a => a.slug).filter(Boolean))
@@ -98,17 +102,17 @@ export default function AdminAnnouncements() {
       if (modal === 'add') await announcementsService.add(payload)
       else                 await announcementsService.update(editId, payload)
       closeModal()
-    } catch (e) { alert('Error: ' + e.message) }
+    } catch (e) { toast.error('Error: ' + e.message) }
     finally { setSaving(false) }
   }
 
   const handleDelete = async id => {
-    if (!confirm('Delete this announcement?')) return
-    try { await announcementsService.delete(id) } catch (e) { alert('Error: ' + e.message) }
+    if (!await confirmDialog('Delete this announcement?')) return
+    try { await announcementsService.delete(id) } catch (e) { toast.error('Error: ' + e.message) }
   }
 
   const toggleEnabled = async row => {
-    try { await announcementsService.update(row.id, { enabled: row.enabled === false }) } catch (e) { alert(e.message) }
+    try { await announcementsService.update(row.id, { enabled: row.enabled === false }) } catch (e) { toast.error(e.message) }
   }
 
   const activeCount = data.filter(isAnnouncementActive).length
@@ -165,7 +169,7 @@ export default function AdminAnnouncements() {
       </div>
 
       {data.length > 1 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+        <div className="glass-solid p-5">
           <h3 className="font-bold text-[#1a1a1a] text-sm mb-1">Reorder (Priority)</h3>
           <p className="text-xs text-gray-400 mb-4">Drag the <span className="font-semibold text-gray-500">⠿</span> handle — first card shows first when multiple are active.</p>
           <SortableGrid items={data} onReorder={handleReorder} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">

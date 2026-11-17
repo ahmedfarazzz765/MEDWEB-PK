@@ -11,6 +11,8 @@ import CertPositionEditor from '../components/CertPositionEditor'
 import RichTextEditor from '../components/RichTextEditor'
 import CoverImage from '../../components/CoverImage'
 import useAdminPermissions from '../hooks/useAdminPermissions'
+import { useToast } from '../components/Toast'
+import { useConfirm } from '../components/ConfirmDialog'
 import { webinarsService, formsService, settingsService, ensureDefaultWebinarForm, activityLogService } from '../../firebase/services'
 
 const emptySpeaker = () => ({ image: '', name: '', qualification: '' })
@@ -57,6 +59,8 @@ function makeColumns(openEdit, handleDelete, regCounts) {
 
 export default function AdminWebinars() {
   const { canWrite } = useAdminPermissions()
+  const toast = useToast()
+  const confirmDialog = useConfirm()
   const [data,    setData]    = useState([])
   const [forms,   setForms]   = useState([])
   const [loading, setLoading] = useState(true)
@@ -91,7 +95,7 @@ export default function AdminWebinars() {
 
   const saveDefaultCfg = async (next) => {
     setDefaultCfg(next)
-    try { await settingsService.update(next); setDefaultSaved(true); setTimeout(() => setDefaultSaved(false), 1500) } catch (e) { alert(e.message) }
+    try { await settingsService.update(next); setDefaultSaved(true); setTimeout(() => setDefaultSaved(false), 1500) } catch (e) { toast.error(e.message) }
   }
 
   const openAdd  = () => { setForm(emptyForm()); setEditId(null); setModal('add') }
@@ -125,17 +129,17 @@ export default function AdminWebinars() {
         activityLogService.log('webinar_updated', { webinarId: editId, topic: payload.topic })
       }
       closeModal()
-    } catch (e) { alert('Error: ' + e.message) }
+    } catch (e) { toast.error('Error: ' + e.message) }
     finally { setSaving(false) }
   }
 
   const handleDelete = async id => {
-    if (!confirm('Delete this webinar?')) return
+    if (!await confirmDialog('Delete this webinar?')) return
     try {
       const topic = data.find(w => w.id === id)?.topic || id
       await webinarsService.delete(id)
       activityLogService.log('webinar_deleted', { webinarId: id, topic })
-    } catch (e) { alert('Error: ' + e.message) }
+    } catch (e) { toast.error('Error: ' + e.message) }
   }
 
   const columns   = makeColumns(openEdit, handleDelete, regCounts)
@@ -149,7 +153,7 @@ export default function AdminWebinars() {
   return (
     <div className="p-4 sm:p-6 space-y-6">
       {/* Default Registration Form settings */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+      <div className="glass-solid p-5">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-black text-[#1a1a1a] text-sm">Default Webinar Registration Form</h3>
           {defaultSaved && <span className="text-xs font-bold text-green-600">Saved ✓</span>}

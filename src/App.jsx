@@ -48,6 +48,12 @@ const NotFoundPage          = lazy(() => import('./pages/NotFoundPage'))
 const AdminLogin  = lazy(() => import('./admin/AdminLogin'))
 const AdminPanel  = lazy(() => import('./admin/AdminPanel'))
 const RequireAuth = lazy(() => import('./admin/RequireAuth'))
+// Dev-only visual-QA harness (Round 15 F) — the import.meta.env.DEV check
+// is a compile-time constant Vite/Rollup resolves at build time, so this
+// entire lazy()+dynamic-import() call (and the chunk it would pull in) is
+// dead-code-eliminated from a production build, not just hidden behind a
+// runtime check.
+const AdminPreview = import.meta.env.DEV ? lazy(() => import('./admin/AdminPreview')) : null
 
 // Ambassador dashboard area — a second, smaller admin-like area most
 // visitors never open.
@@ -131,6 +137,7 @@ function App() {
         <Route path="/admin/invite/:token"    element={<AcceptInvite />} />
         <Route path="/admin/login"            element={<AdminLogin />} />
         <Route path="/admin"                  element={<RequireAuth><AdminPanel /></RequireAuth>} />
+        {import.meta.env.DEV && <Route path="/admin/__preview" element={<AdminPreview />} />}
         <Route path="/admin/*"                element={<RequireAuth><AdminPanel /></RequireAuth>} />
         <Route path="/ambassador/invite/:token" element={<AmbassadorAcceptInvite />} />
         <Route path="/ambassador/login"       element={<AmbassadorLogin />} />

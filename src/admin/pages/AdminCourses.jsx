@@ -12,6 +12,8 @@ import CoverImage from '../../components/CoverImage'
 import SortableGrid, { SortableItem } from '../components/SortableGrid'
 import AdminCourseEnrollments from './AdminCourseEnrollments'
 import useAdminPermissions from '../hooks/useAdminPermissions'
+import { useToast } from '../components/Toast'
+import { useConfirm } from '../components/ConfirmDialog'
 import { coursesService, courseJoiningLinksService, formsService } from '../../firebase/services'
 import { karachiLocalToIso, karachiLocalToMs, isoToKarachiLocal } from '../../lib/karachiTime'
 
@@ -82,6 +84,8 @@ function makeColumns(openEdit, handleDelete, openEnrollments) {
 
 export default function AdminCourses() {
   const { canWrite } = useAdminPermissions()
+  const toast = useToast()
+  const confirmDialog = useConfirm()
   const [data,    setData]    = useState([])
   const [loading, setLoading] = useState(true)
   const [modal,   setModal]   = useState(false)
@@ -113,7 +117,7 @@ export default function AdminCourses() {
 
   const handleReorder = reordered => {
     setData(reordered) // optimistic
-    coursesService.reorder(reordered).catch(e => alert('Error saving order: ' + e.message))
+    coursesService.reorder(reordered).catch(e => toast.error('Error saving order: ' + e.message))
   }
 
   const openAdd  = () => { setForm(emptyForm()); setEditId(null); setSlugTouched(false); setModal('add') }
@@ -215,13 +219,13 @@ export default function AdminCourses() {
       else                 await coursesService.update(editId, coursePayload)
       if (joiningLink.trim()) await courseJoiningLinksService.set(courseId, joiningLink.trim())
       closeModal()
-    } catch (e) { alert('Error: ' + e.message) }
+    } catch (e) { toast.error('Error: ' + e.message) }
     finally { setSaving(false) }
   }
 
   const handleDelete = async id => {
-    if (!confirm('Delete this course?')) return
-    try { await coursesService.delete(id) } catch (e) { alert('Error: ' + e.message) }
+    if (!await confirmDialog('Delete this course?')) return
+    try { await coursesService.delete(id) } catch (e) { toast.error('Error: ' + e.message) }
   }
 
   const columns   = makeColumns(openEdit, handleDelete, setEnrollmentsFor)
@@ -245,7 +249,7 @@ export default function AdminCourses() {
         {data.map((c, i) => {
           const col = colors[i % colors.length]
           return (
-            <SortableItem key={c.id || i} id={c.id || i} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow">
+            <SortableItem key={c.id || i} id={c.id || i} className="glass-solid p-5 hover:shadow-md transition-shadow">
               <div className="flex items-start gap-3 mb-3">
                 {c.imageUrl
                   ? <CoverImage src={c.imageUrl} alt={c.title || ""} className="w-12 h-12 rounded-xl shrink-0" />

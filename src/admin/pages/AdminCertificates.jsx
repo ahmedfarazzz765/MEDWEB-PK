@@ -13,6 +13,8 @@ import CertificateTemplate, { TEMPLATES } from '../../components/CertificateTemp
 import AdminButton from '../components/AdminButton'
 import ResponsesModal from '../components/ResponsesModal'
 import useAdminPermissions from '../hooks/useAdminPermissions'
+import { useToast } from '../components/Toast'
+import { useConfirm } from '../components/ConfirmDialog'
 import { certificatesService, webinarsService, coursesService, formsService, settingsService } from '../../firebase/services'
 import { issueManualCertificate } from '../../lib/certificateGenerator'
 import { DEFAULT_CERT_FONT } from '../../constants/certificateFonts'
@@ -118,6 +120,8 @@ function PreviewBox({ form, scale = 0.46 }) {
 
 export default function AdminCertificates() {
   const { canWrite } = useAdminPermissions()
+  const toast = useToast()
+  const confirmDialog = useConfirm()
   const [data,    setData]    = useState([])
   const [webinars,setWebinars]= useState([])
   const [courses, setCourses] = useState([])
@@ -332,7 +336,7 @@ export default function AdminCertificates() {
   // at the end rather than a silent partial batch.
   const handleIssueSave = async () => {
     const validRecipients = issueForm.recipients.filter(r => r.name.trim() && r.email.trim())
-    if (validRecipients.length === 0) { alert('Add at least one recipient with a name and email'); return }
+    if (validRecipients.length === 0) { toast.error('Add at least one recipient with a name and email'); return }
 
     setIssueSaving(true)
     setIssueProgress({ done: 0, total: validRecipients.length })
@@ -385,12 +389,12 @@ export default function AdminCertificates() {
 
     const failed = results.filter(r => !r.success)
     if (failed.length === 0) {
-      alert(`Issued ${results.length} certificate${results.length > 1 ? 's' : ''} successfully.`)
+      toast.success(`Issued ${results.length} certificate${results.length > 1 ? 's' : ''} successfully.`)
       closeIssue()
     } else {
       // Left open (not closed) so the admin can see which rows failed and
       // fix/retry them — the succeeded ones are already issued either way.
-      alert(
+      toast.error(
         `Issued ${results.length - failed.length} of ${results.length}.\n\nFailed:\n` +
         failed.map(f => `• ${f.name} (${f.email}) — ${f.error}`).join('\n')
       )
@@ -425,19 +429,19 @@ export default function AdminCertificates() {
   // recompositing an already-issued image-based certificate isn't supported
   // here; those are edited by revoking and issuing a new one.
   const handleSave = async () => {
-    if (!form.recipient.trim()) { alert('Recipient name is required'); return }
-    if (!form.title.trim())     { alert('Certificate title is required'); return }
+    if (!form.recipient.trim()) { toast.error('Recipient name is required'); return }
+    if (!form.title.trim())     { toast.error('Certificate title is required'); return }
     setSaving(true)
     try {
       await certificatesService.update(editId, form)
       closeModal()
-    } catch (e) { alert('Error: ' + e.message) }
+    } catch (e) { toast.error('Error: ' + e.message) }
     finally { setSaving(false) }
   }
 
   const handleRevoke = async id => {
-    if (!confirm('Revoke this certificate? It will fail verification afterwards.')) return
-    try { await certificatesService.revoke(id) } catch (e) { alert('Error: ' + e.message) }
+    if (!await confirmDialog('Revoke this certificate? It will fail verification afterwards.')) return
+    try { await certificatesService.revoke(id) } catch (e) { toast.error('Error: ' + e.message) }
   }
 
   const handleVerify = async () => {
@@ -453,13 +457,13 @@ export default function AdminCertificates() {
   const copyLink = code => {
     const url = `${window.location.origin}/certificate/${code}`
     navigator.clipboard?.writeText(url)
-    alert('Public certificate link copied:\n' + url)
+    toast.success('Public certificate link copied.')
   }
 
   // Print just the certificate (opens a clean print window → user picks "Save as PDF")
   const printCert = (cert) => {
     const w = window.open(`${window.location.origin}/certificate/${cert.certCode}?print=1`, '_blank')
-    if (!w) alert('Please allow popups to download the certificate.')
+    if (!w) toast.error('Please allow popups to download the certificate.')
   }
 
   const columns = [

@@ -12,6 +12,7 @@ import TagInput from '../components/TagInput'
 import BlogContentEditor from '../components/BlogContentEditor'
 import useAdminPermissions from '../hooks/useAdminPermissions'
 import { useToast } from '../components/Toast'
+import { useConfirm } from '../components/ConfirmDialog'
 import { newsService } from '../../firebase/services'
 import { toOptimizedUrl } from '../../firebase/cloudinary'
 import CoverImage from '../../components/CoverImage'
@@ -100,6 +101,7 @@ function makeColumns(openEdit, handlePublish, handleDelete, canWrite) {
 export default function AdminEvents() {
   const { canWrite, isSuperAdmin } = useAdminPermissions()
   const toast = useToast()
+  const confirmDialog = useConfirm()
   const [data,    setData]    = useState([])
   const [loading, setLoading] = useState(true)
   const [tab,     setTab]     = useState('events') // 'events' | 'auto'
@@ -269,7 +271,7 @@ export default function AdminEvents() {
   // — the Cloudinary images become orphaned, not deleted. Flagged
   // explicitly rather than silently claiming cleanup that isn't real.
   const handleDelete = async id => {
-    if (!confirm('Delete this event/news item? Its uploaded images stay on Cloudinary (not deleted) — same as every other delete in this admin.')) return
+    if (!await confirmDialog('Delete this event/news item? Its uploaded images stay on Cloudinary (not deleted) — same as every other delete in this admin.')) return
     try { await newsService.delete(id) } catch (e) { toast.error('Error: ' + e.message) }
   }
 
@@ -292,7 +294,7 @@ export default function AdminEvents() {
   const handleBulkDeleteAutoDrafts = async () => {
     if (!autoNewsDrafts.length) return
     const n = autoNewsDrafts.length
-    if (!confirm(`Delete all ${n} bot Draft(s)? Published items are never touched. This cannot be undone.`)) return
+    if (!await confirmDialog(`Delete all ${n} bot Draft(s)? Published items are never touched. This cannot be undone.`)) return
     try {
       await Promise.all(autoNewsDrafts.map(row => newsService.delete(row.id)))
       toast.success(`Deleted ${n} bot draft${n === 1 ? '' : 's'}.`)

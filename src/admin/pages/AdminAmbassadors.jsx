@@ -11,6 +11,8 @@ import AmbassadorLetterSettings from '../components/AmbassadorLetterSettings'
 import CoverImage from '../../components/CoverImage'
 import SortableGrid, { SortableItem } from '../components/SortableGrid'
 import useAdminPermissions from '../hooks/useAdminPermissions'
+import { useToast } from '../components/Toast'
+import { useConfirm } from '../components/ConfirmDialog'
 import { ambassadorsService, settingsService, formsService, studentsDbService, ambassadorInvitesService, ambassadorRanksService, webinarsService } from '../../firebase/services'
 import { computeAmbassadorRank, DEFAULT_RANK_THRESHOLDS } from '../../lib/ambassadorRank'
 import {
@@ -145,6 +147,8 @@ function makeColumns(openEdit, handleDelete, rankThresholds, onIssueLogin, issui
 
 export default function AdminAmbassadors() {
   const { canWrite } = useAdminPermissions()
+  const toast = useToast()
+  const confirmDialog = useConfirm()
   const [data,    setData]    = useState([])
   const [loading, setLoading] = useState(true)
   const [modal,   setModal]   = useState(false)
@@ -180,12 +184,12 @@ export default function AdminAmbassadors() {
 
   const saveApplyCfg = async (next) => {
     setApplyCfg(next)
-    try { await settingsService.update(next); setApplySaved(true); setTimeout(() => setApplySaved(false), 1500) } catch (e) { alert(e.message) }
+    try { await settingsService.update(next); setApplySaved(true); setTimeout(() => setApplySaved(false), 1500) } catch (e) { toast.error(e.message) }
   }
 
   const saveRankThresholds = async (next) => {
     setRankThresholds(next)
-    try { await ambassadorRanksService.update(next); setThresholdsSaved(true); setTimeout(() => setThresholdsSaved(false), 1500) } catch (e) { alert(e.message) }
+    try { await ambassadorRanksService.update(next); setThresholdsSaved(true); setTimeout(() => setThresholdsSaved(false), 1500) } catch (e) { toast.error(e.message) }
   }
   const setThreshold = (gender, tier) => e => {
     const val = parseInt(e.target.value) || 0
@@ -193,7 +197,7 @@ export default function AdminAmbassadors() {
   }
 
   const handleIssueLogin = async row => {
-    if (!row.email) { alert('This ambassador needs an email on file before a login can be issued.'); return }
+    if (!row.email) { toast.error('This ambassador needs an email on file before a login can be issued.'); return }
     setIssuingLogin(row.id)
     try {
       const token = await ambassadorInvitesService.create({ ambassadorId: row.id, name: row.name, email: row.email })
@@ -207,7 +211,7 @@ export default function AdminAmbassadors() {
       // the admin navigates away before claiming.
       await ambassadorsService.update(row.id, { inviteSentAt: new Date().toISOString() })
       setJustInvited({ name: row.name, link, emailSent: result?.sent !== false && !result?.skipped })
-    } catch (e) { alert('Error: ' + e.message) }
+    } catch (e) { toast.error('Error: ' + e.message) }
     finally { setIssuingLogin(null) }
   }
   const copyInviteLink = () => {
@@ -260,7 +264,7 @@ export default function AdminAmbassadors() {
 
   const handleReorderAmbassadors = reordered => {
     setData(reordered) // optimistic
-    ambassadorsService.reorder(reordered).catch(e => alert('Error saving order: ' + e.message))
+    ambassadorsService.reorder(reordered).catch(e => toast.error('Error saving order: ' + e.message))
   }
 
   const openAdd  = () => { setForm(emptyForm()); setEditId(null); setModal('add') }
@@ -327,17 +331,17 @@ export default function AdminAmbassadors() {
         }
       }
       closeModal()
-    } catch (e) { alert('Error: ' + e.message) }
+    } catch (e) { toast.error('Error: ' + e.message) }
     finally { setSaving(false) }
   }
 
   const handleDelete = async id => {
-    if (!confirm('Remove ambassador?')) return
+    if (!await confirmDialog('Remove ambassador?')) return
     const row = data.find(d => d.id === id)
     try {
       await ambassadorsService.delete(id)
       if (row?.email) sendAmbassadorRemovedEmail({ name: row.name, email: row.email }).catch(() => {})
-    } catch (e) { alert('Error: ' + e.message) }
+    } catch (e) { toast.error('Error: ' + e.message) }
   }
 
   const columns  = makeColumns(openEdit, handleDelete, rankThresholds, handleIssueLogin, issuingLogin, openReferrals, canWrite)
@@ -372,7 +376,7 @@ export default function AdminAmbassadors() {
       )}
 
       {/* Referral Rank Thresholds */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+      <div className="glass-solid p-5">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-black text-[#1a1a1a] text-sm">Referral Rank Thresholds</h3>
           {thresholdsSaved && <span className="text-xs font-bold text-green-600">Saved ✓</span>}
@@ -396,7 +400,7 @@ export default function AdminAmbassadors() {
       </div>
 
       {/* Ambassador Apply Form settings */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+      <div className="glass-solid p-5">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-black text-[#1a1a1a] text-sm">Ambassador Apply Form</h3>
           {applySaved && <span className="text-xs font-bold text-green-600">Saved ✓</span>}
@@ -436,7 +440,7 @@ export default function AdminAmbassadors() {
         <StatCard icon={Trophy}    label="Referred" value={loading ? '…' : referred}    color="#64ac37" bg="#f0fdf4" />
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+      <div className="glass-solid p-5">
         <h3 className="font-bold text-[#1a1a1a] text-sm mb-4">Rank Distribution</h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           {RANK_OPTIONS.map(rank => {
@@ -452,7 +456,7 @@ export default function AdminAmbassadors() {
       </div>
 
       {data.length > 1 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+        <div className="glass-solid p-5">
           <h3 className="font-bold text-[#1a1a1a] text-sm mb-1">Reorder Ambassadors</h3>
           <p className="text-xs text-gray-400 mb-4">Drag the <span className="font-semibold text-gray-500">⠿</span> handle to set the order shown on the public Ambassadors section.</p>
           <SortableGrid items={data} onReorder={handleReorderAmbassadors} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">

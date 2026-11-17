@@ -225,6 +225,112 @@ html { scroll-behavior: smooth; overflow-x: hidden; }
   .admin-shell h1, .admin-shell h2, .admin-shell h3, .admin-shell h4 {
     font-family: 'Poppins', sans-serif;
   }
+  .admin-shell, .admin-shell input, .admin-shell button, .admin-shell select, .admin-shell textarea {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Round 15: glassmorphism design system ──────────────────────────────
+     Fixed aurora background (navy -> blue -> teal, a hint of lime) with
+     2-3 slow-drifting blurred blobs behind the whole admin shell. Shell
+     chrome (sidebar, topbar, dashboard KPI/chart cards) sits on glass over
+     it; DATA-HEAVY surfaces (tables, forms, modals, editors) stay
+     high-opacity/readable per the brief's own rule — see .glass-solid
+     below for those, not .glass-card. */
+  .admin-aurora {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    background: linear-gradient(135deg, #0A1B3D 0%, #123f8f 35%, #1655C3 65%, #0f766e 100%);
+    overflow: hidden;
+  }
+  .admin-aurora::before, .admin-aurora::after, .admin-aurora .aurora-blob {
+    content: '';
+    position: absolute;
+    border-radius: 9999px;
+    filter: blur(80px);
+    opacity: 0.45;
+  }
+  .admin-aurora::before {
+    width: 50vw; height: 50vw;
+    background: #1655C3;
+    top: -10%; left: -10%;
+    animation: aurora-drift-1 22s ease-in-out infinite alternate;
+  }
+  .admin-aurora::after {
+    width: 45vw; height: 45vw;
+    background: #64AC37;
+    bottom: -15%; right: -5%;
+    opacity: 0.25;
+    animation: aurora-drift-2 26s ease-in-out infinite alternate;
+  }
+  .admin-aurora .aurora-blob {
+    width: 35vw; height: 35vw;
+    background: #0d9488;
+    top: 30%; left: 55%;
+    opacity: 0.3;
+    animation: aurora-drift-3 30s ease-in-out infinite alternate;
+  }
+  @keyframes aurora-drift-1 { from { transform: translate(0, 0); } to { transform: translate(8vw, 6vh); } }
+  @keyframes aurora-drift-2 { from { transform: translate(0, 0); } to { transform: translate(-6vw, -8vh); } }
+  @keyframes aurora-drift-3 { from { transform: translate(0, 0) scale(1); } to { transform: translate(-5vw, 5vh) scale(1.1); } }
+  @media (prefers-reduced-motion: reduce) {
+    .admin-aurora::before, .admin-aurora::after, .admin-aurora .aurora-blob { animation: none !important; }
+  }
+
+  /* Shell/dashboard glass — white text on top of the aurora. */
+  .glass-card {
+    background: rgba(255, 255, 255, 0.10);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(255, 255, 255, 0.20);
+    border-radius: 16px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 8px 32px rgba(10, 27, 61, 0.25);
+    color: #fff;
+  }
+  .glass-card .text-secondary, .glass-card-secondary { color: rgba(255, 255, 255, 0.6); }
+  /* backdrop-filter fallback (older browsers / disabled) — solid navy, no
+     transparency, so text is never unreadable. */
+  @supports not (backdrop-filter: blur(1px)) {
+    .glass-card { background: rgba(15, 35, 71, 0.9); }
+  }
+
+  /* Data-heavy surfaces (tables, forms, modals, editors) — high-opacity
+     glass, dark text, per the brief's own readability rule. Visually
+     "glass" (same blur/border language) but never sacrifices legibility
+     for long text. */
+  .glass-solid {
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(10, 27, 61, 0.12);
+    color: #0F172A;
+  }
+  @supports not (backdrop-filter: blur(1px)) {
+    .glass-solid { background: rgba(255, 255, 255, 0.97); }
+  }
+
+  /* Pill buttons */
+  .btn-glass-primary {
+    background: #fff; color: #0A1B3D; border-radius: 9999px;
+    font-weight: 600; transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
+  }
+  .btn-glass-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(255,255,255,0.25); }
+  .btn-glass-secondary {
+    background: rgba(255,255,255,0.12); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.25); color: #fff; border-radius: 9999px;
+    font-weight: 600; transition: background 0.15s ease-out, transform 0.15s ease-out;
+  }
+  .btn-glass-secondary:hover { background: rgba(255,255,255,0.2); transform: translateY(-1px); }
+
+  /* 2-line clamp for table cells (Round 15 D3) */
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
 
   /* Turns off decorative motion (page transitions, staggered card
      entrance, hover-lift transitions) for anyone who's asked for reduced

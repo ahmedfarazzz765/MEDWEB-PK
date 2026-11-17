@@ -8,6 +8,8 @@ import ImageUpload from '../components/ImageUpload'
 import AdminButton from '../components/AdminButton'
 import CoverImage from '../../components/CoverImage'
 import useAdminPermissions from '../hooks/useAdminPermissions'
+import { useToast } from '../components/Toast'
+import { useConfirm } from '../components/ConfirmDialog'
 import { settingsService } from '../../firebase/services'
 
 // Matches what's actually live on the homepage today (verified against the
@@ -141,6 +143,8 @@ const TABS = [
 
 export default function AdminContent({ initialTab }) {
   const { canWrite } = useAdminPermissions()
+  const toast = useToast()
+  const confirmDialog = useConfirm()
   const [s, setS] = useState(null)
   const [saving, setSaving] = useState(false)
   const [savedTab, setSavedTab] = useState('')
@@ -182,7 +186,7 @@ export default function AdminContent({ initialTab }) {
   const save = async (tabId) => {
     setSaving(true)
     try { await settingsService.update(s); setSavedTab(tabId); setTimeout(() => setSavedTab(''), 2000) }
-    catch (e) { alert(e.message) } finally { setSaving(false) }
+    catch (e) { toast.error(e.message) } finally { setSaving(false) }
   }
 
   // Why cards helpers
@@ -215,13 +219,13 @@ export default function AdminContent({ initialTab }) {
   )
 
   const Card = ({ children }) => (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6 animate-page-fade-in">{children}</div>
+    <div className="glass-solid p-5 sm:p-6 animate-page-fade-in">{children}</div>
   )
 
   return (
     <div className="p-4 sm:p-6 space-y-5">
       {/* Tab bar */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-2 flex flex-wrap gap-1 overflow-x-auto">
+      <div className="glass-solid p-2 flex flex-wrap gap-1 overflow-x-auto">
         {TABS.map(({ id, label, icon: Icon }) => {
           const isActive = tab === id
           return (

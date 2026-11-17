@@ -6,6 +6,8 @@ import FormField, { inputCls } from '../components/FormField'
 import AdminButton from '../components/AdminButton'
 import AccessDenied from '../components/AccessDenied'
 import useAdminPermissions from '../hooks/useAdminPermissions'
+import { useToast } from '../components/Toast'
+import { useConfirm } from '../components/ConfirmDialog'
 import { adminUsersService, adminInvitesService, activityLogService } from '../../firebase/services'
 import { ADMIN_SECTIONS, ADMIN_SECTION_GROUPS } from '../data/adminSections'
 
@@ -38,6 +40,8 @@ function PermissionChecklist({ selected, onToggle }) {
 
 export default function AdminUsers() {
   const { loading: permLoading, isSuperAdmin } = useAdminPermissions()
+  const toast = useToast()
+  const confirmDialog = useConfirm()
   const [data, setData] = useState([])
   const [invites, setInvites] = useState([])
   const [loading, setLoading] = useState(true)
@@ -91,16 +95,16 @@ export default function AdminUsers() {
   }
 
   const handleDelete = async email => {
-    if (!confirm(`Remove admin access for ${email}?`)) return
+    if (!await confirmDialog(`Remove admin access for ${email}?`)) return
     try {
       await adminUsersService.delete(email)
       activityLogService.log('admin_user_removed', { targetEmail: email })
-    } catch (e) { alert(e.message) }
+    } catch (e) { toast.error(e.message) }
   }
 
   const handleRevokeInvite = async token => {
-    if (!confirm('Revoke this invite? The link will stop working.')) return
-    try { await adminInvitesService.delete(token) } catch (e) { alert(e.message) }
+    if (!await confirmDialog('Revoke this invite? The link will stop working.')) return
+    try { await adminInvitesService.delete(token) } catch (e) { toast.error(e.message) }
   }
 
   const copyLink = () => {
@@ -141,7 +145,7 @@ export default function AdminUsers() {
       </div>
 
       {invites.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+        <div className="glass-solid p-5">
           <h3 className="font-black text-[#1a1a1a] text-sm mb-4">Pending Invites</h3>
           <div className="space-y-3">
             {invites.map(inv => (
@@ -155,7 +159,7 @@ export default function AdminUsers() {
                 </div>
                 <button onClick={() => {
                   navigator.clipboard?.writeText(`${window.location.origin}/admin/invite/${inv.id}`)
-                  alert('Invite link copied!')
+                  toast.success('Invite link copied!')
                 }} className="p-1.5 rounded-lg hover:bg-blue-50 text-[#1655c3]" title="Copy link"><Copy size={13} /></button>
                 <button onClick={() => handleRevokeInvite(inv.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-red-400" title="Revoke"><Trash2 size={13} /></button>
               </div>
@@ -164,7 +168,7 @@ export default function AdminUsers() {
         </div>
       )}
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+      <div className="glass-solid p-5">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-black text-[#1a1a1a] text-sm">Admin Users</h3>
           <AdminButton size="sm" onClick={openAdd}><Plus size={13} className="mr-1" /> Add Admin</AdminButton>

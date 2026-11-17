@@ -5,6 +5,8 @@ import AdminHeader  from './components/AdminHeader'
 import AccessDenied  from './components/AccessDenied'
 import CommandPalette from './components/CommandPalette'
 import { ToastProvider } from './components/Toast'
+import { ConfirmProvider } from './components/ConfirmDialog'
+import PageSkeleton from './components/Skeleton'
 import useAdminPermissions from './hooks/useAdminPermissions'
 import useAdminBadgeCounts from './hooks/useAdminBadgeCounts'
 import AdminDashboard   from './pages/AdminDashboard'
@@ -117,7 +119,15 @@ export default function AdminPanel() {
 
   return (
     <ToastProvider>
-      <div className="admin-shell flex h-screen bg-admin-bg overflow-hidden font-inter">
+      <ConfirmProvider>
+      <div className="admin-shell relative flex h-screen overflow-hidden font-inter">
+        {/* Fixed aurora background (Round 15) — behind the entire admin
+            shell, not just the dashboard, since glass summary cards
+            (StatCard) are used on other pages too and need it showing
+            through. Data-heavy page content (tables/forms/modals) sits on
+            its own high-opacity .glass-solid surface regardless, so this
+            never hurts readability there. */}
+        <div className="admin-aurora"><div className="aurora-blob" /></div>
         <AdminSidebar
           active={activePage}
           activeTab={activePage === 'content' ? contentTab : undefined}
@@ -126,14 +136,14 @@ export default function AdminPanel() {
           mobileOpen={mobileOpen}
           onCloseMobile={() => setMobileOpen(false)}
         />
-        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+        <div className="relative z-10 flex-1 flex flex-col overflow-hidden min-w-0">
           <AdminHeader
             page={activePage} tab={contentTab} permissions={perms} badges={badges}
             onOpenMobileNav={() => setMobileOpen(true)}
             onOpenSearch={() => setPaletteOpen(true)}
           />
-          <main key={activePage} className="flex-1 overflow-y-auto animate-page-fade-in">
-            {perms.loading ? null
+          <main key={activePage} className="flex-1 overflow-y-auto overflow-x-hidden animate-page-fade-in">
+            {perms.loading ? <PageSkeleton />
               : blocked ? <AccessDenied />
               : activePage === 'content' ? <AdminContent initialTab={contentTab} />
               : <PageComponent />}
@@ -141,6 +151,7 @@ export default function AdminPanel() {
         </div>
         {paletteOpen && <CommandPalette onNavigate={handleNav} onClose={() => setPaletteOpen(false)} />}
       </div>
+      </ConfirmProvider>
     </ToastProvider>
   )
 }

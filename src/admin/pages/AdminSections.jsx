@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { Eye, EyeOff, Sparkles } from 'lucide-react'
 import AdminButton from '../components/AdminButton'
 import useAdminPermissions from '../hooks/useAdminPermissions'
+import { useToast } from '../components/Toast'
+import { useConfirm } from '../components/ConfirmDialog'
 import { sectionVisibilityService, settingsService } from '../../firebase/services'
 
 const SECTIONS = [
@@ -24,6 +26,8 @@ const SECTIONS = [
 
 export default function AdminSections() {
   const { canWrite } = useAdminPermissions()
+  const toast = useToast()
+  const confirmDialog = useConfirm()
   const [v, setV] = useState(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -59,7 +63,7 @@ export default function AdminSections() {
     setIntroOn(next) // optimistic
     setIntroSaving(true)
     try { await settingsService.update({ launchIntroEnabled: next }) }
-    catch (e) { setIntroOn(!next); alert(e.message) }
+    catch (e) { setIntroOn(!next); toast.error(e.message) }
     finally { setIntroSaving(false) }
   }
 
@@ -70,14 +74,14 @@ export default function AdminSections() {
   const save = async () => {
     setSaving(true)
     try { await sectionVisibilityService.update(v); setSaved(true); setTimeout(() => setSaved(false), 2000) }
-    catch (e) { alert(e.message) } finally { setSaving(false) }
+    catch (e) { toast.error(e.message) } finally { setSaving(false) }
   }
 
   const visibleCount = SECTIONS.filter(s => v[s.key]).length
 
   return (
     <div className="p-4 sm:p-6 space-y-6">
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6">
+      <div className="glass-solid p-5 sm:p-6">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${introOn ? 'bg-blue-50 text-[#1655c3]' : 'bg-gray-100 text-gray-400'}`}>
@@ -105,7 +109,7 @@ export default function AdminSections() {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6">
+      <div className="glass-solid p-5 sm:p-6">
         <div className="flex items-center justify-between mb-1">
           <div>
             <h3 className="font-black text-[#1a1a1a]">Homepage Sections</h3>

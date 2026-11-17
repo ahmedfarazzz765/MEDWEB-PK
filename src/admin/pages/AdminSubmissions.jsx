@@ -9,6 +9,8 @@ import AdminButton from '../components/AdminButton'
 import Modal from '../components/Modal'
 import FormField, { inputCls } from '../components/FormField'
 import useAdminPermissions from '../hooks/useAdminPermissions'
+import { useToast } from '../components/Toast'
+import { useConfirm } from '../components/ConfirmDialog'
 import {
   submissionsService, webinarsService, formsService, settingsService, activityLogService,
   toIsoString, DEFAULT_WEBINAR_FORM_FIELDS,
@@ -79,6 +81,8 @@ export default function AdminSubmissions() {
   const [pageSize, setPageSize] = useState(PAGE_SIZE)
   const [counts, setCounts] = useState({ webinarRegs: null, newsletter: null })
   const { canWrite, canDelete } = useAdminPermissions()
+  const toast = useToast()
+  const confirmDialog = useConfirm()
 
   useEffect(() => {
     const unsub = submissionsService.listen(data => { setRows(data); setLoading(false) }, pageSize)
@@ -212,7 +216,7 @@ export default function AdminSubmissions() {
       })
       activityLogService.log('registration_edited', { registrationId: editStudent.id, name: editForm.name, email: editForm.email })
       setEditStudent(null)
-    } catch (e) { alert('Error: ' + e.message) }
+    } catch (e) { toast.error('Error: ' + e.message) }
     finally { setSavingEdit(false) }
   }
 
@@ -229,7 +233,7 @@ export default function AdminSubmissions() {
     const a = students.find(s => s.id === idA)
     const b = students.find(s => s.id === idB)
     if (!a || !b) return
-    if (!confirm('Merge these 2 registrations into one record? The other will be deleted — this can\'t be undone.')) return
+    if (!await confirmDialog('Merge these 2 registrations into one record? The other will be deleted — this can\'t be undone.')) return
     setMerging(true)
     try {
       const pick = (x, y) => (x && x !== '-' ? x : (y && y !== '-' ? y : ''))
@@ -246,7 +250,7 @@ export default function AdminSubmissions() {
       await webinarsService.deleteRegistration(b.id)
       activityLogService.log('registrations_merged', { kept: a.id, removed: b.id, name: merged.name, email: merged.email })
       setSelected(new Set())
-    } catch (e) { alert('Error: ' + e.message) }
+    } catch (e) { toast.error('Error: ' + e.message) }
     finally { setMerging(false) }
   }
 
@@ -257,12 +261,12 @@ export default function AdminSubmissions() {
   // this rule for every other page, mirrored here manually since this
   // table doesn't use ActionButtons).
   const handleDeleteRegistration = async row => {
-    if (!confirm(`Delete this registration (${row.name !== '-' ? row.name : row.email})? This can't be undone.`)) return
+    if (!await confirmDialog(`Delete this registration (${row.name !== '-' ? row.name : row.email})? This can't be undone.`)) return
     setDeletingId(row.id)
     try {
       await webinarsService.deleteRegistration(row.id)
       activityLogService.log('registration_deleted', { registrationId: row.id, name: row.name, email: row.email })
-    } catch (e) { alert('Error: ' + e.message) }
+    } catch (e) { toast.error('Error: ' + e.message) }
     finally { setDeletingId(null) }
   }
 
