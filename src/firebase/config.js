@@ -7,7 +7,9 @@
 // usual reasons: easy per-environment swapping, no hardcoded values in source.
 
 import { initializeApp } from 'firebase/app'
-import { getFirestore }   from 'firebase/firestore'
+import {
+  initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
+} from 'firebase/firestore'
 import { getAuth }        from 'firebase/auth'
 import { getFunctions }   from 'firebase/functions'
 import { getAnalytics, isSupported } from 'firebase/analytics'
@@ -34,7 +36,14 @@ const app = initializeApp({
   apiKey: firebaseConfig.apiKey || 'placeholder-api-key',
 })
 
-export const db        = getFirestore(app)
+// Persistent (IndexedDB) local cache, shared across tabs — a repeat
+// getDoc() for something already cached (e.g. public/siteData, or any admin
+// doc read twice in a session) can be served from disk instead of a fresh
+// network read in some cases, and keeps multiple open tabs from each
+// building their own separate in-memory cache from scratch.
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+})
 export const auth      = getAuth(app)
 export const functions = getFunctions(app)
 

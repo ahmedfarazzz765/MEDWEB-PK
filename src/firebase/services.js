@@ -3,8 +3,8 @@
 
 import {
   collection, doc, addDoc, setDoc, updateDoc, deleteDoc,
-  getDocs, getDoc, query, where, orderBy, limit,
-  serverTimestamp, increment, onSnapshot, runTransaction,
+  getDocs, getDoc, query, where, orderBy, limit, startAfter,
+  serverTimestamp, increment, onSnapshot, runTransaction, getCountFromServer,
 } from 'firebase/firestore'
 import { db, auth } from './config'
 
@@ -73,6 +73,71 @@ function reorderCollection(colName, items) {
   return Promise.all(items.map((item, i) => update(colName, item.id, { order: i })))
 }
 
+// ─── PUBLIC SITE DATA (read-quota optimization) ──────────────────────────────
+// Firestore's Spark plan has a 50k-reads/day quota; before this, almost
+// every public page/section mounted its own getDocs/onSnapshot against the
+// full `courses`/`webinars`/`blogPosts`/`announcements`/`settings` collections
+// — and several sections on the SAME page (Hero, WebinarsSlider, CoursePopup,
+// WebinarAnnouncementPopup all separately listen to the whole `webinars`
+// collection, for example) duplicated the same read. One home page load
+// could cost 10+ full-collection reads per visitor.
+//
+// `public/siteData` is a single doc rebuilt here after every admin
+// create/update/delete/publish/reorder on those five collections — NOT on
+// public-facing counter bumps (webinars.register, blogService.incrementView,
+// certificatesService.verify, ambassadorsService.addReferralPoint), which
+// stay cheap single-field writes with no rebuild. Most public pages now
+// read this ONE doc instead (see src/hooks/useSiteData.js for the shared,
+// localStorage-cached client-side fetch).
+//
+// courses/webinars/announcements keep their full doc shape (nothing here is
+// large enough to matter) — blogPosts is the one collection explicitly
+// trimmed: latest 20 Published posts, with `content` (the Tiptap body)
+// stripped out, since that's genuinely heavy and only the single post page
+// ever needs it (fetched separately, by slug, same as before).
+function rebuildSiteData() {
+  // `public/siteData` itself is readable by anyone (see the rules file) —
+  // unlike every other read here, this one is NOT gated per-document by
+  // Firestore rules afterward, so each collection must be pre-filtered to
+  // exactly what a public (non-admin) visitor could already read directly,
+  // or a Draft course/disabled announcement would leak into the public
+  // cache. webinars/blogPosts keep the same "no status gate"/"Published
+  // only" rule the collection itself already enforces.
+  return Promise.all([
+    getAll(COLS.courses, where('status', '==', 'Active'), orderBy('createdAt', 'desc')).then(applyManualOrder),
+    getAll(COLS.webinars, orderBy('createdAt', 'desc')).then(rows => rows.map(normalizeWebinarSpeakers)),
+    getAll(COLS.blog, where('status', '==', 'Published'), orderBy('createdAt', 'desc'), limit(20)),
+    getAll(ANNOUNCEMENTS_COL, orderBy('createdAt', 'desc')).then(applyManualOrder).then(rows => rows.filter(r => r.enabled !== false)),
+    getOne('settings', 'site'),
+  ]).then(([courses, webinars, blogs, announcements, site]) => {
+    const data = {
+      courses,
+      webinars,
+      blogs: blogs.map(({ content, ...rest }) => rest),
+      announcements,
+      site: site || {},
+      updatedAt: Date.now(),
+    }
+    return setDoc(doc(db, 'public', 'siteData'), data).then(() => data)
+  })
+}
+// Fire-and-forget wrapper — an admin save shouldn't wait on (or fail over)
+// the cache rebuild; errors are logged, never thrown back at the caller.
+function triggerSiteDataRebuild() {
+  rebuildSiteData().catch(err => console.error('siteData rebuild failed:', err))
+}
+
+export const siteDataService = {
+  get: async () => {
+    const snap = await getDoc(doc(db, 'public', 'siteData'))
+    return snap.exists() ? snap.data() : null
+  },
+  // Manual repair/backfill — wired to the "Rebuild public cache" button in
+  // the admin dashboard. Awaited (unlike the automatic triggerSiteDataRebuild
+  // above) so the button can show success/failure.
+  rebuild: rebuildSiteData,
+}
+
 // Old webinar docs stored a single speaker as three flat fields
 // (speakerImage/speaker/role). New docs store a `speakers` array of
 // { image, name, qualification } so a webinar can have several. Every read
@@ -95,9 +160,9 @@ export const webinarsService = {
   getUpcoming: () => getAll(COLS.webinars, where('status', '==', 'Upcoming'), orderBy('date')).then(rows => rows.map(normalizeWebinarSpeakers)),
   getLive: () => getAll(COLS.webinars, where('status', '==', 'Live')).then(rows => rows.map(normalizeWebinarSpeakers)),
   getOne: id => getOne(COLS.webinars, id).then(w => w ? normalizeWebinarSpeakers(w) : w),
-  add: data => add(COLS.webinars, { ...data, registered: 0, attended: 0 }),
-  update: (id, data) => update(COLS.webinars, id, data),
-  delete: id => remove(COLS.webinars, id),
+  add: data => add(COLS.webinars, { ...data, registered: 0, attended: 0 }).then(id => { triggerSiteDataRebuild(); return id }),
+  update: (id, data) => update(COLS.webinars, id, data).then(() => triggerSiteDataRebuild()),
+  delete: id => remove(COLS.webinars, id).then(() => triggerSiteDataRebuild()),
   register: id => update(COLS.webinars, id, { registered: increment(1) }),
   markAttended: id => update(COLS.webinars, id, { attended: increment(1) }),
   // Save a user registration / join application
@@ -152,10 +217,10 @@ export const coursesService = {
     const rows = await getAll(COLS.courses, where('slug', '==', slug), limit(1))
     return rows[0] || null
   },
-  add: data => add(COLS.courses, { ...data, students: 0, rating: 0 }),
-  update: (id, data) => update(COLS.courses, id, data),
-  delete: id => remove(COLS.courses, id),
-  reorder: items => reorderCollection(COLS.courses, items),
+  add: data => add(COLS.courses, { ...data, students: 0, rating: 0 }).then(id => { triggerSiteDataRebuild(); return id }),
+  update: (id, data) => update(COLS.courses, id, data).then(() => triggerSiteDataRebuild()),
+  delete: id => remove(COLS.courses, id).then(() => triggerSiteDataRebuild()),
+  reorder: items => reorderCollection(COLS.courses, items).then(() => triggerSiteDataRebuild()),
   listen: cb => onSnapshot(
     query(col(COLS.courses), orderBy('createdAt', 'desc')),
     snap => cb(applyManualOrder(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
@@ -218,11 +283,24 @@ export const courseEnrollmentsService = {
     return { id: enrollRef.id, enrollmentId }
   },
   getByCourse: courseId => getAll('courseEnrollments', where('courseId', '==', courseId), orderBy('createdAt', 'desc')),
-  listenByCourse: (courseId, cb) => onSnapshot(
-    query(col('courseEnrollments'), where('courseId', '==', courseId), orderBy('createdAt', 'desc')),
+  // Capped by `limitN` (default 50) — a popular course's enrollment list
+  // used to be an UNBOUNDED live listener (every doc, every time any one
+  // of them changed). AdminCourseEnrollments.jsx's own "Load more" bumps
+  // this and re-subscribes only when an admin actually asks for more.
+  listenByCourse: (courseId, cb, limitN = 50) => onSnapshot(
+    query(col('courseEnrollments'), where('courseId', '==', courseId), orderBy('createdAt', 'desc'), limit(limitN)),
     snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
     err => console.error('Firebase courseEnrollments listen error:', err)
   ),
+  // Cheap aggregation counts for the Pending/Approved/Rejected StatCards —
+  // independent of how many rows are actually loaded/paginated above, so
+  // the counts stay accurate even when the admin hasn't clicked "Load
+  // more" yet.
+  getStatusCountsByCourse: async courseId => {
+    const countOf = status => getCountFromServer(query(col('courseEnrollments'), where('courseId', '==', courseId), where('status', '==', status))).then(s => s.data().count)
+    const [Pending, Approved, Rejected] = await Promise.all([countOf('Pending'), countOf('Approved'), countOf('Rejected')])
+    return { Pending, Approved, Rejected }
+  },
   updateStatus: (id, status, extra = {}) => update('courseEnrollments', id, { status, ...extra }),
 }
 
@@ -438,10 +516,10 @@ export const announcementsService = {
     const rows = await getAll(ANNOUNCEMENTS_COL, where('slug', '==', slug), limit(1))
     return rows[0] || null
   },
-  add: data => add(ANNOUNCEMENTS_COL, data),
-  update: (id, data) => update(ANNOUNCEMENTS_COL, id, data),
-  delete: id => remove(ANNOUNCEMENTS_COL, id),
-  reorder: items => reorderCollection(ANNOUNCEMENTS_COL, items),
+  add: data => add(ANNOUNCEMENTS_COL, data).then(id => { triggerSiteDataRebuild(); return id }),
+  update: (id, data) => update(ANNOUNCEMENTS_COL, id, data).then(() => triggerSiteDataRebuild()),
+  delete: id => remove(ANNOUNCEMENTS_COL, id).then(() => triggerSiteDataRebuild()),
+  reorder: items => reorderCollection(ANNOUNCEMENTS_COL, items).then(() => triggerSiteDataRebuild()),
   listen: cb => onSnapshot(
     query(col(ANNOUNCEMENTS_COL), orderBy('createdAt', 'desc')),
     snap => cb(applyManualOrder(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
@@ -662,10 +740,10 @@ export const blogService = {
     const rows = await getAll(COLS.blog, where('slug', '==', slug), limit(1))
     return rows[0] || null
   },
-  add: data => add(COLS.blog, { ...data, views: 0 }),
-  update: (id, data) => update(COLS.blog, id, data),
-  publish: id => update(COLS.blog, id, { status: 'Published', published: new Date().toISOString().split('T')[0] }),
-  delete: id => remove(COLS.blog, id),
+  add: data => add(COLS.blog, { ...data, views: 0 }).then(id => { triggerSiteDataRebuild(); return id }),
+  update: (id, data) => update(COLS.blog, id, data).then(() => triggerSiteDataRebuild()),
+  publish: id => update(COLS.blog, id, { status: 'Published', published: new Date().toISOString().split('T')[0] }).then(() => triggerSiteDataRebuild()),
+  delete: id => remove(COLS.blog, id).then(() => triggerSiteDataRebuild()),
   incrementView: id => update(COLS.blog, id, { views: increment(1) }),
   listen: cb => onSnapshot(
     query(col(COLS.blog), orderBy('createdAt', 'desc')),
@@ -811,22 +889,34 @@ export const advisoryService = {
 }
 
 // ─── DASHBOARD STATS ─────────────────────────────────────────────────────────
+// Uses getCountFromServer() instead of downloading every doc just to
+// .length/.filter() them — an aggregation count query is billed far more
+// cheaply than fetching N whole documents, and the dashboard never needed
+// anything but these counts anyway.
 export async function getDashboardStats() {
-  const [students, webinars, courses, certs, ambassadors] = await Promise.all([
-    getDocs(col(STUDENT_DB_COL)),
-    getDocs(col(COLS.webinars)),
-    getDocs(col(COLS.courses)),
-    getDocs(col(COLS.certificates)),
-    getDocs(col(COLS.ambassadors)),
+  const count = snap => snap.data().count
+  const [
+    students, webinars, upcomingWebinars, courses, activeCourses,
+    certs, validCerts, ambassadors, activeAmbassadors,
+  ] = await Promise.all([
+    getCountFromServer(col(STUDENT_DB_COL)),
+    getCountFromServer(col(COLS.webinars)),
+    getCountFromServer(query(col(COLS.webinars), where('status', '==', 'Upcoming'))),
+    getCountFromServer(col(COLS.courses)),
+    getCountFromServer(query(col(COLS.courses), where('status', '==', 'Active'))),
+    getCountFromServer(col(COLS.certificates)),
+    getCountFromServer(query(col(COLS.certificates), where('status', '==', 'Valid'))),
+    getCountFromServer(col(COLS.ambassadors)),
+    getCountFromServer(query(col(COLS.ambassadors), where('status', '==', 'Active'))),
   ])
   return {
-    totalStudents: students.size,
-    activeStudents: students.size, // studentDatabase has no Active/Inactive concept — every aggregated record counts
-    totalWebinars: webinars.size,
-    upcomingWebinars: webinars.docs.filter(d => d.data().status === 'Upcoming').length,
-    activeCourses: courses.docs.filter(d => d.data().status === 'Active').length,
-    validCerts: certs.docs.filter(d => d.data().status === 'Valid').length,
-    activeAmbassadors: ambassadors.docs.filter(d => d.data().status === 'Active').length,
+    totalStudents: count(students),
+    activeStudents: count(students), // studentDatabase has no Active/Inactive concept — every aggregated record counts
+    totalWebinars: count(webinars),
+    upcomingWebinars: count(upcomingWebinars),
+    activeCourses: count(activeCourses),
+    validCerts: count(validCerts),
+    activeAmbassadors: count(activeAmbassadors),
   }
 }
 
@@ -908,7 +998,7 @@ export const youtubeFetchStateService = {
 // ─── SITE SETTINGS (stats, hero text, etc.) ───────────────────────────────────
 export const settingsService = {
   get: () => getOne('settings', 'site'),
-  update: data => setDoc(doc(db, 'settings', 'site'), { ...data, updatedAt: serverTimestamp() }, { merge: true }),
+  update: data => setDoc(doc(db, 'settings', 'site'), { ...data, updatedAt: serverTimestamp() }, { merge: true }).then(() => triggerSiteDataRebuild()),
   // Real-time listener for the single site settings doc
   listen: cb => onSnapshot(doc(db, 'settings', 'site'), snap => cb(snap.exists() ? { id: snap.id, ...snap.data() } : null), err => console.error('Firebase settings listen error:', err)),
 }

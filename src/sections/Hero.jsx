@@ -1,9 +1,8 @@
-import { useEffect, useState } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { motion } from 'framer-motion'
 import { ArrowRight, Play, Activity, Dna, Building2 } from 'lucide-react'
 import { useSiteSettings } from '../hooks/useSiteSettings'
-import { webinarsService } from '../firebase/services'
+import { useSiteData } from '../hooks/useSiteData'
 import heroBanner from '../assets/hero_clean.webp'
 
 const DEFAULTS = {
@@ -19,16 +18,10 @@ const DEFAULTS = {
 
 export default function Hero() {
   const d = useSiteSettings(DEFAULTS)
-  const [liveWebinar, setLiveWebinar] = useState(null)
-
-  useEffect(() => {
-    // webinarsService.listen already orders by createdAt desc, so the first
-    // Live match is the most recently created one if more than one is Live.
-    const unsub = webinarsService.listen(rows => {
-      setLiveWebinar(rows.find(r => r.status === 'Live') || null)
-    })
-    return () => unsub()
-  }, [])
+  const { webinars } = useSiteData()
+  // siteData.webinars is already ordered createdAt desc, so the first Live
+  // match is the most recently created one if more than one is Live.
+  const liveWebinar = webinars.find(r => r.status === 'Live') || null
 
   return (
     <section

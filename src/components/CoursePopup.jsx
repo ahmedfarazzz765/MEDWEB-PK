@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { X, Pin, Calendar, Clock } from 'lucide-react'
-import { coursesService } from '../firebase/services'
+import { useSiteData } from '../hooks/useSiteData'
 import { karachiDateToMs } from '../lib/karachiTime'
 import { getWebinarPopupOpen, subscribeWebinarPopupOpen } from '../lib/popupStore'
 import CoursePriceTag from './CoursePriceTag'
@@ -34,18 +34,17 @@ function Initials({ name }) {
 // deliberately mirrors WebinarAnnouncementPopup.jsx (same card size, pin
 // badge, sway, entrance/exit) — that file itself is untouched.
 export default function CoursePopup() {
-  const [course, setCourse] = useState(null)
+  const { courses } = useSiteData()
   const [show, setShow] = useState(false)
-
-  useEffect(() => {
-    const unsub = coursesService.listenActive(rows => {
-      const qualifying = rows.filter(isWithinWindow)
-      if (!qualifying.length) { setCourse(null); return }
-      qualifying.sort((a, b) => new Date(b.popupStartDate || 0) - new Date(a.popupStartDate || 0))
-      setCourse(qualifying[0])
-    })
-    return () => unsub()
-  }, [])
+  // Memoized on `courses` (stable between renders until siteData actually
+  // refreshes) — recomputing a brand-new object on every render would
+  // retrigger the effect below (keyed on `course`) on every unrelated
+  // re-render, e.g. every time `show` itself changes.
+  const course = useMemo(() => {
+    const qualifying = courses.filter(isWithinWindow)
+    if (!qualifying.length) return null
+    return [...qualifying].sort((a, b) => new Date(b.popupStartDate || 0) - new Date(a.popupStartDate || 0))[0]
+  }, [courses])
 
   useEffect(() => {
     if (!course) return

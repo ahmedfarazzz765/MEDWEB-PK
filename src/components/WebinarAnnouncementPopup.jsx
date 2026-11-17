@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { X, Pin } from 'lucide-react'
-import { webinarsService } from '../firebase/services'
+import { useSiteData } from '../hooks/useSiteData'
 import { WebinarCard } from '../sections/WebinarsSlider'
 import { setWebinarPopupOpen } from '../lib/popupStore'
 
@@ -32,15 +32,12 @@ function pickAnnouncementWebinar(rows) {
 // a short delay so it isn't jarring.
 export default function WebinarAnnouncementPopup() {
   const navigate = useNavigate()
-  const [webinar, setWebinar] = useState(null)
+  const { webinars } = useSiteData()
   const [show, setShow] = useState(false)
-
-  useEffect(() => {
-    const unsub = webinarsService.listen(rows => {
-      setWebinar(pickAnnouncementWebinar(rows))
-    })
-    return () => unsub()
-  }, [])
+  // Memoized on `webinars` (stable between renders until siteData actually
+  // refreshes) — a brand-new object every render would retrigger the
+  // effect below (keyed on `webinar`) on every unrelated re-render.
+  const webinar = useMemo(() => pickAnnouncementWebinar(webinars), [webinars])
 
   useEffect(() => {
     if (!webinar) return

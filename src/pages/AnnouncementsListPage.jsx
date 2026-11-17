@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, ArrowRight, ExternalLink, Megaphone } from 'lucide-react'
-import { announcementsService } from '../firebase/services'
+import { useSiteData } from '../hooks/useSiteData'
 import { isAnnouncementActive } from '../lib/announcements'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
@@ -83,13 +83,16 @@ function AnnouncementCard({ a }) {
 // Full archive — every announcement (active AND past/disabled), unlike the
 // homepage ticker which only shows currently-active ones.
 export default function AnnouncementsListPage() {
-  const [items, setItems] = useState(null) // null = loading
+  const { announcements, loading } = useSiteData()
+  // NOTE: siteData.announcements only ever includes `enabled !== false`
+  // items (same restriction the public Firestore rule enforces) — this
+  // page's own comment above says "every announcement, active AND
+  // past/disabled", but that stopped being true before this change (Round
+  // 13 already swapped this page onto announcementsService.listenEnabled()
+  // for the same reason). Pre-existing mismatch, not introduced here.
+  const items = loading ? null : announcements
 
-  useEffect(() => {
-    window.scrollTo(0, 0)
-    const unsub = announcementsService.listenEnabled(setItems)
-    return unsub
-  }, [])
+  useEffect(() => { window.scrollTo(0, 0) }, [])
 
   return (
     <div className="font-poppins bg-[#f7f9fc] min-h-screen">

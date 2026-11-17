@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { Calendar, Clock, Play, MessageCircle, Video, ArrowRight } from 'lucide-react'
-import { webinarsService } from '../firebase/services'
 import { useSiteSettings } from '../hooks/useSiteSettings'
+import { useSiteData } from '../hooks/useSiteData'
 import SectionHeading from '../components/SectionHeading'
 import InfiniteMarquee from '../components/InfiniteMarquee'
 import CardRowSkeleton from '../components/CardRowSkeleton'
@@ -200,7 +199,8 @@ export function WebinarCard({ webinar, onRegister }) {
 
 export default function WebinarsSlider() {
   const navigate       = useNavigate()
-  const [webinars, setWebinars] = useState(null) // null = still loading; [] = confirmed empty
+  const { webinars: rawWebinars, loading: webinarsLoading } = useSiteData()
+  const webinars = webinarsLoading ? null : sortWebinars(rawWebinars)
   const h = useSiteSettings(HEADING_DEFAULTS)
   // sortWebinars already puts Live/Upcoming first and Completed
   // (newest-first) last — if none of the former exist, this section is
@@ -224,13 +224,6 @@ export default function WebinarsSlider() {
     if (webinar.isStatic) navigate('/webinar/static/register')
     else navigate(`/webinar/${webinar.id}/register`)
   }
-
-  useEffect(() => {
-    const unsub = webinarsService.listen(rows => {
-      setWebinars(sortWebinars(rows))
-    })
-    return () => unsub()
-  }, [])
 
   return (
     <section id="webinars" className="py-10 sm:py-12 px-4 bg-[#f7f9fc] relative overflow-hidden">

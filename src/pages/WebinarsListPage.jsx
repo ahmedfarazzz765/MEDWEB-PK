@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
-import { webinarsService } from '../firebase/services'
+import { useSiteData } from '../hooks/useSiteData'
 import { WebinarCard, sortWebinars } from '../sections/WebinarsSlider'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
@@ -14,13 +14,9 @@ const PAGE_SIZE = 12
 
 export default function WebinarsListPage() {
   const navigate = useNavigate()
-  const [webinars, setWebinars] = useState(null)
+  const { webinars: rawWebinars, loading } = useSiteData()
+  const webinars = loading ? null : sortWebinars(rawWebinars)
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
-
-  useEffect(() => {
-    const unsub = webinarsService.listen(rows => setWebinars(sortWebinars(rows)))
-    return () => unsub()
-  }, [])
 
   const handleRegister = webinar => {
     if (webinar._feedbackMode && webinar.feedbackFormId) { navigate(`/form/${webinar.feedbackFormId}`); return }

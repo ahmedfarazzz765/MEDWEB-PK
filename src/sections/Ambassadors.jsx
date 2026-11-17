@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { ArrowRight, Trophy, Users, Star } from 'lucide-react'
-import { ambassadorsService, settingsService } from '../firebase/services'
+import { ambassadorsService } from '../firebase/services'
+import { useSiteData } from '../hooks/useSiteData'
 import SectionHeading from '../components/SectionHeading'
 import InfiniteMarquee from '../components/InfiniteMarquee'
 import CardRowSkeleton from '../components/CardRowSkeleton'
@@ -77,22 +78,25 @@ export default function Ambassadors() {
   const [heading2, setHeading2] = useState('Student Community')
   const [subtitle, setSubtitle] = useState('Join our growing network of student leaders representing MEDWEB across Pakistan.')
 
+  const { site } = useSiteData()
+
   useEffect(() => {
     const unsub = ambassadorsService.listen(rows => {
       const active = rows.filter(r => r.status === 'Active')
       setAmbassadors(active)
     })
-    const unsub2 = settingsService.listen(s => {
-      if (!s) return
-      if (typeof s.ambassadorApplyEnabled === 'boolean') setApplyEnabled(s.ambassadorApplyEnabled)
-      setApplyFormId(s.ambassadorApplyFormId || '')
-      setApplyLink(s.ambassadorApplyLink || '')
-      if (s.ambassadorsHeading1) setHeading1(s.ambassadorsHeading1)
-      if (s.ambassadorsHeading2) setHeading2(s.ambassadorsHeading2)
-      if (s.ambassadorsSubtitle) setSubtitle(s.ambassadorsSubtitle)
-    })
-    return () => { unsub(); unsub2 && unsub2() }
+    return unsub
   }, [])
+
+  useEffect(() => {
+    if (!site) return
+    if (typeof site.ambassadorApplyEnabled === 'boolean') setApplyEnabled(site.ambassadorApplyEnabled)
+    setApplyFormId(site.ambassadorApplyFormId || '')
+    setApplyLink(site.ambassadorApplyLink || '')
+    if (site.ambassadorsHeading1) setHeading1(site.ambassadorsHeading1)
+    if (site.ambassadorsHeading2) setHeading2(site.ambassadorsHeading2)
+    if (site.ambassadorsSubtitle) setSubtitle(site.ambassadorsSubtitle)
+  }, [site])
 
   const handleApply = () => {
     if (applyLink) window.open(applyLink, '_blank', 'noopener,noreferrer')

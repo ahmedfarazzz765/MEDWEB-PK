@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
-import { coursesService } from '../firebase/services'
+import { useSiteData } from '../hooks/useSiteData'
 import { CourseCard } from '../sections/CoursesHighlight'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
@@ -13,18 +13,15 @@ import SEO from '../components/SEO'
 const PAGE_SIZE = 12
 
 export default function CoursesListPage() {
-  const [courses, setCourses] = useState(null)
+  const { courses: rawCourses, loading } = useSiteData()
+  // siteData.courses is already Active-only (see rebuildSiteData) — the
+  // extra exclude list below is now always a no-op, kept only as a
+  // defensive second layer matching the original behavior.
+  const courses = loading ? null : (() => {
+    const visible = rawCourses.filter(r => !['Inactive', 'Draft', 'Hidden', 'Archived'].includes(r.status))
+    return visible.length > 0 ? visible : rawCourses
+  })()
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
-
-  useEffect(() => {
-    const unsub = coursesService.listenActive(rows => {
-      // Full catalog — not narrowed to "featured" like the homepage teaser,
-      // since "See All Courses" should mean the complete list.
-      const visible = rows.filter(r => !['Inactive', 'Draft', 'Hidden', 'Archived'].includes(r.status))
-      setCourses(visible.length > 0 ? visible : rows)
-    })
-    return () => unsub()
-  }, [])
 
   return (
     <div className="font-poppins bg-[#f7f9fc] min-h-screen">

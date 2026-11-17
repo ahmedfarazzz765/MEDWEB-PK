@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Users, Video, BookOpen, Award, Megaphone, TrendingUp, Star, UserPlus, CalendarClock } from 'lucide-react'
+import { Users, Video, BookOpen, Award, Megaphone, TrendingUp, Star, UserPlus, CalendarClock, RefreshCw } from 'lucide-react'
 import StatCard from '../components/StatCard'
 import CoverImage from '../../components/CoverImage'
-import { getDashboardStats, studentsDbService, webinarsService, ambassadorsService, testimonialsService } from '../../firebase/services'
+import { getDashboardStats, studentsDbService, webinarsService, ambassadorsService, testimonialsService, siteDataService } from '../../firebase/services'
+import { refreshSiteData } from '../../hooks/useSiteData'
 
 const rankColors = { Platinum:'#0369a1', Gold:'#b45309', Silver:'#475569', Bronze:'#9a3412' }
 
@@ -33,6 +34,8 @@ export default function AdminDashboard() {
   const [ambassadors,setAmbassadors]= useState([])
   const [testimonials,setTestimonials]= useState([])
   const [loading,    setLoading]    = useState(true)
+  const [rebuilding, setRebuilding] = useState(false)
+  const [rebuiltMsg, setRebuiltMsg] = useState('')
 
   useEffect(() => {
     getDashboardStats().then(s => { setStats(s); setLoading(false) }).catch(()=>setLoading(false))
@@ -76,8 +79,32 @@ export default function AdminDashboard() {
 
   const upcoming = webinars.filter(w=>w.status==='Upcoming')
 
+  const handleRebuild = async () => {
+    setRebuilding(true)
+    setRebuiltMsg('')
+    try {
+      await siteDataService.rebuild()
+      await refreshSiteData() // also bust this tab's own localStorage/memory cache
+      setRebuiltMsg('Public cache rebuilt.')
+    } catch (e) {
+      setRebuiltMsg('Rebuild failed: ' + e.message)
+    } finally {
+      setRebuilding(false)
+      setTimeout(() => setRebuiltMsg(''), 4000)
+    }
+  }
+
   return (
     <div className="p-6 space-y-8 animate-page-fade-in">
+      <div className="flex items-center justify-end gap-3 -mb-2">
+        {rebuiltMsg && <span className="text-xs font-semibold text-gray-400">{rebuiltMsg}</span>}
+        <button onClick={handleRebuild} disabled={rebuilding}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-[#1655c3] border border-[#1655c3]/30 hover:bg-blue-50 disabled:opacity-50 transition-colors">
+          <RefreshCw size={14} className={rebuilding ? 'animate-spin' : ''} />
+          {rebuilding ? 'Rebuilding…' : 'Rebuild public cache'}
+        </button>
+      </div>
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {kpis.map((k,i)=><StatCard key={i} {...k}/>)}
       </div>

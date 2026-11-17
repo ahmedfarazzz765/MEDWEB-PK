@@ -309,6 +309,15 @@ service cloud.firestore {
                    || canWrite();
     }
 
+    // ── PUBLIC SITE DATA CACHE — public/siteData, rebuilt by
+    //    rebuildSiteData() in services.js after every admin write to
+    //    courses/webinars/blogPosts/announcements/settings. Public pages
+    //    read only this doc now instead of each full collection ──────────
+    match /public/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     // ── ADMIN-ONLY, NO PUBLIC ACCESS AT ALL ────────────────────────────────
     match /customFonts/{id}   { allow read, write: if isAdmin(); }
     match /activityLog/{id}   { allow read: if isSuperAdmin(); allow create: if isAdmin(); allow update, delete: if false; }

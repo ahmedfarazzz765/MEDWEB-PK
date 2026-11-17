@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Megaphone, ExternalLink } from 'lucide-react'
-import { announcementsService } from '../firebase/services'
+import { useSiteData } from '../hooks/useSiteData'
 import { isAnnouncementActive } from '../lib/announcements'
 import InfiniteMarquee from '../components/InfiniteMarquee'
 
@@ -11,15 +10,9 @@ import InfiniteMarquee from '../components/InfiniteMarquee'
 // every other carousel on the site (seamless CSS-driven loop,
 // pause-on-hover built in) instead of a bespoke scroll implementation.
 export default function AnnouncementTicker() {
-  const [items, setItems] = useState(null) // null = loading
+  const { announcements, loading } = useSiteData()
   const navigate = useNavigate()
-
-  useEffect(() => {
-    const unsub = announcementsService.listenEnabled(rows => {
-      setItems(rows.filter(isAnnouncementActive))
-    })
-    return unsub
-  }, [])
+  const items = loading ? null : announcements.filter(isAnnouncementActive)
 
   if (!items || items.length === 0) return null
 

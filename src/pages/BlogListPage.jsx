@@ -1,7 +1,8 @@
 import { useEffect, useState, useMemo } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
-import { blogService, blogCategoriesService } from '../firebase/services'
+import { blogCategoriesService } from '../firebase/services'
+import { useSiteData } from '../hooks/useSiteData'
 import { DEFAULT_BLOG_CATEGORIES } from '../constants/blogCategories'
 import { BlogCard } from '../sections/LatestBlog'
 import Navbar from '../components/Navbar'
@@ -14,15 +15,11 @@ import SEO from '../components/SEO'
 const PAGE_SIZE = 12
 
 export default function BlogListPage() {
-  const [posts, setPosts] = useState(null)
+  const { blogs, loading: postsLoading } = useSiteData()
+  const posts = postsLoading ? null : blogs
   const [dbCategories, setDbCategories] = useState([])
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [searchParams, setSearchParams] = useSearchParams()
-
-  useEffect(() => {
-    const unsub = blogService.listenPublished(setPosts)
-    return () => unsub()
-  }, [])
 
   useEffect(() => {
     const unsub = blogCategoriesService.listen(setDbCategories)

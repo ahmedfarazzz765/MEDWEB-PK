@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight, Clock, User } from 'lucide-react'
-import { blogService } from '../firebase/services'
 import { useSiteSettings } from '../hooks/useSiteSettings'
+import { useSiteData } from '../hooks/useSiteData'
 import SectionHeading from '../components/SectionHeading'
 import InfiniteMarquee from '../components/InfiniteMarquee'
 import CardRowSkeleton from '../components/CardRowSkeleton'
@@ -51,13 +50,9 @@ export function BlogCard({ post, i }) {
 }
 
 export default function LatestBlog() {
-  const [posts, setPosts] = useState(null) // null = still loading; [] = confirmed empty
   const h = useSiteSettings(HEADING_DEFAULTS)
-
-  useEffect(() => {
-    const unsub = blogService.listenPublished(setPosts)
-    return () => unsub()
-  }, [])
+  const { blogs, loading: postsLoading } = useSiteData()
+  const posts = postsLoading ? null : blogs
 
   return (
     <section id="blog" className="py-10 sm:py-12 px-4 bg-white relative overflow-hidden">

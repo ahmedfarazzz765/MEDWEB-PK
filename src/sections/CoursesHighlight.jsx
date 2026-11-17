@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight, BookOpen, Star, Clock } from 'lucide-react'
-import { coursesService, courseEnrollmentsService } from '../firebase/services'
+import { courseEnrollmentsService } from '../firebase/services'
 import { isRegistrationClosed } from '../lib/coursePricing'
 import { useSiteSettings } from '../hooks/useSiteSettings'
+import { useSiteData } from '../hooks/useSiteData'
 import SectionHeading from '../components/SectionHeading'
 import InfiniteMarquee from '../components/InfiniteMarquee'
 import CardRowSkeleton from '../components/CardRowSkeleton'
@@ -95,24 +96,22 @@ export function CourseCard({ c, i }) {
 }
 
 export default function CoursesHighlight() {
-  const [courses, setCourses] = useState(null) // null = still loading; [] = confirmed empty
+  const { courses: rawCourses, loading: coursesLoading } = useSiteData()
   const h = useSiteSettings(HEADING_DEFAULTS)
 
-  useEffect(() => {
-    const unsub = coursesService.listenActive(rows => {
-      // Prefer courses that aren't explicitly inactive/draft/archived; if every
-      // course happens to be in that state, fall back to showing them anyway
-      // rather than hiding real admin-entered courses outright.
-      const visible = rows.filter(r => !['Inactive', 'Draft', 'Hidden', 'Archived'].includes(r.status))
-      const eligible = visible.length > 0 ? visible : rows
-      // This is the "Featured Courses" section — show only courses marked
-      // featured; if none are marked yet, fall back to all eligible courses
-      // so the section doesn't go blank before any admin sets the flag.
-      const featured = eligible.filter(r => r.featured === true)
-      setCourses(featured.length > 0 ? featured : eligible)
-    })
-    return () => unsub()
-  }, [])
+  // siteData.courses is already Active-only. Prefer courses that aren't
+  // explicitly inactive/draft/archived; if every course happens to be in
+  // that state, fall back to showing them anyway rather than hiding real
+  // admin-entered courses outright. This is the "Featured Courses" section
+  // — show only courses marked featured; if none are marked yet, fall back
+  // to all eligible courses so the section doesn't go blank before any
+  // admin sets the flag.
+  const courses = coursesLoading ? null : (() => {
+    const visible = rawCourses.filter(r => !['Inactive', 'Draft', 'Hidden', 'Archived'].includes(r.status))
+    const eligible = visible.length > 0 ? visible : rawCourses
+    const featured = eligible.filter(r => r.featured === true)
+    return featured.length > 0 ? featured : eligible
+  })()
 
   return (
     <section id="courses-highlight" className="py-10 sm:py-12 px-4 bg-[#f7f9fc] relative overflow-hidden">

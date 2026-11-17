@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
-import { webinarsService } from '../firebase/services'
+import { useSiteData } from '../hooks/useSiteData'
 import { deriveSpeakersFromWebinars } from '../lib/speakers'
 import { MemberCard } from '../sections/About'
 import Navbar from '../components/Navbar'
@@ -17,15 +17,10 @@ import SEO from '../components/SEO'
 // photo/name/qualification card shape this page needs, so it's reused
 // as-is rather than building a near-identical speaker card.
 export default function SpeakersPage() {
-  const [speakers, setSpeakers] = useState(null) // null = loading
+  const { webinars, loading } = useSiteData()
+  const speakers = loading ? null : deriveSpeakersFromWebinars(webinars)
 
-  useEffect(() => {
-    window.scrollTo(0, 0)
-    const unsub = webinarsService.listen(webinars => {
-      setSpeakers(deriveSpeakersFromWebinars(webinars))
-    })
-    return unsub
-  }, [])
+  useEffect(() => { window.scrollTo(0, 0) }, [])
 
   return (
     <div className="font-poppins bg-[#f7f9fc] min-h-screen flex flex-col justify-between">

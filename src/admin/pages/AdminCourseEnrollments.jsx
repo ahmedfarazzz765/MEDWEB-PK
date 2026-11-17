@@ -34,6 +34,8 @@ export default function AdminCourseEnrollments({ course, onClose }) {
   const [rejectTarget, setRejectTarget] = useState(null) // enrollment row being rejected
   const [rejectReason, setRejectReason] = useState('')
   const [busyId, setBusyId] = useState(null)
+  const [pageSize, setPageSize] = useState(50)
+  const [counts, setCounts] = useState({ Pending: 0, Approved: 0, Rejected: 0 })
 
   // A linked-form enrollment has no top-level `paymentProofUrl` — its
   // proof (if the form has a file field) lives inside `responses`
@@ -45,15 +47,17 @@ export default function AdminCourseEnrollments({ course, onClose }) {
   const nameOf = row => row.name || row.fullName || '—'
 
   useEffect(() => {
-    const unsub = courseEnrollmentsService.listenByCourse(course.id, data => { setRows(data); setLoading(false) })
+    setLoading(true)
+    const unsub = courseEnrollmentsService.listenByCourse(course.id, data => { setRows(data); setLoading(false) }, pageSize)
     return unsub
-  }, [course.id])
+  }, [course.id, pageSize])
 
-  const counts = useMemo(() => ({
-    Pending: rows.filter(r => r.status === 'Pending').length,
-    Approved: rows.filter(r => r.status === 'Approved').length,
-    Rejected: rows.filter(r => r.status === 'Rejected').length,
-  }), [rows])
+  const refreshCounts = () => {
+    courseEnrollmentsService.getStatusCountsByCourse(course.id).then(setCounts).catch(() => {})
+  }
+  // Independent of `rows`/pagination — these StatCards must stay accurate
+  // even when not every enrollment is loaded yet (see "Load more" below).
+  useEffect(() => { refreshCounts() }, [course.id])
 
   const filtered = (statusFilter === 'All' ? rows : rows.filter(r => r.status === statusFilter))
     // `name` always set here (never just `fullName`) so DataTable's own
@@ -64,10 +68,13 @@ export default function AdminCourseEnrollments({ course, onClose }) {
   // else in the admin/public UI) in sync with real approved enrollments —
   // same shape as every other "update the course's student count" field,
   // just driven by this collection instead of a manual admin edit.
+  // Re-queries the 3 status counts once and uses them for both the
+  // course's `students` field and the StatCards above — avoids querying
+  // twice per approve/reject action.
   const syncStudentCount = async () => {
-    const latest = await courseEnrollmentsService.getByCourse(course.id)
-    const approved = latest.filter(r => r.status === 'Approved').length
-    await coursesService.update(course.id, { students: approved }).catch(() => {})
+    const counts = await courseEnrollmentsService.getStatusCountsByCourse(course.id)
+    setCounts(counts)
+    await coursesService.update(course.id, { students: counts.Approved }).catch(() => {})
   }
 
   const handleApprove = async row => {
@@ -112,16 +119,29 @@ export default function AdminCourseEnrollments({ course, onClose }) {
   // can't be a fixed list the way the built-in form's fields are.
   const responseKeys = useMemo(() => Array.from(new Set(filtered.flatMap(r => Object.keys(r.responses || {})))), [filtered])
 
-  const exportCsv = () => {
-    downloadCsv(
-      `${(course.title || 'course').replace(/\s+/g, '_')}_enrollments.csv`,
-      ['Enrollment ID', 'Name', 'Email', 'WhatsApp', 'Institution', 'Transaction ID', 'Amount Paid', 'Amount Due', 'Payment Date', 'Status', ...responseKeys],
-      filtered.map(r => [
-        r.enrollmentId, nameOf(r), r.email, r.whatsapp, r.institution, r.transactionId,
-        r.amountPaid, r.amountDue, r.paymentDate, r.status,
-        ...responseKeys.map(k => r.responses?.[k] ?? ''),
-      ])
-    )
+  // Fetches the FULL enrollment list on demand, independent of the
+  // `pageSize` cap above — exporting a partial CSV because the admin
+  // hadn't clicked "Load more" yet would be a silent data-loss trap.
+  const [exporting, setExporting] = useState(false)
+  const exportCsv = async () => {
+    setExporting(true)
+    try {
+      const all = (await courseEnrollmentsService.getByCourse(course.id))
+        .filter(r => statusFilter === 'All' || r.status === statusFilter)
+        .map(r => ({ ...r, name: nameOf(r) }))
+      const allResponseKeys = Array.from(new Set(all.flatMap(r => Object.keys(r.responses || {}))))
+      downloadCsv(
+        `${(course.title || 'course').replace(/\s+/g, '_')}_enrollments.csv`,
+        ['Enrollment ID', 'Name', 'Email', 'WhatsApp', 'Institution', 'Transaction ID', 'Amount Paid', 'Amount Due', 'Payment Date', 'Status', ...allResponseKeys],
+        all.map(r => [
+          r.enrollmentId, r.name, r.email, r.whatsapp, r.institution, r.transactionId,
+          r.amountPaid, r.amountDue, r.paymentDate, r.status,
+          ...allResponseKeys.map(k => r.responses?.[k] ?? ''),
+        ])
+      )
+    } finally {
+      setExporting(false)
+    }
   }
 
   const columns = [
@@ -179,12 +199,22 @@ export default function AdminCourseEnrollments({ course, onClose }) {
               </button>
             ))}
           </div>
-          <AdminButton variant="ghost" size="sm" onClick={exportCsv} disabled={!filtered.length}>
-            <Download size={13} className="mr-1.5" /> Export CSV
+          <AdminButton variant="ghost" size="sm" onClick={exportCsv} disabled={!filtered.length || exporting}>
+            <Download size={13} className="mr-1.5" /> {exporting ? 'Exporting…' : 'Export CSV'}
           </AdminButton>
         </div>
 
         <DataTable columns={columns} data={filtered} searchKey="name" emptyMessage="No enrollments yet" />
+        {/* `rows.length === pageSize` is a heuristic for "there might be
+            more" (exactly pageSize loaded could also mean that's all of
+            them) — clicking this re-subscribes with a bigger limit, and
+            the button simply disappears next render if that was in fact
+            everything. */}
+        {!loading && rows.length === pageSize && (
+          <div className="flex justify-center py-4">
+            <AdminButton variant="secondary" onClick={() => setPageSize(n => n + 50)}>Load more</AdminButton>
+          </div>
+        )}
       </div>
 
       {proofUrl && (

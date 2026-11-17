@@ -3,6 +3,7 @@ import { useParams, useNavigate, useLocation, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, ExternalLink, Star, Users, PlayCircle, Clock, ListChecks, Calendar, MapPin, Award, Banknote } from 'lucide-react'
 import { coursesService } from '../firebase/services'
+import { useSiteData } from '../hooks/useSiteData'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
 import CoverImage from '../components/CoverImage'
@@ -21,18 +22,27 @@ export default function CourseDetailPage() {
   const { id: slugOrId } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
+  const { courses: siteCourses, loading: siteDataLoading } = useSiteData()
   const [course, setCourse] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     window.scrollTo(0, 0)
+    if (siteDataLoading) return
+    // siteData.courses carries the full course doc (not a trimmed card
+    // shape) — a cache hit here means zero extra reads. Only a course not
+    // yet in the cache (just created/edited before the admin's rebuild
+    // landed, or a non-Active course not included in the public cache at
+    // all) falls back to a live fetch.
+    const cached = siteCourses.find(c => c.slug === slugOrId || c.id === slugOrId)
+    if (cached) { setCourse(cached); setLoading(false); return }
     setLoading(true)
     coursesService.getBySlug(slugOrId)
       .then(c => c || coursesService.getOne(slugOrId))
       .then(c => setCourse(c))
       .catch(() => setCourse(null))
       .finally(() => setLoading(false))
-  }, [slugOrId])
+  }, [slugOrId, siteCourses, siteDataLoading])
 
   // A card's "Register Now" link arrives as /courses/<slug>#enroll — jump
   // to the form once the page (and its #enroll section) has actually
