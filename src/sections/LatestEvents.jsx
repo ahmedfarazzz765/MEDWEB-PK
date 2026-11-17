@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
-import { newsService } from '../firebase/services'
+import { useSiteData } from '../hooks/useSiteData'
 import SectionHeading from '../components/SectionHeading'
 import CardRowSkeleton from '../components/CardRowSkeleton'
 import SectionEmptyState from '../components/SectionEmptyState'
@@ -9,11 +8,8 @@ import EventCard from '../components/events/EventCard'
 
 // "Latest from MEDWEB Events" — 3 most recent published cards.
 export default function LatestEvents() {
-  const [items, setItems] = useState(null)
-
-  useEffect(() => {
-    newsService.getPublished().then(rows => setItems(rows.slice(0, 3))).catch(() => setItems([]))
-  }, [])
+  const { news, loading } = useSiteData()
+  const items = loading ? null : news.slice(0, 3)
 
   return (
     <section id="events" className="py-10 sm:py-12 px-4 bg-white relative overflow-hidden">

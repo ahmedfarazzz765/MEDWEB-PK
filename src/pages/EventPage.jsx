@@ -4,6 +4,7 @@ import { ArrowLeft, Link2, ExternalLink, PlayCircle } from 'lucide-react'
 import DOMPurify from 'dompurify'
 import { motion } from 'framer-motion'
 import { newsService } from '../firebase/services'
+import { useSiteData } from '../hooks/useSiteData'
 import SEO, { SITE_URL } from '../components/SEO'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
@@ -28,27 +29,29 @@ function youtubeEmbedUrl(url) {
 export default function EventPage() {
   const { slug } = useParams()
   const navigate = useNavigate()
+  const { news, loading: siteDataLoading } = useSiteData()
   const [item, setItem] = useState(undefined) // undefined = loading, null = not found
-  const [related, setRelated] = useState([])
 
   useEffect(() => {
     window.scrollTo(0, 0)
+    if (siteDataLoading) return
+    // siteData.news is already Published-only and carries the full doc
+    // (not trimmed, unlike blogs) — a cache hit means zero extra reads.
+    // Only an item not yet in the cache falls back to a live fetch.
+    const cached = news.find(n => n.slug === slug)
+    if (cached) { setItem(cached); return }
     setItem(undefined)
     newsService.getBySlug(slug)
       .then(p => setItem(p && p.status === 'Published' ? p : null))
       .catch(() => setItem(null))
-  }, [slug])
+  }, [slug, news, siteDataLoading])
 
-  useEffect(() => {
-    if (!item) return
-    newsService.getPublished()
-      .then(rows => {
-        const sameCategory = rows.filter(r => r.id !== item.id && (r.category || 'News') === (item.category || 'News'))
-        const pool = sameCategory.length >= 3 ? sameCategory : rows.filter(r => r.id !== item.id)
-        setRelated(pool.slice(0, 3))
-      })
-      .catch(() => setRelated([]))
-  }, [item])
+  const related = (() => {
+    if (!item) return []
+    const sameCategory = news.filter(r => r.id !== item.id && (r.category || 'News') === (item.category || 'News'))
+    const pool = sameCategory.length >= 3 ? sameCategory : news.filter(r => r.id !== item.id)
+    return pool.slice(0, 3)
+  })()
 
   if (item === undefined) {
     return (

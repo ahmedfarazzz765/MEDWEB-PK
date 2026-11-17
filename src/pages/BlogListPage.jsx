@@ -1,7 +1,6 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
-import { blogCategoriesService } from '../firebase/services'
 import { useSiteData } from '../hooks/useSiteData'
 import { DEFAULT_BLOG_CATEGORIES } from '../constants/blogCategories'
 import { BlogCard } from '../sections/LatestBlog'
@@ -15,16 +14,10 @@ import SEO from '../components/SEO'
 const PAGE_SIZE = 12
 
 export default function BlogListPage() {
-  const { blogs, loading: postsLoading } = useSiteData()
+  const { blogs, blogCategories: dbCategories, loading: postsLoading } = useSiteData()
   const posts = postsLoading ? null : blogs
-  const [dbCategories, setDbCategories] = useState([])
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [searchParams, setSearchParams] = useSearchParams()
-
-  useEffect(() => {
-    const unsub = blogCategoriesService.listen(setDbCategories)
-    return () => unsub && unsub()
-  }, [])
 
   // Baseline categories + admin-created ones, deduped — same merge used
   // everywhere else categories are read (Navbar dropdown, Admin dropdown).

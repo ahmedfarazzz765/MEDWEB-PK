@@ -103,19 +103,53 @@ function rebuildSiteData() {
   // or a Draft course/disabled announcement would leak into the public
   // cache. webinars/blogPosts keep the same "no status gate"/"Published
   // only" rule the collection itself already enforces.
+  // ambassadors/testimonials/news are fetched WITHOUT a `where()` filter
+  // and filtered here in JS instead — rebuildSiteData runs as an admin
+  // (full read access), so there's no permission reason to filter at the
+  // query level, and filtering in JS also means a doc with a MISSING
+  // status field (e.g. a legacy testimonial with no `status` at all,
+  // which the per-doc rule treats as Approved) is handled correctly
+  // instead of silently excluded the way a `where('status','==',...)`
+  // query would exclude it.
   return Promise.all([
     getAll(COLS.courses, where('status', '==', 'Active'), orderBy('createdAt', 'desc')).then(applyManualOrder),
     getAll(COLS.webinars, orderBy('createdAt', 'desc')).then(rows => rows.map(normalizeWebinarSpeakers)),
     getAll(COLS.blog, where('status', '==', 'Published'), orderBy('createdAt', 'desc'), limit(20)),
     getAll(ANNOUNCEMENTS_COL, orderBy('createdAt', 'desc')).then(applyManualOrder).then(rows => rows.filter(r => r.enabled !== false)),
     getOne('settings', 'site'),
-  ]).then(([courses, webinars, blogs, announcements, site]) => {
+    getAll(COLS.ambassadors, orderBy('createdAt', 'desc')).then(applyManualOrder).then(rows => rows
+      .filter(r => r.status === 'Active')
+      // Public FIELDS only — excludes cnic/email/phone/authUid/
+      // referralCode/hasLogin (personal/internal, never meant to reach a
+      // public read; AmbassadorProfilePage.jsx's own single-doc getOne()
+      // is untouched by this and still has the full doc for its own use).
+      .map(({ id, name, university, city, gender, rank, ranking, status, students, points, imageUrl, cardImageUrl, ambCode, degreeProgram, semester, socialLinks, order }) =>
+        ({ id, name, university, city, gender, rank, ranking, status, students, points, imageUrl, cardImageUrl, ambCode, degreeProgram, semester, socialLinks, order }))),
+    getAll('testimonials', orderBy('createdAt', 'desc')).then(rows => rows.filter(r => (r.status || 'Approved') === 'Approved')),
+    getAll(COLS.team, orderBy('createdAt', 'desc')).then(applyManualOrder),
+    getAll('teamCategories', orderBy('createdAt', 'desc')).then(applyManualOrder),
+    getAll(COLS.advisory, orderBy('createdAt', 'desc')),
+    getAll('blogCategories', orderBy('createdAt', 'desc')),
+    getOne('settings', 'sectionVisibility'),
+    getAll('news', orderBy('createdAt', 'desc')).then(rows => rows.filter(r => r.status === 'Published' || r.status === 'published')),
+  ]).then(([
+    courses, webinars, blogs, announcements, site,
+    ambassadors, testimonials, team, teamCategories, advisory, blogCategories, sectionVisibility, news,
+  ]) => {
     const data = {
       courses,
       webinars,
       blogs: blogs.map(({ content, ...rest }) => rest),
       announcements,
       site: site || {},
+      ambassadors,
+      testimonials,
+      team,
+      teamCategories,
+      advisory,
+      blogCategories,
+      sectionVisibility: sectionVisibility || {},
+      news,
       updatedAt: Date.now(),
     }
     return setDoc(doc(db, 'public', 'siteData'), data).then(() => data)
@@ -223,16 +257,6 @@ export const coursesService = {
   reorder: items => reorderCollection(COLS.courses, items).then(() => triggerSiteDataRebuild()),
   listen: cb => onSnapshot(
     query(col(COLS.courses), orderBy('createdAt', 'desc')),
-    snap => cb(applyManualOrder(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
-    err => console.error("Firebase listen error:", err)
-  ),
-  // Public-facing listener — Firestore rules only let a non-admin visitor
-  // read `status == 'Active'` courses (Round 13 security fix), so every
-  // public page must query with that same filter or the whole listener is
-  // rejected, not just narrowed. `.listen()` above (unfiltered) stays
-  // admin-only.
-  listenActive: cb => onSnapshot(
-    query(col(COLS.courses), where('status', '==', 'Active'), orderBy('createdAt', 'desc')),
     snap => cb(applyManualOrder(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
     err => console.error("Firebase listen error:", err)
   ),
@@ -415,10 +439,14 @@ export const ambassadorsService = {
   getAll: () => getAll(COLS.ambassadors, orderBy('createdAt', 'desc')).then(applyManualOrder),
   getActive: () => getAll(COLS.ambassadors, where('status', '==', 'Active')).then(applyManualOrder),
   getOne: id => getOne(COLS.ambassadors, id),
-  add: data => add(COLS.ambassadors, { ...data, students: 0 }),
-  update: (id, data) => update(COLS.ambassadors, id, data),
-  delete: id => remove(COLS.ambassadors, id),
-  reorder: items => reorderCollection(COLS.ambassadors, items),
+  add: data => add(COLS.ambassadors, { ...data, students: 0 }).then(id => { triggerSiteDataRebuild(); return id }),
+  // Also used by the public self-claim flow (AmbassadorAcceptInvite.jsx) to
+  // stamp authUid/hasLogin/referralCode on an existing doc — none of those
+  // fields are in siteData's public whitelist above, so the extra rebuild
+  // that triggers is a harmless no-op change, not a real inefficiency.
+  update: (id, data) => update(COLS.ambassadors, id, data).then(() => triggerSiteDataRebuild()),
+  delete: id => remove(COLS.ambassadors, id).then(() => triggerSiteDataRebuild()),
+  reorder: items => reorderCollection(COLS.ambassadors, items).then(() => triggerSiteDataRebuild()),
   listen: cb => onSnapshot(
     query(col(COLS.ambassadors), orderBy('createdAt', 'desc')),
     snap => cb(applyManualOrder(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
@@ -529,18 +557,6 @@ export const announcementsService = {
   reorder: items => reorderCollection(ANNOUNCEMENTS_COL, items).then(() => triggerSiteDataRebuild()),
   listen: cb => onSnapshot(
     query(col(ANNOUNCEMENTS_COL), orderBy('createdAt', 'desc')),
-    snap => cb(applyManualOrder(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
-    err => console.error("Firebase listen error:", err)
-  ),
-  // Public-facing listener — rules only let a non-admin visitor read
-  // `enabled == true` announcements (Round 13 security fix); `.listen()`
-  // above (unfiltered) stays admin-only. Same missing-field caveat as
-  // testimonialsService.listenApproved: a legacy doc with no `enabled`
-  // field at all won't match this query even though the per-doc rule
-  // treats that as visible. AdminAnnouncements.jsx always writes `enabled`
-  // explicitly, so this only matters for pre-existing legacy rows.
-  listenEnabled: cb => onSnapshot(
-    query(col(ANNOUNCEMENTS_COL), where('enabled', '==', true), orderBy('createdAt', 'desc')),
     snap => cb(applyManualOrder(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
     err => console.error("Firebase listen error:", err)
   ),
@@ -757,21 +773,13 @@ export const blogService = {
     snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
     err => console.error("Firebase listen error:", err)
   ),
-  // Public-facing listener — rules only let a non-admin visitor read
-  // `status == 'Published'` posts (Round 13 security fix); `.listen()`
-  // above (unfiltered) stays admin-only.
-  listenPublished: cb => onSnapshot(
-    query(col(COLS.blog), where('status', '==', 'Published'), orderBy('createdAt', 'desc')),
-    snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
-    err => console.error("Firebase listen error:", err)
-  ),
 }
 
 export const blogCategoriesService = {
   getAll: () => getAll('blogCategories', orderBy('createdAt', 'desc')),
-  add: data => add('blogCategories', data),
-  update: (id, data) => update('blogCategories', id, data),
-  delete: id => remove('blogCategories', id),
+  add: data => add('blogCategories', data).then(id => { triggerSiteDataRebuild(); return id }),
+  update: (id, data) => update('blogCategories', id, data).then(() => triggerSiteDataRebuild()),
+  delete: id => remove('blogCategories', id).then(() => triggerSiteDataRebuild()),
   listen: cb => onSnapshot(
     query(collection(db, 'blogCategories'), orderBy('createdAt', 'desc')),
     snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
@@ -817,20 +825,12 @@ export const newsService = {
     const rows = await getAll('news', where('slug', '==', slug), limit(1))
     return rows[0] || null
   },
-  add: data => add('news', data),
-  update: (id, data) => update('news', id, data),
-  publish: id => update('news', id, { status: 'Published', published: new Date().toISOString().split('T')[0] }),
-  delete: id => remove('news', id),
+  add: data => add('news', data).then(id => { triggerSiteDataRebuild(); return id }),
+  update: (id, data) => update('news', id, data).then(() => triggerSiteDataRebuild()),
+  publish: id => update('news', id, { status: 'Published', published: new Date().toISOString().split('T')[0] }).then(() => triggerSiteDataRebuild()),
+  delete: id => remove('news', id).then(() => triggerSiteDataRebuild()),
   listen: cb => onSnapshot(
     query(collection(db, 'news'), orderBy('createdAt', 'desc')),
-    snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
-    err => console.error("Firebase news listen error:", err)
-  ),
-  // Public-facing listener — rules only let a non-admin visitor read
-  // `status == 'Published'` news/events (Round 13 security fix); `.listen()`
-  // above (unfiltered) stays admin-only.
-  listenPublished: cb => onSnapshot(
-    query(collection(db, 'news'), where('status', '==', 'Published'), orderBy('createdAt', 'desc')),
     snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
     err => console.error("Firebase news listen error:", err)
   ),
@@ -856,10 +856,10 @@ export const customFontsService = {
 export const teamService = {
   getAll: () => getAll(COLS.team, orderBy('createdAt', 'desc')).then(applyManualOrder),
   getOne: id => getOne(COLS.team, id),
-  add: data => add(COLS.team, data),
-  update: (id, data) => update(COLS.team, id, data),
-  delete: id => remove(COLS.team, id),
-  reorder: items => reorderCollection(COLS.team, items),
+  add: data => add(COLS.team, data).then(id => { triggerSiteDataRebuild(); return id }),
+  update: (id, data) => update(COLS.team, id, data).then(() => triggerSiteDataRebuild()),
+  delete: id => remove(COLS.team, id).then(() => triggerSiteDataRebuild()),
+  reorder: items => reorderCollection(COLS.team, items).then(() => triggerSiteDataRebuild()),
   listen: cb => onSnapshot(
     query(col(COLS.team), orderBy('createdAt', 'desc')),
     snap => cb(applyManualOrder(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
@@ -869,10 +869,10 @@ export const teamService = {
 
 export const teamCategoriesService = {
   getAll: () => getAll('teamCategories', orderBy('createdAt', 'desc')).then(applyManualOrder),
-  add: data => add('teamCategories', data),
-  update: (id, data) => update('teamCategories', id, data),
-  delete: id => remove('teamCategories', id),
-  reorder: items => reorderCollection('teamCategories', items),
+  add: data => add('teamCategories', data).then(id => { triggerSiteDataRebuild(); return id }),
+  update: (id, data) => update('teamCategories', id, data).then(() => triggerSiteDataRebuild()),
+  delete: id => remove('teamCategories', id).then(() => triggerSiteDataRebuild()),
+  reorder: items => reorderCollection('teamCategories', items).then(() => triggerSiteDataRebuild()),
   listen: cb => onSnapshot(
     query(collection(db, 'teamCategories'), orderBy('createdAt', 'desc')),
     snap => cb(applyManualOrder(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
@@ -885,9 +885,9 @@ export const teamCategoriesService = {
 export const advisoryService = {
   getAll: () => getAll(COLS.advisory, orderBy('createdAt', 'desc')),
   getOne: id => getOne(COLS.advisory, id),
-  add: data => add(COLS.advisory, data),
-  update: (id, data) => update(COLS.advisory, id, data),
-  delete: id => remove(COLS.advisory, id),
+  add: data => add(COLS.advisory, data).then(id => { triggerSiteDataRebuild(); return id }),
+  update: (id, data) => update(COLS.advisory, id, data).then(() => triggerSiteDataRebuild()),
+  delete: id => remove(COLS.advisory, id).then(() => triggerSiteDataRebuild()),
   listen: cb => onSnapshot(
     query(col(COLS.advisory), orderBy('createdAt', 'desc')),
     snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
@@ -931,25 +931,11 @@ export async function getDashboardStats() {
 export const testimonialsService = {
   getAll: () => getAll('testimonials', orderBy('createdAt', 'desc')),
   getApproved: () => getAll('testimonials', where('status', '==', 'Approved'), orderBy('createdAt', 'desc')),
-  add: data => add('testimonials', { ...data, status: 'Approved' }),
-  update: (id, data) => update('testimonials', id, data),
-  delete: id => remove('testimonials', id),
+  add: data => add('testimonials', { ...data, status: 'Approved' }).then(id => { triggerSiteDataRebuild(); return id }),
+  update: (id, data) => update('testimonials', id, data).then(() => triggerSiteDataRebuild()),
+  delete: id => remove('testimonials', id).then(() => triggerSiteDataRebuild()),
   listen: cb => onSnapshot(
     query(collection(db, 'testimonials'), orderBy('createdAt', 'desc')),
-    snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
-    err => console.error("Firebase listen error:", err)
-  ),
-  // Public-facing listener — rules only let a non-admin visitor read
-  // `status == 'Approved'` testimonials (Round 13 security fix); `.listen()`
-  // above (unfiltered) stays admin-only. NOTE: unlike the per-doc rule
-  // (which treats a MISSING `status` field as Approved, matching the old
-  // client-side `r.status || 'Approved'` fallback), this `where()` query
-  // can't match docs that have no `status` field at all — any testimonial
-  // written before that field existed won't appear here even though the
-  // rule would allow reading it directly by ID. `add()` above always sets
-  // `status: 'Approved'`, so this only matters for pre-existing legacy rows.
-  listenApproved: cb => onSnapshot(
-    query(collection(db, 'testimonials'), where('status', '==', 'Approved'), orderBy('createdAt', 'desc')),
     snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
     err => console.error("Firebase listen error:", err)
   ),
@@ -1040,7 +1026,7 @@ export const emailUsageService = {
 // disappears for sites that existed before this shipped.
 export const sectionVisibilityService = {
   get: () => getOne('settings', 'sectionVisibility'),
-  update: data => setDoc(doc(db, 'settings', 'sectionVisibility'), { ...data, updatedAt: serverTimestamp() }, { merge: true }),
+  update: data => setDoc(doc(db, 'settings', 'sectionVisibility'), { ...data, updatedAt: serverTimestamp() }, { merge: true }).then(() => triggerSiteDataRebuild()),
   listen: cb => onSnapshot(doc(db, 'settings', 'sectionVisibility'), snap => cb(snap.exists() ? snap.data() : null), err => console.error('Firebase sectionVisibility listen error:', err)),
 }
 

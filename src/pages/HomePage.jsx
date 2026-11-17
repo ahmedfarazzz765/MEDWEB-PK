@@ -5,7 +5,7 @@ import WelcomeBar from '../sections/WelcomeBar'
 import Navbar from '../components/Navbar'
 import AnnouncementTicker from '../sections/AnnouncementTicker'
 import Hero from '../sections/Hero'
-import { sectionVisibilityService, settingsService } from '../firebase/services'
+import { useSiteData } from '../hooks/useSiteData'
 import SEO, { SITE_NAME, SITE_URL, DEFAULT_IMAGE } from '../components/SEO'
 
 // Everything below the fold is code-split — Hero is the only section a
@@ -51,26 +51,18 @@ const DEFAULT_VISIBILITY = {
 }
 
 export default function HomePage() {
-  const [v, setV] = useState(DEFAULT_VISIBILITY)
+  const { sectionVisibility, site } = useSiteData()
+  const v = { ...DEFAULT_VISIBILITY, ...sectionVisibility }
   const [showIntro, setShowIntro] = useState(false)
   const location = useLocation()
 
+  // The intro only plays while the site owner has it switched on (Admin
+  // Panel → Homepage Sections → Launch Intro Animation), a single boolean
+  // on the shared settings/site doc — now read from the siteData cache
+  // instead of its own one-time get().
   useEffect(() => {
-    const unsub = sectionVisibilityService.listen(s => {
-      if (!s) return
-      setV(prev => ({ ...prev, ...s }))
-    })
-    return () => unsub && unsub()
-  }, [])
-
-  // One-shot check on load — the intro only plays while the site owner has
-  // it switched on (Admin Panel → Homepage Sections → Launch Intro
-  // Animation), a single boolean on the shared settings/site doc.
-  useEffect(() => {
-    settingsService.get().then(s => {
-      if (s?.launchIntroEnabled) setShowIntro(true)
-    }).catch(() => {})
-  }, [])
+    if (site?.launchIntroEnabled) setShowIntro(true)
+  }, [site])
 
   // Reached via a Navbar/Footer link clicked from a DIFFERENT page (e.g.
   // "Courses" clicked while on /blog/some-post) — Navbar routes here as

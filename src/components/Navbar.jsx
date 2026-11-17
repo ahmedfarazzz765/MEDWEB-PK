@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { Menu, X, ChevronDown, MessageCircle } from 'lucide-react'
 import { useSiteSettings } from '../hooks/useSiteSettings'
-import { blogCategoriesService } from '../firebase/services'
+import { useSiteData } from '../hooks/useSiteData'
 import { DEFAULT_BLOG_CATEGORIES } from '../constants/blogCategories'
 import Logo from './Logo'
 
@@ -25,7 +25,7 @@ const DEFAULTS = {
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
-  const [blogDbCategories, setBlogDbCategories] = useState([])
+  const { blogCategories: blogDbCategories } = useSiteData()
   const { navTagline: tagline, navLinks: rawNavLinks, communityLink } = useSiteSettings(DEFAULTS)
   const navigate = useNavigate()
   const location = useLocation()
@@ -34,11 +34,6 @@ export default function Navbar() {
     const handleScroll = () => setScrolled(window.scrollY > 60)
     window.addEventListener('scroll', handleScroll)
     return () => window.removeEventListener('scroll', handleScroll)
-  }, [])
-
-  useEffect(() => {
-    const unsub = blogCategoriesService.listen(setBlogDbCategories)
-    return () => unsub && unsub()
   }, [])
 
   const blogCategoryNames = useMemo(() => {

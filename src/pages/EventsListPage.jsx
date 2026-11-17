@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { ArrowLeft } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { newsService } from '../firebase/services'
+import { useSiteData } from '../hooks/useSiteData'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
 import SectionHeading from '../components/SectionHeading'
@@ -29,16 +29,12 @@ function useReducedMotion() {
 }
 
 export default function EventsListPage() {
-  const [items, setItems] = useState(null)
+  const { news, loading: newsLoading } = useSiteData()
+  const items = newsLoading ? null : news
   const [category, setCategory] = useState('All')
   const [year, setYear] = useState('All')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const reduceMotion = useReducedMotion()
-
-  useEffect(() => {
-    const unsub = newsService.listenPublished(setItems)
-    return () => unsub()
-  }, [])
 
   const years = useMemo(() => {
     if (!items) return []

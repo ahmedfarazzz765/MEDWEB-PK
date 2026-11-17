@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
-import { ambassadorsService } from '../firebase/services'
+import { useSiteData } from '../hooks/useSiteData'
 import { AmbassadorCard } from '../sections/Ambassadors'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
@@ -13,13 +13,9 @@ import SEO from '../components/SEO'
 const PAGE_SIZE = 16
 
 export default function AmbassadorsListPage() {
-  const [ambassadors, setAmbassadors] = useState(null)
+  const { ambassadors: rawAmbassadors, loading } = useSiteData()
+  const ambassadors = loading ? null : rawAmbassadors
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
-
-  useEffect(() => {
-    const unsub = ambassadorsService.listen(rows => setAmbassadors(rows.filter(r => r.status === 'Active')))
-    return () => unsub()
-  }, [])
 
   return (
     <div className="font-poppins bg-[#f7f9fc] min-h-screen">

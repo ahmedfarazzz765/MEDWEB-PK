@@ -10,7 +10,11 @@ import { siteDataService } from '../firebase/services'
 const CACHE_KEY = 'medweb_siteData_v1'
 const TTL_MS = 30 * 60 * 1000
 
-const EMPTY = { courses: [], webinars: [], blogs: [], announcements: [], site: {} }
+const EMPTY = {
+  courses: [], webinars: [], blogs: [], announcements: [], site: {},
+  ambassadors: [], testimonials: [], team: [], teamCategories: [], advisory: [],
+  blogCategories: [], sectionVisibility: {}, news: [],
+}
 
 let memoryCache = null       // { data, updatedAt, fetchedAt }
 let inflightPromise = null   // dedupes concurrent fetchSiteData() calls
@@ -81,7 +85,12 @@ export function useSiteData() {
   }, [])
 
   const d = data || EMPTY
-  return { courses: d.courses || [], webinars: d.webinars || [], blogs: d.blogs || [], announcements: d.announcements || [], site: d.site || {}, loading }
+  return {
+    courses: d.courses || [], webinars: d.webinars || [], blogs: d.blogs || [], announcements: d.announcements || [], site: d.site || {},
+    ambassadors: d.ambassadors || [], testimonials: d.testimonials || [], team: d.team || [], teamCategories: d.teamCategories || [],
+    advisory: d.advisory || [], blogCategories: d.blogCategories || [], sectionVisibility: d.sectionVisibility || {}, news: d.news || [],
+    loading,
+  }
 }
 
 // Bypasses both caches and re-notifies every mounted useSiteData() — call

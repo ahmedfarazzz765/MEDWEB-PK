@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react'
 import { Star } from 'lucide-react'
-import { testimonialsService } from '../firebase/services'
 import { useSiteSettings } from '../hooks/useSiteSettings'
+import { useSiteData } from '../hooks/useSiteData'
 import SectionHeading from '../components/SectionHeading'
 import InfiniteMarquee from '../components/InfiniteMarquee'
 import BrandWatermark from '../components/BrandWatermark'
@@ -63,21 +62,15 @@ function ReviewCard({ t }) {
 }
 
 export default function Testimonials() {
-  const [testimonials, setTestimonials] = useState(null) // null = still loading; [] = confirmed empty
   const h = useSiteSettings(HEADING_DEFAULTS)
-
-  useEffect(() => {
-    const unsub = testimonialsService.listenApproved(rows => {
-      // Approved via Admin > Pending Reviews (pendingTestimonialsService.approve())
-      // tags a YouTube-comment-sourced item with category "YouTube Review" —
-      // those shouldn't appear as a homepage testimonial even once approved
-      // (a comment isn't the same as a submitted review); Google Reviews and
-      // anything else stay.
-      const approved = rows.filter(r => (r.status || 'Approved') === 'Approved' && r.category !== 'YouTube Review')
-      setTestimonials(approved)
-    })
-    return () => unsub && unsub()
-  }, [])
+  // siteData.testimonials is already Approved-only (see rebuildSiteData).
+  // Approved via Admin > Pending Reviews (pendingTestimonialsService.approve())
+  // tags a YouTube-comment-sourced item with category "YouTube Review" —
+  // those shouldn't appear as a homepage testimonial even once approved (a
+  // comment isn't the same as a submitted review); Google Reviews and
+  // anything else stay.
+  const { testimonials: rawTestimonials, loading: testimonialsLoading } = useSiteData()
+  const testimonials = testimonialsLoading ? null : rawTestimonials.filter(r => r.category !== 'YouTube Review')
 
   const loading = testimonials === null
   const empty = testimonials !== null && testimonials.length === 0

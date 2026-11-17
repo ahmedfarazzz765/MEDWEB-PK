@@ -87,9 +87,9 @@ export default function AnnouncementsListPage() {
   // NOTE: siteData.announcements only ever includes `enabled !== false`
   // items (same restriction the public Firestore rule enforces) — this
   // page's own comment above says "every announcement, active AND
-  // past/disabled", but that stopped being true before this change (Round
-  // 13 already swapped this page onto announcementsService.listenEnabled()
-  // for the same reason). Pre-existing mismatch, not introduced here.
+  // past/disabled", but that stopped being true before this change
+  // (Round 13 already restricted this page to enabled-only for the same
+  // reason). Pre-existing mismatch, not introduced here.
   const items = loading ? null : announcements
 
   useEffect(() => { window.scrollTo(0, 0) }, [])

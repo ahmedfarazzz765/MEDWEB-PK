@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
-import { advisoryService } from '../firebase/services'
+import { useSiteData } from '../hooks/useSiteData'
 import { AdvisorCard } from '../sections/AdvisoryBoard'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
@@ -13,13 +13,9 @@ import SEO from '../components/SEO'
 const PAGE_SIZE = 16
 
 export default function AdvisoryBoardListPage() {
-  const [board, setBoard] = useState(null)
+  const { advisory, loading } = useSiteData()
+  const board = loading ? null : advisory.filter(r => r.status !== 'Inactive')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
-
-  useEffect(() => {
-    const unsub = advisoryService.listen(rows => setBoard(rows.filter(r => r.status !== 'Inactive')))
-    return () => unsub()
-  }, [])
 
   return (
     <div className="font-poppins bg-[#f7f9fc] min-h-screen">

@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
-import { advisoryService } from '../firebase/services'
 import { useSiteSettings } from '../hooks/useSiteSettings'
+import { useSiteData } from '../hooks/useSiteData'
 import SectionHeading from '../components/SectionHeading'
 import InfiniteMarquee from '../components/InfiniteMarquee'
 import CardRowSkeleton from '../components/CardRowSkeleton'
@@ -52,16 +52,9 @@ export function AdvisorCard({ member }) {
 }
 
 export default function AdvisoryBoard() {
-  const [board, setBoard] = useState(null) // null = loading
   const h = useSiteSettings(HEADING_DEFAULTS)
-
-  useEffect(() => {
-    const unsub = advisoryService.listen(rows => {
-      const active = rows.filter(r => r.status !== 'Inactive')
-      setBoard(active)
-    })
-    return () => unsub()
-  }, [])
+  const { advisory, loading: boardLoading } = useSiteData()
+  const board = boardLoading ? null : advisory.filter(r => r.status !== 'Inactive')
 
   // If section confirmed empty, hide the entire section (heading, watermark, container)
   if (board !== null && board.length === 0) return null

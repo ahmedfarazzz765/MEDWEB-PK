@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight, Users, Linkedin, Star, Award, ShieldCheck, UserCheck, Radio, BookOpen } from 'lucide-react'
-import { teamService, teamCategoriesService } from '../firebase/services'
 import { useSiteSettings } from '../hooks/useSiteSettings'
+import { useSiteData } from '../hooks/useSiteData'
 import SectionHeading from '../components/SectionHeading'
 import InfiniteMarquee from '../components/InfiniteMarquee'
 import CardRowSkeleton from '../components/CardRowSkeleton'
@@ -200,24 +200,10 @@ export function WhyMedwebCategoryCard({ category, memberCount, onSelect }) {
 
 // ─── HOMEPAGE "OUR TEAM" SECTION ───────────────────────────────────────────
 export default function Team() {
-  const [team, setTeam] = useState(null) // null = loading
-  const [dbCategories, setDbCategories] = useState([])
   const h = useSiteSettings(HEADING_DEFAULTS)
   const navigate = useNavigate()
-
-  useEffect(() => {
-    const unsubTeam = teamService.listen(rows => {
-      const active = rows.filter(r => r.status !== 'Inactive')
-      setTeam(active)
-    })
-    const unsubCats = teamCategoriesService.listen(cats => {
-      setDbCategories(cats)
-    })
-    return () => {
-      unsubTeam()
-      unsubCats()
-    }
-  }, [])
+  const { team: rawTeam, teamCategories: dbCategories, loading: teamLoading } = useSiteData()
+  const team = teamLoading ? null : rawTeam.filter(r => r.status !== 'Inactive')
 
   // Renders exactly what's in Firestore — no default-template fallback here.
   // (Previously merged in DEFAULT_CATEGORY_TEMPLATES for any name not

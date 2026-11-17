@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { X, Newspaper } from 'lucide-react'
-import { newsService } from '../firebase/services'
+import { useSiteData } from '../hooks/useSiteData'
 
 const DISMISS_KEY_PREFIX = 'medweb_news_badge_dismissed_'
 
@@ -14,14 +14,10 @@ const DISMISS_KEY_PREFIX = 'medweb_news_badge_dismissed_'
 // news item published later still gets its own first showing.
 export default function NewsPopup() {
   const navigate = useNavigate()
-  const [item, setItem] = useState(null)
+  const { news } = useSiteData()
   const [show, setShow] = useState(false)
-
-  useEffect(() => {
-    newsService.getLatest(1)
-      .then(rows => setItem(rows[0] || null))
-      .catch(err => console.error('NewsPopup: failed to load latest news:', err))
-  }, [])
+  // siteData.news is already ordered createdAt desc and Published-only.
+  const item = news[0] || null
 
   useEffect(() => {
     if (!item) return

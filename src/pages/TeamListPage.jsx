@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, ArrowRight } from 'lucide-react'
-import { teamService, teamCategoriesService } from '../firebase/services'
+import { useSiteData } from '../hooks/useSiteData'
 import { MemberCard, WhyMedwebCategoryCard } from '../sections/About'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
@@ -14,26 +14,12 @@ const PAGE_SIZE = 16
 
 export default function TeamListPage() {
   const navigate = useNavigate()
-  const [team, setTeam] = useState(null)
-  const [dbCategories, setDbCategories] = useState([])
+  const { team: rawTeam, teamCategories: dbCategories, loading: teamLoading } = useSiteData()
+  const team = teamLoading ? null : rawTeam.filter(r => r.status !== 'Inactive')
   const [searchParams, setSearchParams] = useSearchParams()
   const initialCat = searchParams.get('category') || 'All'
   const [activeCategory, setActiveCategory] = useState(initialCat)
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
-
-  useEffect(() => {
-    const unsubTeam = teamService.listen(rows => {
-      const active = rows.filter(r => r.status !== 'Inactive')
-      setTeam(active)
-    })
-    const unsubCats = teamCategoriesService.listen(cats => {
-      setDbCategories(cats)
-    })
-    return () => {
-      unsubTeam()
-      unsubCats()
-    }
-  }, [])
 
   // Synchronize category state when searchParams change
   useEffect(() => {

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { ArrowRight, Trophy, Users, Star } from 'lucide-react'
-import { ambassadorsService } from '../firebase/services'
 import { useSiteData } from '../hooks/useSiteData'
 import SectionHeading from '../components/SectionHeading'
 import InfiniteMarquee from '../components/InfiniteMarquee'
@@ -70,7 +69,6 @@ export function AmbassadorCard({ a }) {
 
 export default function Ambassadors() {
   const navigate = useNavigate()
-  const [ambassadors, setAmbassadors] = useState(null)
   const [applyEnabled, setApplyEnabled] = useState(true)
   const [applyFormId, setApplyFormId] = useState('')
   const [applyLink, setApplyLink] = useState('')
@@ -78,15 +76,9 @@ export default function Ambassadors() {
   const [heading2, setHeading2] = useState('Student Community')
   const [subtitle, setSubtitle] = useState('Join our growing network of student leaders representing MEDWEB across Pakistan.')
 
-  const { site } = useSiteData()
-
-  useEffect(() => {
-    const unsub = ambassadorsService.listen(rows => {
-      const active = rows.filter(r => r.status === 'Active')
-      setAmbassadors(active)
-    })
-    return unsub
-  }, [])
+  const { site, ambassadors: rawAmbassadors, loading: ambassadorsLoading } = useSiteData()
+  // siteData.ambassadors is already Active-only and public-fields-only.
+  const ambassadors = ambassadorsLoading ? null : rawAmbassadors
 
   useEffect(() => {
     if (!site) return
