@@ -11,10 +11,16 @@ export default {
           blue: '#1655c3',
           lightgreen: '#95d348',
           darkgreen: '#64ac37',
-        }
+        },
+        // Admin panel design system (Round 14 Part C) — named so admin
+        // components can use `bg-admin-navy` etc. instead of repeating the
+        // literal hex everywhere.
+        'admin-navy': '#0A1B3D',
+        'admin-bg': '#F7F9FC',
       },
       fontFamily: {
         poppins: ['Poppins', 'sans-serif'],
+        inter: ['Inter', 'sans-serif'],
       },
       backgroundImage: {
         'medical-gradient': 'linear-gradient(135deg, #e7f3ff 0%, #f4fff5 100%)',

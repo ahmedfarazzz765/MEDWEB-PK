@@ -2,12 +2,13 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { signOut } from 'firebase/auth'
 import { auth } from '../../firebase/config'
+import useAdminBadgeCounts from '../hooks/useAdminBadgeCounts'
 import {
   LayoutDashboard, Users, Video, BookOpen, Award, Megaphone,
   FileText, UserCheck, LogOut, ChevronLeft, ChevronRight, Shield, Mail,
   FormInput, Star, Inbox, Link2, ToggleRight, GraduationCap,
   Image, Quote, Sparkles, Building2, ShieldCheck, PanelTop, Scale, ClipboardCheck,
-  UserCog, Newspaper, BarChart3, ScrollText,
+  UserCog, Newspaper, BarChart3, ScrollText, X,
 } from 'lucide-react'
 
 // Each item's `id` is the page key in AdminPanel's `pages` map. Items that
@@ -53,7 +54,7 @@ const GROUPS = [
     accent: '#fcd34d',
     items: [
       { id: 'webinars',     label: 'Webinars',     icon: Video },
-      { id: 'courses',      label: 'Courses',      icon: BookOpen },
+      { id: 'courses',      label: 'Courses',      icon: BookOpen, badgeKey: 'pendingEnrollments' },
       { id: 'certificates', label: 'Certificates', icon: Award },
     ],
   },
@@ -62,9 +63,9 @@ const GROUPS = [
     accent: '#f9a8d4',
     items: [
       { id: 'testimonials', label: 'Testimonials', icon: Star },
-      { id: 'pendingTestimonials', label: 'Pending Reviews', icon: ClipboardCheck },
+      { id: 'pendingTestimonials', label: 'Pending Reviews', icon: ClipboardCheck, badgeKey: 'pendingReviews' },
       { id: 'blog',         label: 'Blog Posts',   icon: FileText },
-      { id: 'events',       label: 'Events & News', icon: Newspaper },
+      { id: 'events',       label: 'Events & News', icon: Newspaper, badgeKey: 'autoNewsDrafts' },
       { id: 'forms',        label: 'Form Builder', icon: FormInput },
       { id: 'submissions',  label: 'Submissions',  icon: Inbox },
       { id: 'reports',      label: 'Reports',      icon: BarChart3 },
@@ -88,9 +89,10 @@ const GROUPS = [
   },
 ]
 
-export default function AdminSidebar({ active, activeTab, onNav, permissions }) {
+export default function AdminSidebar({ active, activeTab, onNav, permissions, mobileOpen, onCloseMobile }) {
   const [collapsed, setCollapsed] = useState(false)
   const navigate = useNavigate()
+  const badges = useAdminBadgeCounts()
 
   // Firebase Auth's signOut() ends the session; RequireAuth's own
   // onAuthStateChanged listener will also react to this, but navigating
@@ -121,10 +123,19 @@ export default function AdminSidebar({ active, activeTab, onNav, permissions }) 
   }
 
   return (
-    <aside
-      className="flex flex-col h-screen sticky top-0 transition-all duration-300 shadow-2xl z-40 bg-[#123f8f]"
-      style={{ width: collapsed ? 72 : 250, minWidth: collapsed ? 72 : 250 }}
-    >
+    <>
+      {/* Mobile backdrop — only rendered (and only blocks clicks) while the
+          drawer is open; the sidebar itself is position-fixed and slid
+          off-screen below the lg breakpoint otherwise. Desktop (lg+)
+          ignores mobileOpen entirely and keeps the original sticky layout. */}
+      {mobileOpen && (
+        <div className="fixed inset-0 bg-black/40 z-30 lg:hidden" onClick={onCloseMobile} />
+      )}
+      <aside
+        className={`flex flex-col h-screen sticky top-0 lg:sticky transition-all duration-300 shadow-2xl z-40 bg-admin-navy
+          fixed lg:relative inset-y-0 left-0 ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
+        style={{ width: collapsed ? 72 : 250, minWidth: collapsed ? 72 : 250 }}
+      >
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 py-5 border-b border-white/10">
         <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
@@ -138,9 +149,12 @@ export default function AdminSidebar({ active, activeTab, onNav, permissions }) 
             <div className="text-white/50 text-[10px] font-medium tracking-wider">ADMIN PANEL</div>
           </div>
         )}
+        <button onClick={onCloseMobile} className="ml-auto p-1 rounded-lg hover:bg-white/10 text-white/60 hover:text-white transition-all lg:hidden">
+          <X size={18} />
+        </button>
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="ml-auto p-1 rounded-lg hover:bg-white/10 text-white/60 hover:text-white transition-all"
+          className="ml-auto p-1 rounded-lg hover:bg-white/10 text-white/60 hover:text-white transition-all hidden lg:block"
         >
           {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
         </button>
@@ -161,12 +175,12 @@ export default function AdminSidebar({ active, activeTab, onNav, permissions }) 
                 </span>
               </div>
             )}
-            {visibleItems.map(({ id, tab, label, icon: Icon }) => {
+            {visibleItems.map(({ id, tab, label, icon: Icon, badgeKey }) => {
               const isActive = active === id && (!tab || activeTab === tab)
               return (
                 <button
                   key={label}
-                  onClick={() => onNav(id, tab)}
+                  onClick={() => { onNav(id, tab); onCloseMobile?.() }}
                   className={`w-full flex items-center gap-3 px-4 py-2.5 transition-all duration-200 relative group border-r-[3px] ${
                     isActive ? 'bg-white/15 border-[#95d348]' : 'bg-transparent border-transparent hover:bg-white/5'
                   }`}
@@ -177,13 +191,21 @@ export default function AdminSidebar({ active, activeTab, onNav, permissions }) 
                     <Icon size={16} className="transition-colors" style={{ color: isActive ? '#fff' : group.accent, opacity: isActive ? 1 : 0.75 }} />
                   </div>
                   {!collapsed && (
-                    <span className={`text-sm font-medium transition-colors truncate ${isActive ? 'text-white' : 'text-white/70 group-hover:text-white'}`}>
+                    <span className={`text-sm font-medium transition-colors truncate flex-1 text-left ${isActive ? 'text-white' : 'text-white/70 group-hover:text-white'}`}>
                       {label}
                     </span>
                   )}
+                  {!collapsed && badgeKey && badges[badgeKey] > 0 && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#95d348] text-[#0A1B3D] shrink-0">
+                      {badges[badgeKey]}
+                    </span>
+                  )}
+                  {collapsed && badgeKey && badges[badgeKey] > 0 && (
+                    <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#95d348]" />
+                  )}
                   {collapsed && (
                     <div className="absolute left-full ml-2 bg-[#1655c3] text-white text-xs font-semibold px-2 py-1 rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-lg">
-                      {label}
+                      {label}{badgeKey && badges[badgeKey] > 0 ? ` (${badges[badgeKey]})` : ''}
                     </div>
                   )}
                 </button>
@@ -201,6 +223,7 @@ export default function AdminSidebar({ active, activeTab, onNav, permissions }) 
           {!collapsed && <span className="text-white/60 text-sm group-hover:text-red-400">Logout</span>}
         </button>
       </div>
-    </aside>
+      </aside>
+    </>
   )
 }

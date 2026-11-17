@@ -270,6 +270,12 @@ export const webinarsService = {
   addRegistration: data => add('webinarRegistrations', data),
   getRegistrations: webinarId => getAll('webinarRegistrations', where('webinarId', '==', webinarId), orderBy('createdAt', 'desc')),
   getAllRegistrations: () => getAll('webinarRegistrations', orderBy('createdAt', 'desc')),
+  // Bounded by `sinceMs` AND a hard limit(2000) safety cap — used for the
+  // dashboard's "registrations over time" / "per webinar" charts. A real
+  // date-range query, not a full-collection read: even the 365-day toggle
+  // only ever reads docs created in that window, never the whole
+  // collection's history.
+  getRegistrationsSince: sinceMs => getAll('webinarRegistrations', where('createdAt', '>=', new Date(sinceMs)), orderBy('createdAt', 'desc'), limit(2000)),
   // Live feed of every registration doc, across all webinars — the ground
   // truth for "how many registered" (each webinar's own `registered`
   // counter is a best-effort increment at submit time that can silently
@@ -392,6 +398,14 @@ export const courseEnrollmentsService = {
     const [Pending, Approved, Rejected] = await Promise.all([countOf('Pending'), countOf('Approved'), countOf('Rejected')])
     return { Pending, Approved, Rejected }
   },
+  // Across every course — used for the sidebar's "Courses" badge.
+  getPendingCountAll: () => getCountFromServer(query(col('courseEnrollments'), where('status', '==', 'Pending'))).then(s => s.data().count),
+  // Across every course — used for the dashboard's "Enrollment Status" donut.
+  getStatusCountsAll: async () => {
+    const countOf = status => getCountFromServer(query(col('courseEnrollments'), where('status', '==', status))).then(s => s.data().count)
+    const [Pending, Approved, Rejected] = await Promise.all([countOf('Pending'), countOf('Approved'), countOf('Rejected')])
+    return { Pending, Approved, Rejected }
+  },
   updateStatus: (id, status, extra = {}) => update('courseEnrollments', id, { status, ...extra }),
   // Set after a successful (or retried) Google Contacts save — see
   // src/lib/googleContacts.js and AdminCourseEnrollments.jsx's
@@ -505,6 +519,10 @@ export const certificatesService = {
 export const ambassadorsService = {
   getAll: () => getAll(COLS.ambassadors, orderBy('createdAt', 'desc')).then(applyManualOrder),
   getActive: () => getAll(COLS.ambassadors, where('status', '==', 'Active')).then(applyManualOrder),
+  // Top N by referred-student count — used by the dashboard's "Top
+  // Ambassadors" table instead of listening to the whole collection just
+  // to show 5 rows.
+  getTop: (limitN = 5) => getAll(COLS.ambassadors, orderBy('students', 'desc'), limit(limitN)),
   getOne: id => getOne(COLS.ambassadors, id),
   add: data => add(COLS.ambassadors, { ...data, students: 0 }).then(id => { triggerSiteDataRebuild(); return id }),
   // Also used by the public self-claim flow (AmbassadorAcceptInvite.jsx) to
@@ -745,6 +763,11 @@ export const studentsDbService = {
     err => console.error('Firebase studentDatabase listen error:', err)
   ),
   getCount: () => getCountFromServer(col(STUDENT_DB_COL)).then(s => s.data().count),
+  // Capped sample (default 500) for the dashboard's "Students by
+  // University/City" donut — a representative recent slice, not an
+  // exhaustive scan. The donut/caption makes clear it's based on a sample
+  // when the real total exceeds this.
+  getSample: (limitN = 500) => getAll(STUDENT_DB_COL, orderBy('updatedAt', 'desc'), limit(limitN)),
   // Merges `removeId` into `keepId`: unions registrations/certificates/
   // enrollments (deduped by webinarId/certCode/courseId, same rule each
   // upsertFrom* method already uses), fills in any blank name/email/
@@ -923,6 +946,9 @@ export const blogCategoriesService = {
 // medical content.
 export const newsService = {
   getAll: () => getAll('news', orderBy('createdAt', 'desc')),
+  // Used for AdminEvents.jsx's "Auto News" tab badge and the sidebar's
+  // "Events & News" badge.
+  getAutoDraftCount: () => getCountFromServer(query(collection(db, 'news'), where('source', '==', 'auto-news'), where('status', '==', 'Draft'))).then(s => s.data().count),
   getPublished: async () => {
     try {
       return await getAll('news', where('status', '==', 'Published'), orderBy('createdAt', 'desc'))
@@ -1029,9 +1055,13 @@ export const advisoryService = {
 // anything but these counts anyway.
 export async function getDashboardStats() {
   const count = snap => snap.data().count
+  const now = new Date()
+  const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+  const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
   const [
     students, webinars, upcomingWebinars, courses, activeCourses,
     certs, validCerts, ambassadors, activeAmbassadors,
+    regsThisMonth, regsLastMonth, pendingEnrollments, publishedBlog, publishedEvents,
   ] = await Promise.all([
     getCountFromServer(col(STUDENT_DB_COL)),
     getCountFromServer(col(COLS.webinars)),
@@ -1042,6 +1072,11 @@ export async function getDashboardStats() {
     getCountFromServer(query(col(COLS.certificates), where('status', '==', 'Valid'))),
     getCountFromServer(col(COLS.ambassadors)),
     getCountFromServer(query(col(COLS.ambassadors), where('status', '==', 'Active'))),
+    getCountFromServer(query(col('webinarRegistrations'), where('createdAt', '>=', startOfThisMonth))),
+    getCountFromServer(query(col('webinarRegistrations'), where('createdAt', '>=', startOfLastMonth), where('createdAt', '<', startOfThisMonth))),
+    getCountFromServer(query(col('courseEnrollments'), where('status', '==', 'Pending'))),
+    getCountFromServer(query(col(COLS.blog), where('status', '==', 'Published'))),
+    getCountFromServer(query(collection(db, 'news'), where('status', '==', 'Published'))),
   ])
   return {
     totalStudents: count(students),
@@ -1051,6 +1086,10 @@ export async function getDashboardStats() {
     activeCourses: count(activeCourses),
     validCerts: count(validCerts),
     activeAmbassadors: count(activeAmbassadors),
+    registrationsThisMonth: count(regsThisMonth),
+    registrationsLastMonth: count(regsLastMonth),
+    pendingEnrollments: count(pendingEnrollments),
+    publishedPosts: count(publishedBlog) + count(publishedEvents),
   }
 }
 
@@ -1091,6 +1130,8 @@ export const pendingTestimonialsService = {
     return new Set(snap.docs.map(d => d.data().dedupeKey))
   },
   add: data => add('pendingTestimonials', { ...data, status: 'Pending' }),
+  // Used for the sidebar's "Pending Reviews" badge.
+  getPendingCount: () => getCountFromServer(query(collection(db, 'pendingTestimonials'), where('status', '==', 'Pending'))).then(s => s.data().count),
   reject: id => update('pendingTestimonials', id, { status: 'Rejected' }),
   approve: async pending => {
     await testimonialsService.add({

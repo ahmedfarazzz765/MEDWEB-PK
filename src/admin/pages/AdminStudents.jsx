@@ -7,6 +7,7 @@ import Modal      from '../components/Modal'
 import AdminButton from '../components/AdminButton'
 import FormField, { inputCls } from '../components/FormField'
 import useAdminPermissions from '../hooks/useAdminPermissions'
+import { useToast } from '../components/Toast'
 import { studentsDbService } from '../../firebase/services'
 
 const PAGE_SIZE = 200
@@ -46,6 +47,7 @@ function makeColumns(openProfile) {
 
 export default function AdminStudents() {
   const { canDelete } = useAdminPermissions()
+  const toast = useToast()
   const [data,    setData]    = useState([])
   const [loading, setLoading] = useState(true)
   const [pageSize, setPageSize] = useState(PAGE_SIZE)
@@ -166,7 +168,7 @@ export default function AdminStudents() {
       for (const [k, list] of byEmail) addGroup(`email:${k}`, list)
       setDupeGroups(groups)
     } catch (e) {
-      alert('Error finding duplicates: ' + e.message)
+      toast.error('Error finding duplicates: ' + e.message)
       setDupModalOpen(false)
     } finally {
       setFindingDupes(false)
@@ -181,8 +183,9 @@ export default function AdminStudents() {
       setDupeGroups(prev => prev
         .map(g => ({ ...g, students: g.students.filter(s => s.id !== removeId) }))
         .filter(g => g.students.length > 1))
+      toast.success('Records merged.')
     } catch (e) {
-      alert('Error merging: ' + e.message)
+      toast.error('Error merging: ' + e.message)
     } finally {
       setMergingId(null)
     }

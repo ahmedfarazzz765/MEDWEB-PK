@@ -11,6 +11,7 @@ import ActionButtons from '../components/ActionButtons'
 import TagInput from '../components/TagInput'
 import BlogContentEditor from '../components/BlogContentEditor'
 import useAdminPermissions from '../hooks/useAdminPermissions'
+import { useToast } from '../components/Toast'
 import { newsService } from '../../firebase/services'
 import { toOptimizedUrl } from '../../firebase/cloudinary'
 import CoverImage from '../../components/CoverImage'
@@ -98,6 +99,7 @@ function makeColumns(openEdit, handlePublish, handleDelete, canWrite) {
 
 export default function AdminEvents() {
   const { canWrite, isSuperAdmin } = useAdminPermissions()
+  const toast = useToast()
   const [data,    setData]    = useState([])
   const [loading, setLoading] = useState(true)
   const [tab,     setTab]     = useState('events') // 'events' | 'auto'
@@ -187,7 +189,7 @@ export default function AdminEvents() {
   const validReferences = form.references.filter(r => r.url?.trim())
 
   const handleSaveBasics = async () => {
-    if (!form.title.trim()) { alert('Title is required'); return }
+    if (!form.title.trim()) { toast.error('Title is required'); return }
     setSaving(true)
     try {
       const existingSlugs = new Set(data.filter(p => p.id !== editId).map(p => p.slug).filter(Boolean))
@@ -222,7 +224,7 @@ export default function AdminEvents() {
         setEditorContent(existing?.content || '')
         setContentEditorOpen(true)
       }
-    } catch (e) { alert('Error: ' + e.message) }
+    } catch (e) { toast.error('Error: ' + e.message) }
     finally { setSaving(false) }
   }
 
@@ -240,7 +242,7 @@ export default function AdminEvents() {
     try {
       await newsService.update(editorPost.id, { content: editorContent, status: 'Draft' })
       setEditorPost(prev => ({ ...prev, status: 'Draft' }))
-    } catch (e) { alert('Error: ' + e.message) }
+    } catch (e) { toast.error('Error: ' + e.message) }
     finally { setEditorSaving(false) }
   }
 
@@ -250,12 +252,12 @@ export default function AdminEvents() {
       await newsService.update(editorPost.id, { content: editorContent })
       await newsService.publish(editorPost.id)
       closeContentEditor()
-    } catch (e) { alert('Error: ' + e.message) }
+    } catch (e) { toast.error('Error: ' + e.message) }
     finally { setEditorSaving(false) }
   }
 
   const handlePublish = async id => {
-    try { await newsService.publish(id) } catch (e) { alert('Error: ' + e.message) }
+    try { await newsService.publish(id) } catch (e) { toast.error('Error: ' + e.message) }
   }
 
   // Firebase Storage has no files to clean up here — every upload in this
@@ -268,7 +270,7 @@ export default function AdminEvents() {
   // explicitly rather than silently claiming cleanup that isn't real.
   const handleDelete = async id => {
     if (!confirm('Delete this event/news item? Its uploaded images stay on Cloudinary (not deleted) — same as every other delete in this admin.')) return
-    try { await newsService.delete(id) } catch (e) { alert('Error: ' + e.message) }
+    try { await newsService.delete(id) } catch (e) { toast.error('Error: ' + e.message) }
   }
 
   const columns   = makeColumns(openEdit, handlePublish, handleDelete, canWrite)
@@ -289,10 +291,12 @@ export default function AdminEvents() {
   // excluded already (autoNewsDrafts is Draft-only).
   const handleBulkDeleteAutoDrafts = async () => {
     if (!autoNewsDrafts.length) return
-    if (!confirm(`Delete all ${autoNewsDrafts.length} bot Draft(s)? Published items are never touched. This cannot be undone.`)) return
+    const n = autoNewsDrafts.length
+    if (!confirm(`Delete all ${n} bot Draft(s)? Published items are never touched. This cannot be undone.`)) return
     try {
       await Promise.all(autoNewsDrafts.map(row => newsService.delete(row.id)))
-    } catch (e) { alert('Error: ' + e.message) }
+      toast.success(`Deleted ${n} bot draft${n === 1 ? '' : 's'}.`)
+    } catch (e) { toast.error('Error: ' + e.message) }
   }
 
   return (

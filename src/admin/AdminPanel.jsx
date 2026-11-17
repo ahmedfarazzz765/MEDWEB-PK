@@ -1,8 +1,12 @@
+import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import AdminSidebar from './components/AdminSidebar'
 import AdminHeader  from './components/AdminHeader'
 import AccessDenied  from './components/AccessDenied'
+import CommandPalette from './components/CommandPalette'
+import { ToastProvider } from './components/Toast'
 import useAdminPermissions from './hooks/useAdminPermissions'
+import useAdminBadgeCounts from './hooks/useAdminBadgeCounts'
 import AdminDashboard   from './pages/AdminDashboard'
 import AdminStudents    from './pages/AdminStudents'
 import AdminWebinars    from './pages/AdminWebinars'
@@ -69,11 +73,33 @@ export default function AdminPanel() {
   const activePage = segments[0] || 'dashboard'
   const contentTab = activePage === 'content' ? (segments[1] || 'hero') : 'hero'
   const perms = useAdminPermissions()
+  const badges = useAdminBadgeCounts()
   const PageComponent = pages[activePage] || AdminDashboard
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const [paletteOpen, setPaletteOpen] = useState(false)
 
   const handleNav = (id, tab) => {
     navigate(tab ? `/admin/${id}/${tab}` : `/admin/${id}`)
   }
+
+  // Ctrl+K / Cmd+K anywhere in the admin panel opens the command palette —
+  // ignored while typing in a text field/textarea/contenteditable so it
+  // doesn't steal a literal "k" from a form.
+  useEffect(() => {
+    const onKeyDown = e => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setPaletteOpen(o => !o)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
+  // Closes the mobile drawer automatically on navigation (route change) —
+  // covers browser back/forward too, not just the sidebar's own link
+  // clicks (which already close it directly).
+  useEffect(() => { setMobileOpen(false) }, [location.pathname])
 
   // Mirrors the permission key format used in adminSections.js: plain `id`
   // for most pages, `id:tab` for AdminContent's internal tabs.
@@ -90,22 +116,31 @@ export default function AdminPanel() {
   )
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
-      <AdminSidebar
-        active={activePage}
-        activeTab={activePage === 'content' ? contentTab : undefined}
-        onNav={handleNav}
-        permissions={perms}
-      />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <AdminHeader page={activePage} tab={contentTab} permissions={perms} />
-        <main key={activePage} className="flex-1 overflow-y-auto animate-page-fade-in">
-          {perms.loading ? null
-            : blocked ? <AccessDenied />
-            : activePage === 'content' ? <AdminContent initialTab={contentTab} />
-            : <PageComponent />}
-        </main>
+    <ToastProvider>
+      <div className="admin-shell flex h-screen bg-admin-bg overflow-hidden font-inter">
+        <AdminSidebar
+          active={activePage}
+          activeTab={activePage === 'content' ? contentTab : undefined}
+          onNav={handleNav}
+          permissions={perms}
+          mobileOpen={mobileOpen}
+          onCloseMobile={() => setMobileOpen(false)}
+        />
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+          <AdminHeader
+            page={activePage} tab={contentTab} permissions={perms} badges={badges}
+            onOpenMobileNav={() => setMobileOpen(true)}
+            onOpenSearch={() => setPaletteOpen(true)}
+          />
+          <main key={activePage} className="flex-1 overflow-y-auto animate-page-fade-in">
+            {perms.loading ? null
+              : blocked ? <AccessDenied />
+              : activePage === 'content' ? <AdminContent initialTab={contentTab} />
+              : <PageComponent />}
+          </main>
+        </div>
+        {paletteOpen && <CommandPalette onNavigate={handleNav} onClose={() => setPaletteOpen(false)} />}
       </div>
-    </div>
+    </ToastProvider>
   )
 }

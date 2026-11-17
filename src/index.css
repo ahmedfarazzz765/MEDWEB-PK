@@ -196,6 +196,53 @@ html { scroll-behavior: smooth; overflow-x: hidden; }
   }
   .animate-page-fade-in { animation: page-fade-in 0.25s ease-out; }
 
+  /* Staggered entrance for a grid/row of cards (KPI cards, etc.) — apply
+     .animate-card-in to each card and set --stagger-i to its index (e.g.
+     inline style={{ '--stagger-i': i }}) for a cascading reveal. */
+  @keyframes card-in {
+    from { opacity: 0; transform: translateY(8px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .animate-card-in {
+    animation: card-in 0.3s ease-out backwards;
+    animation-delay: calc(var(--stagger-i, 0) * 50ms);
+  }
+
+  /* Admin dashboard/table cards — a small lift + shadow bump on hover,
+     200ms, matching the "Motion: subtle, 150-300ms" spec. */
+  .hover-lift {
+    transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
+  }
+  .hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(22, 85, 195, 0.08);
+  }
+
+  /* Admin design system (Round 14 Part C): Inter for body text (set via
+     .font-inter on the admin shell's root), Poppins for headings — this
+     reaches every h1-h4 used across the ~20 admin pages' own section
+     titles without needing each one's className touched individually. */
+  .admin-shell h1, .admin-shell h2, .admin-shell h3, .admin-shell h4 {
+    font-family: 'Poppins', sans-serif;
+  }
+
+  /* Turns off decorative motion (page transitions, staggered card
+     entrance, hover-lift transitions) for anyone who's asked for reduced
+     motion — deliberately leaves .animate-spin/.animate-pulse alone,
+     since those communicate real loading state rather than decoration,
+     and leaves Framer Motion's own animations alone too (components using
+     it check window.matchMedia('(prefers-reduced-motion: reduce)')
+     directly in JS, same pattern EventsListPage.jsx's useReducedMotion()
+     already established). */
+  @media (prefers-reduced-motion: reduce) {
+    .animate-page-fade-in, .animate-card-in {
+      animation: none !important;
+    }
+    .hover-lift {
+      transition: none !important;
+    }
+  }
+
   /* Blue-to-green neon glow for "Upcoming" webinar cards only — the
      gradient ring comes from the wrapper's background showing through a
      thin padding gap (see .webinar-neon-border usage in WebinarsSlider),
