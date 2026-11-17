@@ -513,6 +513,12 @@ async function main() {
         metaTitle: (rewritten.metaTitle || rewritten.title).trim().slice(0, 60),
         metaDescription: (rewritten.metaDescription || rewritten.title).trim().slice(0, 155),
         status: 'Draft',
+        // Marks this as a bot-created draft, not an admin-authored one —
+        // AdminEvents.jsx's "Auto News" tab filters on this field so these
+        // never mix with real events/news, and its bulk "delete all
+        // Drafts" action uses it too, so it can never touch a human-made
+        // Draft event by mistake.
+        source: 'auto-news',
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       })

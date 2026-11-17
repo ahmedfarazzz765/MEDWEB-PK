@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Newspaper, CheckCircle, Edit as EditIcon, Plus, X } from 'lucide-react'
+import { Newspaper, CheckCircle, Edit as EditIcon, Plus, X, Bot, Trash2 } from 'lucide-react'
 import StatCard    from '../components/StatCard'
 import DataTable   from '../components/DataTable'
 import Modal       from '../components/Modal'
@@ -57,6 +57,15 @@ function uniqueSlug(base, existingSlugs) {
 function needsMigration(row) {
   return row.category === undefined
 }
+// A pre-existing bot-created Draft from before `source` existed looks
+// exactly like one created today, minus the field itself: category
+// 'News' (the bot never sets anything else), no coverImage/imageUrl (the
+// bot never had an image pipeline until later), and still a Draft (any
+// bot item an admin already reviewed and published is a real published
+// item now, not a stray draft — left alone here on purpose).
+function needsAutoNewsBackfill(row) {
+  return row.source === undefined && row.status === 'Draft' && row.category === 'News' && !row.coverImage && !row.imageUrl
+}
 function migratedFields(row) {
   return {
     category: 'News',
@@ -88,9 +97,10 @@ function makeColumns(openEdit, handlePublish, handleDelete, canWrite) {
 }
 
 export default function AdminEvents() {
-  const { canWrite } = useAdminPermissions()
+  const { canWrite, isSuperAdmin } = useAdminPermissions()
   const [data,    setData]    = useState([])
   const [loading, setLoading] = useState(true)
+  const [tab,     setTab]     = useState('events') // 'events' | 'auto'
   const [modal,   setModal]   = useState(false)
   const [form,    setForm]    = useState(emptyForm)
   const [editId,  setEditId]  = useState(null)
@@ -111,6 +121,18 @@ export default function AdminEvents() {
     if (loading || !canWrite) return
     const stale = data.filter(needsMigration)
     stale.forEach(row => newsService.update(row.id, migratedFields(row)).catch(() => {}))
+  }, [data, loading, canWrite])
+
+  // One-time-per-doc backfill — see needsAutoNewsBackfill()'s own comment.
+  // A doc the category-backfill effect above just migrated (category
+  // undefined → 'News') won't qualify here until `data` itself reflects
+  // that write — newsService.listen() is a live onSnapshot, so that
+  // happens automatically a moment later and re-runs this effect, no
+  // second page load needed.
+  useEffect(() => {
+    if (loading || !canWrite) return
+    const stale = data.filter(needsAutoNewsBackfill)
+    stale.forEach(row => newsService.update(row.id, { source: 'auto-news' }).catch(() => {}))
   }, [data, loading, canWrite])
 
   const openAdd  = () => { setForm(emptyForm()); setEditId(null); setModal('add') }
@@ -253,6 +275,26 @@ export default function AdminEvents() {
   const published = data.filter(b => b.status === 'Published').length
   const drafts    = data.filter(b => b.status === 'Draft').length
 
+  // Bot drafts never mix with real events/news here — a bot item graduates
+  // out of this tab the moment it's published (it's a real item at that
+  // point, not a stray draft), so this is always exactly the set the bulk
+  // delete below is allowed to touch.
+  const autoNewsDrafts = data.filter(r => r.source === 'auto-news' && r.status === 'Draft')
+  const eventsAndNews  = data.filter(r => !(r.source === 'auto-news' && r.status === 'Draft'))
+  const visibleData    = tab === 'auto' ? autoNewsDrafts : eventsAndNews
+
+  // Super Admin only, scoped to exactly the bot-draft set above — never
+  // the main Events & News list, so a real admin-authored Draft can never
+  // be caught by this even by mistake. Published items are structurally
+  // excluded already (autoNewsDrafts is Draft-only).
+  const handleBulkDeleteAutoDrafts = async () => {
+    if (!autoNewsDrafts.length) return
+    if (!confirm(`Delete all ${autoNewsDrafts.length} bot Draft(s)? Published items are never touched. This cannot be undone.`)) return
+    try {
+      await Promise.all(autoNewsDrafts.map(row => newsService.delete(row.id)))
+    } catch (e) { alert('Error: ' + e.message) }
+  }
+
   return (
     <div className="p-6 space-y-6">
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
@@ -261,8 +303,36 @@ export default function AdminEvents() {
         <StatCard icon={EditIcon}    label="Drafts"       value={loading ? '…' : drafts}       color="#f59e0b" bg="#fffbeb" />
       </div>
 
-      <DataTable title="Events & News" columns={columns} data={data} searchKey="title" emptyMessage="No events or news yet — click New Item to create one"
-        actions={canWrite && <AdminButton size="sm" onClick={openAdd}>+ New Item</AdminButton>}
+      <div className="flex gap-2">
+        <button onClick={() => setTab('events')}
+          className={`text-xs font-bold px-3.5 py-2 rounded-lg transition-all ${tab === 'events' ? 'text-white bg-[#1655c3]' : 'text-gray-500 bg-gray-100 hover:bg-gray-200'}`}>
+          Events & News
+        </button>
+        <button onClick={() => setTab('auto')}
+          className={`flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-lg transition-all ${tab === 'auto' ? 'text-white bg-[#1655c3]' : 'text-gray-500 bg-gray-100 hover:bg-gray-200'}`}>
+          <Bot size={13} /> Auto News (bot drafts)
+          {autoNewsDrafts.length > 0 && (
+            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${tab === 'auto' ? 'bg-white/25 text-white' : 'bg-amber-100 text-amber-700'}`}>
+              {autoNewsDrafts.length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      <DataTable
+        title={tab === 'auto' ? 'Auto News — bot-created drafts pending review' : 'Events & News'}
+        columns={columns} data={visibleData} searchKey="title"
+        emptyMessage={tab === 'auto' ? 'No bot drafts waiting for review' : 'No events or news yet — click New Item to create one'}
+        actions={
+          <div className="flex items-center gap-2">
+            {tab === 'auto' && isSuperAdmin && autoNewsDrafts.length > 0 && (
+              <AdminButton size="sm" variant="ghost" onClick={handleBulkDeleteAutoDrafts}>
+                <Trash2 size={13} className="mr-1.5" /> Select all Drafts → Delete ({autoNewsDrafts.length})
+              </AdminButton>
+            )}
+            {canWrite && <AdminButton size="sm" onClick={openAdd}>+ New Item</AdminButton>}
+          </div>
+        }
       />
 
       {modal && (
