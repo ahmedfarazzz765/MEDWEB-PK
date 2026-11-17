@@ -4,7 +4,7 @@
 import {
   collection, doc, addDoc, setDoc, updateDoc, deleteDoc,
   getDocs, getDoc, query, where, orderBy, limit, startAfter,
-  serverTimestamp, increment, onSnapshot, runTransaction, getCountFromServer,
+  serverTimestamp, increment, onSnapshot, runTransaction, getCountFromServer, Timestamp,
 } from 'firebase/firestore'
 import { db, auth } from './config'
 
@@ -95,6 +95,56 @@ function reorderCollection(colName, items) {
 // trimmed: latest 20 Published posts, with `content` (the Tiptap body)
 // stripped out, since that's genuinely heavy and only the single post page
 // ever needs it (fetched separately, by slug, same as before).
+// setDoc() rejects `undefined` anywhere in the payload outright — even
+// nested inside an array/object — which is exactly what a course/webinar/
+// etc. doc can have plenty of (an admin form field that was simply never
+// filled in, or a service helper's own optional-field spread). Recursively
+// strips every `undefined` (dropping the key/array slot entirely, same as
+// Firestore's own `ignoreUndefinedProperties` would for a top-level field),
+// and normalizes Firestore Timestamp / JS Date values to plain epoch-ms
+// numbers so nothing downstream has to special-case either type.
+function deepCleanForFirestore(value) {
+  if (value === undefined) return undefined
+  if (value === null) return null
+  if (value instanceof Timestamp) return value.toMillis()
+  if (value instanceof Date) return value.getTime()
+  if (Array.isArray(value)) {
+    return value.map(deepCleanForFirestore).filter(v => v !== undefined)
+  }
+  if (typeof value === 'object') {
+    const out = {}
+    for (const [k, v] of Object.entries(value)) {
+      const cleaned = deepCleanForFirestore(v)
+      if (cleaned !== undefined) out[k] = cleaned
+    }
+    return out
+  }
+  return value
+}
+
+// Last-resort trim when the whole payload is pushing Firestore's 1 MiB
+// document limit — truncates long text fields on every item of a list
+// rather than dropping whole items, which would be a much more visible
+// behavior change for a comparatively small size win.
+const LONG_FIELD_KEYS = ['description', 'content', 'body', 'bio', 'fullDescription', 'shortDescription']
+const LONG_FIELD_THRESHOLD = 500
+const LONG_FIELD_TRUNCATE_TO = 300
+function truncateLongFields(rows) {
+  if (!Array.isArray(rows)) return rows
+  return rows.map(row => {
+    if (!row || typeof row !== 'object') return row
+    const next = { ...row }
+    for (const key of LONG_FIELD_KEYS) {
+      const val = next[key]
+      if (typeof val === 'string' && val.length > LONG_FIELD_THRESHOLD) {
+        next[key] = val.slice(0, LONG_FIELD_TRUNCATE_TO) + '…'
+      }
+    }
+    return next
+  })
+}
+const SITE_DATA_LIST_KEYS = ['courses', 'webinars', 'blogs', 'announcements', 'ambassadors', 'testimonials', 'team', 'teamCategories', 'advisory', 'blogCategories', 'news']
+
 function rebuildSiteData() {
   // `public/siteData` itself is readable by anyone (see the rules file) —
   // unlike every other read here, this one is NOT gated per-document by
@@ -152,7 +202,24 @@ function rebuildSiteData() {
       news,
       updatedAt: Date.now(),
     }
-    return setDoc(doc(db, 'public', 'siteData'), data).then(() => data)
+
+    let cleaned = deepCleanForFirestore(data)
+    let byteSize = new TextEncoder().encode(JSON.stringify(cleaned)).length
+    console.log(`siteData payload size: ${(byteSize / 1024).toFixed(1)} KB`)
+
+    // 900 KB, not Firestore's real 1 MiB (1048576 bytes) limit — leaves
+    // headroom for the fields set outside this object (Firestore's own
+    // per-document overhead, plus whatever setDoc's own encoding adds).
+    if (byteSize > 900 * 1024) {
+      console.warn(`siteData payload is ${(byteSize / 1024).toFixed(1)} KB (over 900 KB) — truncating long text fields on list items.`)
+      for (const key of SITE_DATA_LIST_KEYS) {
+        if (Array.isArray(cleaned[key])) cleaned[key] = truncateLongFields(cleaned[key])
+      }
+      byteSize = new TextEncoder().encode(JSON.stringify(cleaned)).length
+      console.log(`siteData payload size after truncation: ${(byteSize / 1024).toFixed(1)} KB`)
+    }
+
+    return setDoc(doc(db, 'public', 'siteData'), cleaned).then(() => cleaned)
   })
 }
 // Fire-and-forget wrapper — an admin save shouldn't wait on (or fail over)

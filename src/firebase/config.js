@@ -41,8 +41,17 @@ const app = initializeApp({
 // doc read twice in a session) can be served from disk instead of a fresh
 // network read in some cases, and keeps multiple open tabs from each
 // building their own separate in-memory cache from scratch.
+//
+// ignoreUndefinedProperties: a safety net, not the fix — setDoc()/
+// updateDoc() otherwise reject the ENTIRE write the moment any field,
+// anywhere (including nested in an array/object), is `undefined`.
+// rebuildSiteData() already deep-cleans its own payload explicitly before
+// writing (see deepCleanForFirestore in services.js); this just means any
+// OTHER write in the app with a stray undefined field quietly drops that
+// field instead of failing outright.
 export const db = initializeFirestore(app, {
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+  ignoreUndefinedProperties: true,
 })
 export const auth      = getAuth(app)
 export const functions = getFunctions(app)
