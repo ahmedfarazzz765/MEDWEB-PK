@@ -78,7 +78,7 @@ service cloud.firestore {
     // The ONLY accounts with unconditional full access. Must be kept
     // byte-for-byte in sync with src/constants/superAdmins.js.
     function isSuperAdmin() {
-      return isSignedIn() && request.auth.token.email.lower() in ['medwebpk@gmail.com'];
+      return isSignedIn() && request.auth.token.email.lower() in ['medwebpk@gmail.com', 'admin@gmail.com'];
     }
     function hasAdminDoc() {
       return exists(/databases/$(database)/documents/adminUsers/$(request.auth.token.email.lower()));
