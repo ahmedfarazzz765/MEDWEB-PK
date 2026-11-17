@@ -9,6 +9,7 @@ import { ConfirmProvider } from './components/ConfirmDialog'
 import PageSkeleton from './components/Skeleton'
 import useAdminPermissions from './hooks/useAdminPermissions'
 import useAdminBadgeCounts from './hooks/useAdminBadgeCounts'
+import useAdminTheme from './hooks/useAdminTheme'
 import AdminDashboard   from './pages/AdminDashboard'
 import AdminStudents    from './pages/AdminStudents'
 import AdminWebinars    from './pages/AdminWebinars'
@@ -76,6 +77,7 @@ export default function AdminPanel() {
   const contentTab = activePage === 'content' ? (segments[1] || 'hero') : 'hero'
   const perms = useAdminPermissions()
   const badges = useAdminBadgeCounts()
+  const { theme, toggleTheme } = useAdminTheme()
   const PageComponent = pages[activePage] || AdminDashboard
   const [mobileOpen, setMobileOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
@@ -120,14 +122,7 @@ export default function AdminPanel() {
   return (
     <ToastProvider>
       <ConfirmProvider>
-      <div className="admin-shell relative flex h-screen overflow-hidden font-inter">
-        {/* Fixed aurora background (Round 15) — behind the entire admin
-            shell, not just the dashboard, since glass summary cards
-            (StatCard) are used on other pages too and need it showing
-            through. Data-heavy page content (tables/forms/modals) sits on
-            its own high-opacity .glass-solid surface regardless, so this
-            never hurts readability there. */}
-        <div className="admin-aurora"><div className="aurora-blob" /></div>
+      <div className="admin-shell admin-shell-bg relative flex h-screen overflow-hidden font-inter">
         <AdminSidebar
           active={activePage}
           activeTab={activePage === 'content' ? contentTab : undefined}
@@ -141,6 +136,7 @@ export default function AdminPanel() {
             page={activePage} tab={contentTab} permissions={perms} badges={badges}
             onOpenMobileNav={() => setMobileOpen(true)}
             onOpenSearch={() => setPaletteOpen(true)}
+            theme={theme} onToggleTheme={toggleTheme}
           />
           <main key={activePage} className="flex-1 overflow-y-auto overflow-x-hidden animate-page-fade-in">
             {perms.loading ? <PageSkeleton />

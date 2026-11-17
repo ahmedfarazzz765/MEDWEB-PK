@@ -19,3 +19,12 @@ public/sitemap.xml
 *.njsproj
 *.sln
 *.sw?
+
+# Local-only files that have shown up in this working directory but aren't
+# part of the project (personal docs/media, the local VS Code workspace file).
+# .gitignore doesn't support quoting, so spaces are left bare (not escaped) —
+# that's enough since these are plain match patterns, not shell args.
+Pakistan Observer.pdf
+WhatsApp Unknown 2026-11-17 at 7.28.29 PM.zip
+WhatsApp Unknown 2026-11-17 at 7.28.29 PM/
+*.code-workspace

@@ -9,6 +9,7 @@ import FormField, { inputCls } from './components/FormField'
 import AdminButton from './components/AdminButton'
 import { ToastProvider } from './components/Toast'
 import { ConfirmProvider } from './components/ConfirmDialog'
+import useAdminTheme from './hooks/useAdminTheme'
 
 // DEV-ONLY visual-QA harness (Round 15 F) — renders the real admin shell
 // (sidebar, topbar, aurora background, glass cards) with hand-written mock
@@ -44,35 +45,46 @@ const MOCK_EVENTS = [
   { id: '3', title: 'Breaking: New WHO Antibiotic Guidelines', category: 'News', status: 'Draft', published: '' },
 ]
 
+const MOCK_CERTS = [
+  { id: '1', certCode: 'CERT-MW-2026-00142', recipient: 'Hassan Raza', title: 'Clinical Pharmacology Update', issued: '2026-11-10', verifications: 3, status: 'Valid' },
+  { id: '2', certCode: 'CERT-MW-2026-00141', recipient: 'Fatima Noor', title: 'AMR: The Silent Pandemic', issued: '2026-11-09', verifications: 1, status: 'Valid' },
+  { id: '3', certCode: 'CERT-MW-2025-00098', recipient: 'Ayesha Khan', title: 'Psychiatry Grand Rounds', issued: '2025-10-30', verifications: 0, status: 'Revoked' },
+]
+
 function MockDashboard() {
+  // Matches the real AdminDashboard.jsx's 4-card KPI row and token usage
+  // (docs/design/admin-{light,dark}.png) — this mock exists only because
+  // the real dashboard needs live Firestore data; its shell/KPI/button
+  // styling is kept in sync by hand.
   const kpis = [
-    { icon: Users, label: 'Total Students', value: 268, sub: '268 on file', trend: 12, color: '#60a5fa', bg: 'rgba(96,165,250,0.15)' },
-    { icon: TrendingUp, label: 'Registrations This Month', value: 47, sub: '', trend: 8, sparkline: [3, 5, 2, 8, 6, 9, 14], color: '#95d348', bg: 'rgba(149,211,72,0.15)' },
-    { icon: Video, label: 'Upcoming Webinars', value: 3, sub: '18 total', color: '#c084fc', bg: 'rgba(192,132,252,0.15)' },
-    { icon: CreditCard, label: 'Pending Enrollments', value: 4, sub: 'awaiting payment review', color: '#fbbf24', bg: 'rgba(251,191,36,0.15)' },
-    { icon: Award, label: 'Certificates Issued', value: 204, sub: 'valid on file', trend: 0, color: '#22d3ee', bg: 'rgba(34,211,238,0.15)' },
-    { icon: Newspaper, label: 'Published Posts & Events', value: 31, sub: 'blog + events & news', color: '#f472b6', bg: 'rgba(244,114,182,0.15)' },
+    { icon: Users, label: 'Students', value: 268, sub: '268 on file', color: '#1655C3', bg: 'rgba(22,85,195,0.12)' },
+    { icon: TrendingUp, label: 'Registrations this month', value: 47, trend: 8, sparkline: [3, 5, 2, 8, 6, 9, 14], color: '#1655C3', bg: 'rgba(22,85,195,0.12)' },
+    { icon: CreditCard, label: 'Pending Enrollments', value: 4, sub: 'awaiting payment review', color: '#CA8A04', bg: 'rgba(202,138,4,0.14)' },
+    { icon: Award, label: 'Certificates', value: 204, sub: 'valid on file', color: '#64AC37', bg: 'rgba(100,172,55,0.14)' },
   ]
   return (
     <div className="p-4 sm:p-6 space-y-6 font-poppins">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-black text-white">Good afternoon, preview 👋</h2>
-          <p className="text-sm text-white/60">Here's what's happening at MEDWEB today.</p>
+          <h2 className="text-2xl font-black admin-text">Good afternoon, preview 👋</h2>
+          <p className="text-sm admin-text-secondary">Here's what's happening at MEDWEB today.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button className="btn-admin-secondary flex items-center gap-2 px-4 py-2.5 text-xs"><Download size={13} /> Export</button>
+          <button className="btn-admin-primary flex items-center gap-2 px-4 py-2.5 text-xs"><CalendarPlus size={14} /> Schedule Webinar</button>
         </div>
       </div>
       <div className="flex flex-wrap gap-2">
-        <button className="btn-glass-primary flex items-center gap-2 px-4 py-2.5 text-xs"><CalendarPlus size={14} /> + Schedule Webinar</button>
-        <button className="btn-glass-secondary flex items-center gap-2 px-4 py-2.5 text-xs"><Newspaper size={13} /> New Event</button>
-        <button className="btn-glass-secondary flex items-center gap-2 px-4 py-2.5 text-xs"><BookOpen size={13} /> New Course</button>
-        <button className="btn-glass-secondary flex items-center gap-2 px-4 py-2.5 text-xs"><Download size={13} /> Export Students</button>
+        <button className="btn-admin-secondary flex items-center gap-2 px-4 py-2 text-xs"><Newspaper size={13} /> New Event</button>
+        <button className="btn-admin-secondary flex items-center gap-2 px-4 py-2 text-xs"><BookOpen size={13} /> New Course</button>
+        <button className="btn-admin-secondary flex items-center gap-2 px-4 py-2 text-xs"><Download size={13} /> Export Students</button>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {kpis.map((k, i) => <StatCard key={k.label} {...k} />)}
       </div>
       <div className="grid lg:grid-cols-2 gap-6">
-        <div className="glass-card p-5 h-56 flex items-center justify-center text-white/40 text-sm">Chart preview (Recharts) — see live Dashboard</div>
-        <div className="glass-card p-5 h-56 flex items-center justify-center text-white/40 text-sm">Chart preview (Recharts) — see live Dashboard</div>
+        <div className="admin-card p-5 h-56 flex items-center justify-center admin-text-secondary text-sm">Chart preview (Recharts) — see live Dashboard</div>
+        <div className="admin-card p-5 h-56 flex items-center justify-center admin-text-secondary text-sm">Chart preview (Recharts) — see live Dashboard</div>
       </div>
     </div>
   )
@@ -155,22 +167,44 @@ function MockFormModal({ onClose }) {
   )
 }
 
-const PAGES = { dashboard: MockDashboard, webinars: MockWebinars, students: MockStudents, events: MockEvents }
+function MockCertificates() {
+  const columns = [
+    { key: 'certCode', label: 'Certificate ID', render: v => <span className="font-mono text-xs text-[#1655c3] font-bold whitespace-nowrap">{v}</span> },
+    { key: 'recipient', label: 'Recipient', render: v => <span className="font-semibold admin-text">{v}</span> },
+    { key: 'title', label: 'For', render: v => <span className="text-xs admin-text-secondary max-w-[180px] truncate block">{v}</span> },
+    { key: 'issued', label: 'Issued', render: v => <span className="text-xs whitespace-nowrap admin-text-secondary">{v}</span> },
+    { key: 'verifications', label: 'Verified', numeric: true, render: v => <span className="font-bold text-[#1655c3]">{v || 0}×</span> },
+    { key: 'status', label: 'Status', render: v => <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${v === 'Valid' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'}`}>{v}</span> },
+  ]
+  return (
+    <div className="p-4 sm:p-6 space-y-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard icon={Award} label="Total Certificates" value={204} color="#1655c3" bg="#eff6ff" />
+        <StatCard icon={Award} label="Valid" value={198} color="#64ac37" bg="#f0fdf4" />
+        <StatCard icon={Award} label="Revoked" value={6} color="#ef4444" bg="#fef2f2" />
+        <StatCard icon={Award} label="Verifications" value={412} color="#1655c3" bg="#eff6ff" />
+      </div>
+      <DataTable title="Certificates" columns={columns} data={MOCK_CERTS} searchKey="recipient" />
+    </div>
+  )
+}
+
+const PAGES = { dashboard: MockDashboard, webinars: MockWebinars, students: MockStudents, events: MockEvents, certificates: MockCertificates }
 
 export default function AdminPreview() {
   const [page, setPage] = useState('dashboard')
   const [showModal, setShowModal] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const { theme, toggleTheme } = useAdminTheme()
   const Page = PAGES[page] || MockDashboard
 
   return (
     <ToastProvider>
       <ConfirmProvider>
-        <div className="admin-shell relative flex h-screen overflow-hidden font-inter">
-          <div className="admin-aurora"><div className="aurora-blob" /></div>
+        <div className="admin-shell admin-shell-bg relative flex h-screen overflow-hidden font-inter">
           <AdminSidebar active={page} onNav={(id) => setPage(id)} permissions={MOCK_PERMISSIONS} mobileOpen={mobileOpen} onCloseMobile={() => setMobileOpen(false)} />
           <div className="relative z-10 flex-1 flex flex-col overflow-hidden min-w-0">
-            <AdminHeader page={page} permissions={MOCK_PERMISSIONS} badges={MOCK_BADGES} onOpenMobileNav={() => setMobileOpen(true)} onOpenSearch={() => {}} />
+            <AdminHeader page={page} permissions={MOCK_PERMISSIONS} badges={MOCK_BADGES} onOpenMobileNav={() => setMobileOpen(true)} onOpenSearch={() => {}} theme={theme} onToggleTheme={toggleTheme} />
             <main className="flex-1 overflow-y-auto overflow-x-hidden">
               <Page />
               <div className="p-4 sm:p-6">

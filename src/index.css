@@ -229,100 +229,94 @@ html { scroll-behavior: smooth; overflow-x: hidden; }
     font-variant-numeric: tabular-nums;
   }
 
-  /* ── Round 15: glassmorphism design system ──────────────────────────────
-     Fixed aurora background (navy -> blue -> teal, a hint of lime) with
-     2-3 slow-drifting blurred blobs behind the whole admin shell. Shell
-     chrome (sidebar, topbar, dashboard KPI/chart cards) sits on glass over
-     it; DATA-HEAVY surfaces (tables, forms, modals, editors) stay
-     high-opacity/readable per the brief's own rule — see .glass-solid
-     below for those, not .glass-card. */
-  .admin-aurora {
-    position: fixed;
-    inset: 0;
-    z-index: 0;
-    background: linear-gradient(135deg, #0A1B3D 0%, #123f8f 35%, #1655C3 65%, #0f766e 100%);
-    overflow: hidden;
+  /* ── Round 16: light/dark admin design system ────────────────────────────
+     Replaces the Round 15 aurora/glassmorphism look entirely. CSS variables
+     carry the two palettes; components read them via var(--token) (in
+     Tailwind arbitrary values like bg-[var(--admin-card)]) or the .admin-*
+     utility classes below. `.dark` on <html> (toggled by useAdminTheme,
+     default = system preference via prefers-color-scheme, persisted in
+     localStorage) switches every token at once. */
+  :root {
+    --admin-bg: #F4F7FC;
+    --admin-card: #FFFFFF;
+    --admin-border: #E3E8F2;
+    --admin-text: #0F172A;
+    --admin-text-secondary: #64748B;
+    --admin-shadow: 0 1px 2px rgba(15,23,42,0.04), 0 8px 24px rgba(15,23,42,0.06);
   }
-  .admin-aurora::before, .admin-aurora::after, .admin-aurora .aurora-blob {
-    content: '';
-    position: absolute;
-    border-radius: 9999px;
-    filter: blur(80px);
-    opacity: 0.45;
-  }
-  .admin-aurora::before {
-    width: 50vw; height: 50vw;
-    background: #1655C3;
-    top: -10%; left: -10%;
-    animation: aurora-drift-1 22s ease-in-out infinite alternate;
-  }
-  .admin-aurora::after {
-    width: 45vw; height: 45vw;
-    background: #64AC37;
-    bottom: -15%; right: -5%;
-    opacity: 0.25;
-    animation: aurora-drift-2 26s ease-in-out infinite alternate;
-  }
-  .admin-aurora .aurora-blob {
-    width: 35vw; height: 35vw;
-    background: #0d9488;
-    top: 30%; left: 55%;
-    opacity: 0.3;
-    animation: aurora-drift-3 30s ease-in-out infinite alternate;
-  }
-  @keyframes aurora-drift-1 { from { transform: translate(0, 0); } to { transform: translate(8vw, 6vh); } }
-  @keyframes aurora-drift-2 { from { transform: translate(0, 0); } to { transform: translate(-6vw, -8vh); } }
-  @keyframes aurora-drift-3 { from { transform: translate(0, 0) scale(1); } to { transform: translate(-5vw, 5vh) scale(1.1); } }
-  @media (prefers-reduced-motion: reduce) {
-    .admin-aurora::before, .admin-aurora::after, .admin-aurora .aurora-blob { animation: none !important; }
+  .dark {
+    --admin-bg: #0B1020;
+    --admin-card: #111833;
+    --admin-border: #1E2A4A;
+    --admin-text: #F1F5F9;
+    --admin-text-secondary: #94A3B8;
+    --admin-shadow: 0 1px 2px rgba(0,0,0,0.2), 0 8px 24px rgba(0,0,0,0.35);
   }
 
-  /* Shell/dashboard glass — white text on top of the aurora. */
-  .glass-card {
-    background: rgba(255, 255, 255, 0.10);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-    border: 1px solid rgba(255, 255, 255, 0.20);
+  .admin-shell-bg { background: var(--admin-bg); color: var(--admin-text); }
+
+  .admin-card {
+    background: var(--admin-card);
+    border: 1px solid var(--admin-border);
     border-radius: 16px;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 8px 32px rgba(10, 27, 61, 0.25);
-    color: #fff;
+    box-shadow: var(--admin-shadow);
+    color: var(--admin-text);
   }
-  .glass-card .text-secondary, .glass-card-secondary { color: rgba(255, 255, 255, 0.6); }
-  /* backdrop-filter fallback (older browsers / disabled) — solid navy, no
-     transparency, so text is never unreadable. */
-  @supports not (backdrop-filter: blur(1px)) {
-    .glass-card { background: rgba(15, 35, 71, 0.9); }
-  }
+  .admin-text { color: var(--admin-text); }
+  .admin-text-secondary { color: var(--admin-text-secondary); }
+  .admin-border { border-color: var(--admin-border); }
 
-  /* Data-heavy surfaces (tables, forms, modals, editors) — high-opacity
-     glass, dark text, per the brief's own readability rule. Visually
-     "glass" (same blur/border language) but never sacrifices legibility
-     for long text. */
-  .glass-solid {
-    background: rgba(255, 255, 255, 0.85);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-    border: 1px solid rgba(255, 255, 255, 0.4);
+  /* Data tables / forms sit on the same card token as everything else now
+     (no separate high-opacity variant needed once there's no translucent
+     background behind it to begin with). Kept as an alias so existing
+     admin page markup (`className="glass-solid ..."`) didn't need a
+     mechanical find/replace across ~17 files for this round. */
+  .glass-solid, .glass-card {
+    background: var(--admin-card);
+    border: 1px solid var(--admin-border);
     border-radius: 16px;
-    box-shadow: 0 8px 32px rgba(10, 27, 61, 0.12);
-    color: #0F172A;
+    box-shadow: var(--admin-shadow);
+    color: var(--admin-text);
   }
-  @supports not (backdrop-filter: blur(1px)) {
-    .glass-solid { background: rgba(255, 255, 255, 0.97); }
-  }
+  .glass-card .text-secondary, .glass-card-secondary { color: var(--admin-text-secondary); }
 
-  /* Pill buttons */
-  .btn-glass-primary {
-    background: #fff; color: #0A1B3D; border-radius: 9999px;
+  /* Sidebar nav item — tinted pill + green left bar when active (matches
+     docs/design/admin-{light,dark}.png). */
+  .admin-nav-active {
+    background: rgba(22,85,195,0.10);
+    border-left: 3px solid #64AC37;
+  }
+  .dark .admin-nav-active { background: rgba(22,85,195,0.18); }
+
+  /* Buttons */
+  .btn-glass-primary, .btn-admin-primary {
+    background: #1655C3; color: #fff; border-radius: 9999px;
     font-weight: 600; transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
   }
-  .btn-glass-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(255,255,255,0.25); }
-  .btn-glass-secondary {
-    background: rgba(255,255,255,0.12); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255,255,255,0.25); color: #fff; border-radius: 9999px;
-    font-weight: 600; transition: background 0.15s ease-out, transform 0.15s ease-out;
+  .btn-glass-primary:hover, .btn-admin-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(22,85,195,0.3); }
+  .btn-glass-secondary, .btn-admin-secondary {
+    background: var(--admin-card); border: 1px solid var(--admin-border); color: var(--admin-text);
+    border-radius: 9999px; font-weight: 600; transition: background 0.15s ease-out, transform 0.15s ease-out;
   }
-  .btn-glass-secondary:hover { background: rgba(255,255,255,0.2); transform: translateY(-1px); }
+  .btn-glass-secondary:hover, .btn-admin-secondary:hover { background: var(--admin-bg); transform: translateY(-1px); }
+
+  /* Dark-mode safety net for the ~20 admin pages whose own table column
+     render() functions still hardcode light-mode greys (not swept this
+     round — see Round 16 report) — without this, dark grey-on-near-black
+     text inside .admin-card would be unreadable in dark mode. Saturated
+     Tailwind color-600/500 text (blue/green/red/purple/amber) stays as-is;
+     it's legible on both backgrounds. */
+  .dark .admin-card .text-gray-700,
+  .dark .admin-card .text-gray-600,
+  .dark .admin-card .text-gray-500,
+  .dark .admin-card .text-gray-400,
+  .dark .admin-card [class*="text-[#1a1a1a]"],
+  .dark .admin-card [class*="text-[#0F172A]"] { color: var(--admin-text-secondary) !important; }
+  .dark .admin-card .bg-gray-100 { background: rgba(255,255,255,0.08) !important; }
+  .dark .admin-card .bg-white { background: var(--admin-card) !important; }
+  .dark .admin-card input, .dark .admin-card select, .dark .admin-card textarea {
+    background: var(--admin-bg); color: var(--admin-text); border-color: var(--admin-border);
+  }
 
   /* 2-line clamp for table cells (Round 15 D3) */
   .line-clamp-2 {

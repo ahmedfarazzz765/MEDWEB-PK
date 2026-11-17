@@ -467,9 +467,9 @@ export default function AdminCertificates() {
   }
 
   const columns = [
-    { key: 'certCode', label: 'Certificate ID', render: v => <span className="font-mono text-xs text-[#1655c3] font-bold">{v}</span> },
-    { key: 'recipient', label: 'Recipient', render: (v, row) => <span className="font-semibold text-[#1a1a1a]">{v || row.student}</span> },
-    { key: 'title', label: 'For', render: (v, row) => <span className="text-xs text-gray-600 max-w-[180px] truncate block">{v || row.course}</span> },
+    { key: 'certCode', label: 'Certificate ID', render: v => <span className="font-mono text-xs text-[#1655c3] font-bold whitespace-nowrap">{v}</span> },
+    { key: 'recipient', label: 'Recipient', render: (v, row) => <span className="font-semibold admin-text">{v || row.student}</span> },
+    { key: 'title', label: 'For', render: (v, row) => <span className="text-xs admin-text-secondary max-w-[180px] truncate block">{v || row.course}</span> },
     { key: 'sourceType', label: 'Source', render: v => (
       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${v === 'manual' ? 'bg-purple-50 text-purple-600' : v === 'webinar' ? 'bg-blue-50 text-[#1655c3]' : 'bg-gray-100 text-gray-500'}`}>
         {v === 'manual' ? 'Manual' : v === 'webinar' ? 'Webinar' : v === 'course' ? 'Course' : '—'}
@@ -479,8 +479,8 @@ export default function AdminCertificates() {
       ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-50 text-[#64ac37]">Custom Template</span>
       : <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-[#1655c3]">{TEMPLATES.find(t => t.id === v)?.name || 'Classic'}</span>
     },
-    { key: 'issued', label: 'Issued' },
-    { key: 'verifications', label: 'Verified', render: v => <span className="font-bold text-[#1655c3]">{v || 0}×</span> },
+    { key: 'issued', label: 'Issued', render: v => <span className="text-xs whitespace-nowrap admin-text-secondary">{v}</span> },
+    { key: 'verifications', label: 'Verified', numeric: true, render: v => <span className="font-bold text-[#1655c3]">{v || 0}×</span> },
     { key: 'status', label: 'Status', render: v => <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${v === 'Valid' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'}`}>{v}</span> },
     { key: 'id', label: 'Actions', render: (v, row) => (
       <div className="flex gap-1.5">

@@ -5,11 +5,12 @@ import { auth } from '../../firebase/config'
 import useAdminBadgeCounts from '../hooks/useAdminBadgeCounts'
 import {
   LayoutDashboard, Users, Video, BookOpen, Award, Megaphone,
-  FileText, UserCheck, LogOut, ChevronLeft, ChevronRight, ChevronDown, Shield, Mail,
+  FileText, UserCheck, LogOut, ChevronLeft, ChevronRight, ChevronDown, Mail,
   FormInput, Star, Inbox, Link2, ToggleRight, GraduationCap,
   Image, Quote, Sparkles, Building2, ShieldCheck, PanelTop, Scale, ClipboardCheck,
   UserCog, Newspaper, BarChart3, ScrollText, X,
 } from 'lucide-react'
+import logo from '../../assets/medweb-logo.png'
 
 // Each item's `id` is the page key in AdminPanel's `pages` map. Items that
 // point into AdminContent.jsx's internal tabs also carry a `tab`, so the
@@ -23,14 +24,12 @@ import {
 const GROUPS = [
   {
     label: 'Overview',
-    accent: '#7dd3fc',
     items: [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     ],
   },
   {
     label: 'Programs',
-    accent: '#fcd34d',
     items: [
       { id: 'webinars',     label: 'Webinars',     icon: Video },
       { id: 'courses',      label: 'Courses',      icon: BookOpen, badgeKey: 'pendingEnrollments' },
@@ -39,7 +38,6 @@ const GROUPS = [
   },
   {
     label: 'People',
-    accent: '#c4b5fd',
     items: [
       { id: 'students',    label: 'Students',       icon: Users },
       { id: 'submissions', label: 'Submissions',    icon: Inbox },
@@ -50,7 +48,6 @@ const GROUPS = [
   },
   {
     label: 'Engagement',
-    accent: '#f9a8d4',
     items: [
       { id: 'testimonials', label: 'Testimonials', icon: Star },
       { id: 'pendingTestimonials', label: 'Pending Reviews', icon: ClipboardCheck, badgeKey: 'pendingReviews' },
@@ -62,7 +59,6 @@ const GROUPS = [
   },
   {
     label: 'Website Content',
-    accent: '#6ee7b7',
     collapsible: true,
     items: [
       { id: 'content',  label: 'Hero',                    icon: Image,       tab: 'hero' },
@@ -79,14 +75,12 @@ const GROUPS = [
   },
   {
     label: 'Settings',
-    accent: '#cbd5e1',
     items: [
       { id: 'email', label: 'Email Settings', icon: Mail },
     ],
   },
   {
     label: 'Admin',
-    accent: '#fca5a5',
     superAdminOnly: true,
     items: [
       { id: 'adminUsers', label: 'Admin Users', icon: UserCog },
@@ -149,30 +143,26 @@ export default function AdminSidebar({ active, activeTab, onNav, permissions, mo
       )}
       <aside
         className={`flex flex-col h-screen transition-all duration-300 z-40
-          bg-admin-navy/70 backdrop-blur-xl border-r border-white/10 shadow-2xl
+          admin-card !rounded-none border-r
           fixed inset-y-0 left-0 lg:sticky lg:top-0 lg:left-auto lg:inset-y-auto
           ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
         style={{ width: collapsed ? 72 : 250, minWidth: collapsed ? 72 : 250 }}
       >
       {/* Logo */}
-      <div className="flex items-center gap-3 px-4 py-5 border-b border-white/10">
-        <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
-          <Shield size={18} className="text-white" />
-        </div>
+      <div className="flex items-center gap-3 px-4 py-5 border-b admin-border">
+        <img src={logo} alt="MEDWEB" className="w-10 h-10 rounded-full object-cover shrink-0" />
         {!collapsed && (
           <div className="overflow-hidden">
-            <div className="text-white font-black text-lg leading-none">
-              MED<span style={{ color: '#95d348' }}>WEB</span>
-            </div>
-            <div className="text-white/50 text-[10px] font-medium tracking-wider">ADMIN PANEL</div>
+            <div className="admin-text font-black text-base leading-none">MEDWEB</div>
+            <div className="admin-text-secondary text-[10px] font-semibold tracking-wider">ADMIN PANEL</div>
           </div>
         )}
-        <button onClick={onCloseMobile} className="ml-auto p-1 rounded-lg hover:bg-white/10 text-white/60 hover:text-white transition-all lg:hidden">
+        <button onClick={onCloseMobile} className="ml-auto p-1 rounded-lg hover:bg-black/5 admin-text-secondary transition-all lg:hidden">
           <X size={18} />
         </button>
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="ml-auto p-1 rounded-lg hover:bg-white/10 text-white/60 hover:text-white transition-all hidden lg:block"
+          className="ml-auto p-1 rounded-lg hover:bg-black/5 admin-text-secondary transition-all hidden lg:block"
         >
           {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
         </button>
@@ -189,20 +179,18 @@ export default function AdminSidebar({ active, activeTab, onNav, permissions, mo
           const groupHasActive = visibleItems.some(({ id, tab }) => active === id && (!tab || activeTab === tab))
           const isExpanded = !group.collapsible || expandedGroups.has(group.label) || groupHasActive
           return (
-          <div key={group.label} className={gi > 0 ? 'mt-3 pt-3 border-t border-white/10' : ''}>
+          <div key={group.label} className={gi > 0 ? 'mt-3 pt-3 border-t admin-border' : ''}>
             {!collapsed && (
               group.collapsible ? (
                 <button onClick={() => toggleGroup(group.label)} className="w-full flex items-center gap-2 px-4 mb-1.5 group/header">
-                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: group.accent }} />
-                  <span className="text-[10px] font-bold tracking-wider uppercase flex-1 text-left" style={{ color: group.accent }}>
+                  <span className="text-[10px] font-bold tracking-wider uppercase flex-1 text-left admin-text-secondary">
                     {group.label}
                   </span>
-                  <ChevronDown size={12} className={`text-white/40 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                  <ChevronDown size={12} className={`admin-text-secondary transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                 </button>
               ) : (
-                <div className="flex items-center gap-2 px-4 mb-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: group.accent }} />
-                  <span className="text-[10px] font-bold tracking-wider uppercase" style={{ color: group.accent }}>
+                <div className="px-4 mb-1.5">
+                  <span className="text-[10px] font-bold tracking-wider uppercase admin-text-secondary">
                     {group.label}
                   </span>
                 </div>
@@ -215,26 +203,22 @@ export default function AdminSidebar({ active, activeTab, onNav, permissions, mo
                   key={label}
                   onClick={() => { onNav(id, tab); onCloseMobile?.() }}
                   className={`w-full flex items-center gap-3 px-4 py-2.5 transition-all duration-200 relative group border-l-[3px] ${
-                    isActive ? 'bg-white/15 border-[#95d348]' : 'bg-transparent border-transparent hover:bg-white/5'
+                    isActive ? 'admin-nav-active border-[#64AC37]' : 'bg-transparent border-transparent hover:bg-black/[0.03]'
                   }`}
                 >
-                  <div
-                    className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-all ${isActive ? 'bg-white/20' : 'bg-transparent group-hover:bg-white/10'}`}
-                  >
-                    <Icon size={16} className="transition-colors" style={{ color: isActive ? '#fff' : group.accent, opacity: isActive ? 1 : 0.75 }} />
-                  </div>
+                  <Icon size={17} className="shrink-0" style={{ color: isActive ? '#1655C3' : 'var(--admin-text-secondary)' }} />
                   {!collapsed && (
-                    <span className={`text-sm font-medium transition-colors truncate flex-1 text-left ${isActive ? 'text-white' : 'text-white/70 group-hover:text-white'}`}>
+                    <span className={`text-sm font-medium truncate flex-1 text-left ${isActive ? 'admin-text font-semibold' : 'admin-text-secondary group-hover:text-[var(--admin-text)]'}`}>
                       {label}
                     </span>
                   )}
                   {!collapsed && badgeKey && badges[badgeKey] > 0 && (
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#95d348] text-[#0A1B3D] shrink-0">
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#1655C3] text-white shrink-0">
                       {badges[badgeKey]}
                     </span>
                   )}
                   {collapsed && badgeKey && badges[badgeKey] > 0 && (
-                    <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#95d348]" />
+                    <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#1655C3]" />
                   )}
                   {collapsed && (
                     <div className="absolute left-full ml-2 bg-[#1655c3] text-white text-xs font-semibold px-2 py-1 rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-lg">
@@ -250,10 +234,10 @@ export default function AdminSidebar({ active, activeTab, onNav, permissions, mo
       </nav>
 
       {/* Bottom */}
-      <div className="border-t border-white/10 p-4">
-        <button onClick={handleLogout} className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-white/10 transition-all group">
-          <LogOut size={17} className="text-white/60 group-hover:text-red-400 shrink-0" />
-          {!collapsed && <span className="text-white/60 text-sm group-hover:text-red-400">Logout</span>}
+      <div className="border-t admin-border p-4">
+        <button onClick={handleLogout} className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-black/5 transition-all group">
+          <LogOut size={17} className="admin-text-secondary group-hover:text-red-500 shrink-0" />
+          {!collapsed && <span className="admin-text-secondary text-sm group-hover:text-red-500">Logout</span>}
         </button>
       </div>
       </aside>
