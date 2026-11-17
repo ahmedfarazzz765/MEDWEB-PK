@@ -302,6 +302,13 @@ export const courseEnrollmentsService = {
     return { Pending, Approved, Rejected }
   },
   updateStatus: (id, status, extra = {}) => update('courseEnrollments', id, { status, ...extra }),
+  // Set after a successful (or retried) Google Contacts save — see
+  // src/lib/googleContacts.js and AdminCourseEnrollments.jsx's
+  // saveContactForEnrollment(). Never blocks/retries the approval flow
+  // itself if this fails.
+  saveContactInfo: (id, { contactResourceName }) => update('courseEnrollments', id, {
+    contactSaved: true, contactResourceName, contactSavedAt: serverTimestamp(),
+  }),
 }
 
 // ─── COURSE JOINING LINKS (kept out of the public `courses` doc) ─────────────

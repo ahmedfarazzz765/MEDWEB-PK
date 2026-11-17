@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Download, Eye, Check, X as XIcon, FileText, ListChecks } from 'lucide-react'
+import { Download, Eye, Check, X as XIcon, FileText, ListChecks, Contact, RefreshCw } from 'lucide-react'
 import StatCard from '../components/StatCard'
 import DataTable from '../components/DataTable'
 import Modal from '../components/Modal'
@@ -7,6 +7,9 @@ import AdminButton from '../components/AdminButton'
 import useAdminPermissions from '../hooks/useAdminPermissions'
 import { courseEnrollmentsService, coursesService, courseJoiningLinksService, activityLogService } from '../../firebase/services'
 import { sendCourseEnrollmentApprovedEmail, sendCourseEnrollmentRejectedEmail } from '../../firebase/email'
+import {
+  onGoogleContactsAuthChange, connectGoogleContacts, saveEnrollmentContact,
+} from '../../lib/googleContacts'
 
 function downloadCsv(filename, header, rows) {
   const csv = [header, ...rows]
@@ -36,6 +39,62 @@ export default function AdminCourseEnrollments({ course, onClose }) {
   const [busyId, setBusyId] = useState(null)
   const [pageSize, setPageSize] = useState(50)
   const [counts, setCounts] = useState({ Pending: 0, Approved: 0, Rejected: 0 })
+  const [googleAuth, setGoogleAuth] = useState({ connected: false, email: null })
+  const [connecting, setConnecting] = useState(false)
+  const [toast, setToast] = useState(null) // { text, retryRow } | null
+  const [bulkSyncing, setBulkSyncing] = useState(false)
+  const [contactBusyId, setContactBusyId] = useState(null)
+
+  useEffect(() => onGoogleContactsAuthChange(setGoogleAuth), [])
+
+  const handleConnectGoogle = async () => {
+    setConnecting(true)
+    try { await connectGoogleContacts() }
+    catch (e) { setToast({ text: 'Google Contacts connection failed: ' + e.message }) }
+    finally { setConnecting(false) }
+  }
+
+  // Create/update the Google Contact for one enrollment — never blocks or
+  // undoes the approval/email that already happened; a failure here only
+  // ever surfaces as a toast with a Retry action.
+  const saveContactForEnrollment = async row => {
+    setContactBusyId(row.id)
+    try {
+      const { resourceName } = await saveEnrollmentContact({
+        enrollmentId: row.enrollmentId, fullName: nameOf(row), phone: row.whatsapp || row.phone,
+        email: row.email, courseTitle: course.title,
+      })
+      await courseEnrollmentsService.saveContactInfo(row.id, { contactResourceName: resourceName })
+      setRows(prev => prev.map(r => r.id === row.id ? { ...r, contactSaved: true, contactResourceName: resourceName } : r))
+    } catch (e) {
+      setToast({ text: `Couldn't save contact for ${nameOf(row)}: ${e.message}`, retryRow: row })
+    } finally {
+      setContactBusyId(null)
+    }
+  }
+
+  const retryToast = () => {
+    if (toast?.retryRow) saveContactForEnrollment(toast.retryRow)
+    setToast(null)
+  }
+
+  // Sequential with a 300ms gap between each — the People API has
+  // per-minute write quotas that a tight loop of 50+ approved enrollments
+  // could otherwise trip.
+  const bulkSyncContacts = async () => {
+    setBulkSyncing(true)
+    try {
+      const all = await courseEnrollmentsService.getByCourse(course.id)
+      const targets = all.filter(r => r.status === 'Approved' && !r.contactSaved)
+      for (const row of targets) {
+        await saveContactForEnrollment(row)
+        await new Promise(res => setTimeout(res, 300))
+      }
+      setToast({ text: `Synced ${targets.length} contact${targets.length === 1 ? '' : 's'}.` })
+    } finally {
+      setBulkSyncing(false)
+    }
+  }
 
   // A linked-form enrollment has no top-level `paymentProofUrl` — its
   // proof (if the form has a file field) lives inside `responses`
@@ -92,7 +151,9 @@ export default function AdminCourseEnrollments({ course, onClose }) {
         eventDate: course.eventDate, startTime: course.startTime, endTime: course.endTime,
         platform: course.platform, joiningLink: joiningLinkDoc?.joiningLink || '', enrollmentId: row.enrollmentId,
         amountDue: row.amountDue,
+        communityLink: course.communityLink || '', communityName: course.communityName || '',
       }).catch(() => {})
+      saveContactForEnrollment(row).catch(() => {})
     } catch (e) { alert('Error: ' + e.message) }
     finally { setBusyId(null) }
   }
@@ -155,6 +216,16 @@ export default function AdminCourseEnrollments({ course, onClose }) {
       const m = { Pending: 'bg-yellow-50 text-yellow-600', Approved: 'bg-green-50 text-green-600', Rejected: 'bg-red-50 text-red-500' }
       return <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${m[v] || 'bg-gray-100 text-gray-500'}`}>{v}</span>
     }},
+    { key: 'contactSaved', label: 'Contact', render: (v, row) => {
+      if (row.status !== 'Approved') return <span className="text-gray-300">—</span>
+      if (row.contactSaved) return <span className="inline-flex items-center gap-1 text-xs font-bold text-[#64ac37]"><Check size={12} /> Saved</span>
+      return (
+        <button onClick={() => saveContactForEnrollment(row)} disabled={contactBusyId === row.id}
+          className="inline-flex items-center gap-1 text-xs font-bold text-[#1655c3] hover:underline disabled:opacity-40" title="Retry save contact">
+          <RefreshCw size={12} className={contactBusyId === row.id ? 'animate-spin' : ''} /> {contactBusyId === row.id ? 'Saving…' : 'Retry save contact'}
+        </button>
+      )
+    }},
     { key: 'actions', label: 'Actions', render: (v, row) => (
       <div className="flex items-center gap-1.5">
         <button onClick={() => setDetailRow(row)} className="p-1.5 rounded-lg hover:bg-blue-50 text-[#1655c3]" title="View full submission">
@@ -189,6 +260,36 @@ export default function AdminCourseEnrollments({ course, onClose }) {
           <StatCard icon={Check} label="Approved" value={loading ? '…' : counts.Approved} color="#64ac37" bg="#f0fdf4" />
           <StatCard icon={XIcon} label="Rejected" value={loading ? '…' : counts.Rejected} color="#ef4444" bg="#fef2f2" />
         </div>
+
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            {googleAuth.connected ? (
+              <>
+                <span className="text-xs font-semibold text-gray-500 flex items-center gap-1.5">
+                  <Contact size={14} className="text-[#64ac37]" /> Contacts: {googleAuth.email || 'connected'}
+                </span>
+                <AdminButton variant="ghost" size="sm" onClick={bulkSyncContacts} disabled={bulkSyncing || !counts.Approved}>
+                  <RefreshCw size={13} className={`mr-1.5 ${bulkSyncing ? 'animate-spin' : ''}`} />
+                  {bulkSyncing ? 'Syncing…' : 'Sync contacts for all approved'}
+                </AdminButton>
+              </>
+            ) : (
+              <AdminButton variant="ghost" size="sm" onClick={handleConnectGoogle} disabled={connecting}>
+                <Contact size={13} className="mr-1.5" /> {connecting ? 'Connecting…' : 'Connect Google Contacts'}
+              </AdminButton>
+            )}
+          </div>
+        </div>
+
+        {toast && (
+          <div className="flex items-center justify-between gap-3 text-xs font-semibold bg-amber-50 text-amber-700 rounded-xl px-4 py-2.5">
+            <span>{toast.text}</span>
+            <div className="flex items-center gap-3 shrink-0">
+              {toast.retryRow && <button onClick={retryToast} className="underline">Retry save contact</button>}
+              <button onClick={() => setToast(null)} className="text-amber-400 hover:text-amber-600"><XIcon size={13} /></button>
+            </div>
+          </div>
+        )}
 
         <div className="flex items-center justify-between gap-3">
           <div className="flex gap-2">

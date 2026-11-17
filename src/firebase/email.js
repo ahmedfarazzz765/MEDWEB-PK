@@ -381,7 +381,7 @@ export async function sendCourseEnrollmentReceivedEmail({ name, email, courseTit
 
 // Payment verified — joining link only ever goes out through this email,
 // never to the public course page/form.
-export async function sendCourseEnrollmentApprovedEmail({ name, email, courseTitle, eventDate, startTime, endTime, platform, joiningLink, enrollmentId, amountDue }) {
+export async function sendCourseEnrollmentApprovedEmail({ name, email, courseTitle, eventDate, startTime, endTime, platform, joiningLink, enrollmentId, amountDue, communityLink, communityName }) {
   const when = [eventDate, [startTime, endTime].filter(Boolean).join(' – ')].filter(Boolean).join(' · ')
   return sendEmail({
     to_name: name,
@@ -402,6 +402,15 @@ export async function sendCourseEnrollmentApprovedEmail({ name, email, courseTit
       <p style="color:#aaa;font-size:12px;margin:0 0 20px;text-align:center;">Or paste this link in your browser: <a href="${joiningLink}" style="color:#1655c3;">${joiningLink}</a></p>
       ` : ''}
       <p style="color:#888;font-size:13px;margin:0;">Enrollment ID: <strong style="font-family:monospace;">${enrollmentId}</strong>${amountDue > 0 ? ` · Amount Due: <strong style="color:#1655c3;">PKR ${Number(amountDue).toLocaleString()}</strong>` : ''}</p>
+      ${communityLink ? `
+      <div style="background:#eff6ff;border-radius:12px;padding:20px;margin:20px 0;">
+        <p style="margin:0 0 12px;color:#1a1a1a;font-size:14px;line-height:1.7;">Join our official <strong>${communityName || 'WhatsApp'} Community</strong>:<br>All workshop updates and the Google Meet link will be shared there only.</p>
+        <div style="text-align:center;margin-bottom:10px;">
+          <a href="${communityLink}" style="display:inline-block;background:#25D366;color:#fff;text-decoration:none;padding:12px 28px;border-radius:10px;font-weight:700;font-size:14px;">Join WhatsApp Community →</a>
+        </div>
+        <p style="color:#aaa;font-size:12px;margin:0;text-align:center;">Or paste this link in your browser: <a href="${communityLink}" style="color:#1655c3;">${communityLink}</a></p>
+      </div>
+      ` : ''}
       <p style="color:#888;font-size:13px;margin:16px 0 0;">Questions? WhatsApp us at <strong>+92 329 1692899</strong> or email <strong>medwebpk@gmail.com</strong>.</p>
       <br><p style="color:#888;font-size:13px;margin:0;">— MEDWEB Team</p>
     `),

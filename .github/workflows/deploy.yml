@@ -27,6 +27,11 @@ jobs:
           VITE_GOOGLE_PLACES_API_KEY: ${{ secrets.VITE_GOOGLE_PLACES_API_KEY }}
           VITE_GOOGLE_PLACE_ID: ${{ secrets.VITE_GOOGLE_PLACE_ID }}
           VITE_YOUTUBE_API_KEY: ${{ secrets.VITE_YOUTUBE_API_KEY }}
+          # Public OAuth web client ID (not a secret — safe to ship in the
+          # bundle either way) for the admin-only Google Contacts sync.
+          # src/lib/googleContacts.js also hardcodes this same value as a
+          # fallback if this env var is ever missing.
+          VITE_GOOGLE_CLIENT_ID: 233910635732-5r08r906shpjc9m46hgc9u31t5fpt9k6.apps.googleusercontent.com
           # Reuses the same service-account secret scripts/fetch-health-news.js
           # already relies on — the build now also runs
           # scripts/generate-sitemap.js (pre-build) and

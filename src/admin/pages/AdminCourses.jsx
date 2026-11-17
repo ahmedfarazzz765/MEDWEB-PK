@@ -27,6 +27,10 @@ const emptyForm = () => ({
   registrationFormId: '',
   // Workshop/event details
   eventDate: '', startTime: '', endTime: '', platform: '', joiningLink: '',
+  // WhatsApp community — unlike joiningLink, this IS meant to be public
+  // (shown in the approval email, fine to sit in the public courses doc/
+  // public/siteData too).
+  communityLink: '', communityName: '',
   // Payment instructions (manual verification — no payment gateway)
   paymentBankName: '', paymentAccountTitle: '', paymentAccountNumber: '', paymentIban: '', paymentJazzcashEasypaisa: '',
   certificateNote: '',
@@ -124,6 +128,7 @@ export default function AdminCourses() {
       category: row.category === 'Workshop' ? 'Workshop' : 'Course', fee: row.fee || 0,
       registrationFormId: row.registrationFormId || '',
       eventDate: row.eventDate || '', startTime: row.startTime || '', endTime: row.endTime || '', platform: row.platform || '', joiningLink: '',
+      communityLink: row.communityLink || '', communityName: row.communityName || '',
       paymentBankName: row.paymentBankName || '', paymentAccountTitle: row.paymentAccountTitle || '', paymentAccountNumber: row.paymentAccountNumber || '',
       paymentIban: row.paymentIban || '', paymentJazzcashEasypaisa: row.paymentJazzcashEasypaisa || '',
       certificateNote: row.certificateNote || '',
@@ -426,6 +431,14 @@ export default function AdminCourses() {
                   <FormField label="Certificate Note">
                     <textarea className={inputCls} rows={2} value={form.certificateNote} onChange={set('certificateNote')} placeholder="e.g. Mock test + certificate. Certificate for scores above 70%." />
                   </FormField>
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField label="WhatsApp Community Name">
+                      <input className={inputCls} value={form.communityName} onChange={set('communityName')} placeholder="e.g. AMR Revolution Workshop" />
+                    </FormField>
+                    <FormField label="WhatsApp Community Link (shown in the approval email — all workshop updates and the Meet link are shared there)">
+                      <input className={inputCls} value={form.communityLink} onChange={set('communityLink')} placeholder="https://chat.whatsapp.com/..." />
+                    </FormField>
+                  </div>
                 </div>
 
                 <div className="border-t border-gray-100 pt-4 mt-2">
