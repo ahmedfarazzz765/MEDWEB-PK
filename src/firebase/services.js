@@ -716,8 +716,8 @@ async function upsertStudent({ phone, email }, patch) {
   await runTransaction(db, async tx => {
     const snap = await tx.get(ref)
     const base = snap.exists() ? snap.data() : {
-      name: '', email: normEmail, phone: normPhone, university: '', degree: '',
-      registrations: [], certificates: [],
+      name: '', email: normEmail, phone: normPhone, university: '', degree: '', city: '',
+      registrations: [], certificates: [], enrollments: [],
       createdAt: serverTimestamp(),
     }
     // Backfills a slug for any record that predates this feature, and
@@ -735,11 +735,46 @@ async function upsertStudent({ phone, email }, patch) {
 
 export const studentsDbService = {
   getAll: () => getAll(STUDENT_DB_COL, orderBy('updatedAt', 'desc')),
-  listen: cb => onSnapshot(
-    query(col(STUDENT_DB_COL), orderBy('updatedAt', 'desc')),
+  // Capped by `limitN` (default 200) — the admin Students page used to
+  // live-listen to the ENTIRE collection on every load regardless of size.
+  // AdminStudents.jsx's own "Load more" bumps this and re-subscribes only
+  // when an admin actually asks for more.
+  listen: (cb, limitN = 200) => onSnapshot(
+    query(col(STUDENT_DB_COL), orderBy('updatedAt', 'desc'), limit(limitN)),
     snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
     err => console.error('Firebase studentDatabase listen error:', err)
   ),
+  getCount: () => getCountFromServer(col(STUDENT_DB_COL)).then(s => s.data().count),
+  // Merges `removeId` into `keepId`: unions registrations/certificates/
+  // enrollments (deduped by webinarId/certCode/courseId, same rule each
+  // upsertFrom* method already uses), fills in any blank name/email/
+  // phone/university/degree/city field on `keepId` from `removeId`, sums
+  // the *Count fields to match the unioned arrays, then deletes
+  // `removeId`. Nothing is ever lost — every array entry from both docs
+  // survives in the merged doc. Called only after an admin explicitly
+  // confirms a specific pair in AdminStudents.jsx's duplicate-preview UI;
+  // never automatic.
+  mergeDuplicates: async (keepId, removeId) => {
+    const [keep, dupe] = await Promise.all([getOne(STUDENT_DB_COL, keepId), getOne(STUDENT_DB_COL, removeId)])
+    if (!keep || !dupe) throw new Error('One of the two records no longer exists.')
+    const pick = (a, b) => (a && a !== '-' ? a : (b || ''))
+    const unionBy = (listA, listB, keyFn) => {
+      const out = [...(listA || [])]
+      const seen = new Set(out.map(keyFn))
+      for (const item of listB || []) { const k = keyFn(item); if (!seen.has(k)) { out.push(item); seen.add(k) } }
+      return out
+    }
+    const registrations = unionBy(keep.registrations, dupe.registrations, r => r.webinarId)
+    const certificates = unionBy(keep.certificates, dupe.certificates, c => c.certCode || c.webinarId)
+    const enrollments = unionBy(keep.enrollments, dupe.enrollments, e => e.courseId)
+    await update(STUDENT_DB_COL, keepId, {
+      name: pick(keep.name, dupe.name), email: pick(keep.email, dupe.email), phone: pick(keep.phone, dupe.phone),
+      university: pick(keep.university, dupe.university), degree: pick(keep.degree, dupe.degree), city: pick(keep.city, dupe.city),
+      registrations, certificates, enrollments,
+      registrationCount: registrations.length, certificateCount: certificates.length, enrollmentCount: enrollments.length,
+    })
+    await remove(STUDENT_DB_COL, removeId)
+  },
   // Primary identity lookup now — doc ID is deterministic from the
   // normalized phone number, so this is a direct get, not a query.
   getByPhone: phone => { const p = normalizePhone(phone); return p ? getOne(STUDENT_DB_COL, p) : Promise.resolve(null) },
@@ -762,7 +797,7 @@ export const studentsDbService = {
   // registrationCount start from 0 here rather than backfilling the
   // count of entries already in `registrations` — AdminStudents.jsx
   // falls back to the array length for those until their next upsert.
-  upsertFromRegistration: ({ email, name, phone, university, degree, webinarId, webinarTitle, registeredAt }) =>
+  upsertFromRegistration: ({ email, name, phone, university, degree, city, webinarId, webinarTitle, registeredAt }) =>
     upsertStudent({ phone, email }, base => {
       const already = (base.registrations || []).some(r => r.webinarId === webinarId)
       return {
@@ -770,6 +805,7 @@ export const studentsDbService = {
         name: name?.trim() || base.name,
         university: university?.trim() || base.university,
         degree: degree?.trim() || base.degree,
+        city: city?.trim() || base.city,
         registrations: already ? base.registrations : [
           ...(base.registrations || []),
           { webinarId: webinarId || '', webinarTitle: webinarTitle || '', registeredAt: registeredAt || new Date().toISOString() },
@@ -780,15 +816,38 @@ export const studentsDbService = {
 
   // Webinar Feedback submission — doesn't add a registration/certificate,
   // just ensures the student record exists and enriches contact details.
-  // university/degree are optional here (not every feedback form asks for
-  // them again) — only overwritten when this submission actually has them.
-  upsertFromFeedback: ({ email, name, phone, university, degree }) =>
+  // university/degree/city are optional here (not every feedback form asks
+  // for them again) — only overwritten when this submission actually has them.
+  upsertFromFeedback: ({ email, name, phone, university, degree, city }) =>
     upsertStudent({ phone, email }, base => ({
       ...base,
       name: name?.trim() || base.name,
       university: university?.trim() || base.university,
       degree: degree?.trim() || base.degree,
+      city: city?.trim() || base.city,
     })),
+
+  // Course/workshop enrollment (paid or free, built-in or Form-Builder-
+  // linked) — one entry per distinct courseId, same dedupe/count shape as
+  // upsertFromRegistration above. Was previously missing entirely: a
+  // course enrollment never touched the Student Database at all, so
+  // "Events Attended" only ever reflected webinars.
+  upsertFromCourseEnrollment: ({ email, name, phone, university, degree, city, courseId, courseTitle, enrolledAt }) =>
+    upsertStudent({ phone, email }, base => {
+      const already = (base.enrollments || []).some(e => e.courseId === courseId)
+      return {
+        ...base,
+        name: name?.trim() || base.name,
+        university: university?.trim() || base.university,
+        degree: degree?.trim() || base.degree,
+        city: city?.trim() || base.city,
+        enrollments: already ? (base.enrollments || []) : [
+          ...(base.enrollments || []),
+          { courseId: courseId || '', courseTitle: courseTitle || '', enrolledAt: enrolledAt || new Date().toISOString() },
+        ],
+        enrollmentCount: already ? (base.enrollmentCount || 0) : (base.enrollmentCount || 0) + 1,
+      }
+    }),
 
   // Certificate issuance — one entry per distinct certCode. certificateCount
   // maintained the same way registrationCount is above.
@@ -807,13 +866,14 @@ export const studentsDbService = {
     }),
 
   // Ambassador registration (public application form, or an admin manually
-  // adding an ambassador) — enriches contact/university/degree only.
-  upsertFromAmbassador: ({ email, name, phone, university, degree }) =>
+  // adding an ambassador) — enriches contact/university/degree/city only.
+  upsertFromAmbassador: ({ email, name, phone, university, degree, city }) =>
     upsertStudent({ phone, email }, base => ({
       ...base,
       name: name?.trim() || base.name,
       university: university?.trim() || base.university,
       degree: degree?.trim() || base.degree,
+      city: city?.trim() || base.city,
     })),
 }
 
@@ -1268,11 +1328,15 @@ export const formsService = {
   getSubmissions: formId => getAll('formSubmissions', where('formId', '==', formId), orderBy('createdAt', 'desc')),
   getAllSubmissions: () => getAll('formSubmissions', orderBy('createdAt', 'desc')),
   deleteSubmission: id => remove('formSubmissions', id),
-  listenSubmissions: cb => onSnapshot(
-    query(col('formSubmissions'), orderBy('createdAt', 'desc')),
+  // Capped by `limitN` (default 500) — used to live-listen to the ENTIRE
+  // formSubmissions collection, across every form, on every load of the
+  // Form Builder admin page. AdminForms.jsx's own "Load more" bumps this.
+  listenSubmissions: (cb, limitN = 500) => onSnapshot(
+    query(col('formSubmissions'), orderBy('createdAt', 'desc'), limit(limitN)),
     snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
     err => console.error("Firebase listen error:", err)
   ),
+  getSubmissionsCount: () => getCountFromServer(col('formSubmissions')).then(s => s.data().count),
 }
 
 // The 7 fields required by the spec for webinar registration, expressed in the
@@ -1329,7 +1393,14 @@ export function toIsoString(val) {
 // resolves each form's fields correctly, so Form rows were dropped here
 // rather than fixed twice.
 export const submissionsService = {
-  listen: cb => {
+  // Capped by `limitN` (default 500) on EACH underlying collection — this
+  // used to live-listen to the ENTIRE webinarRegistrations AND
+  // newsletterSubscribers collections, unconditionally, on every admin
+  // page load. AdminSubmissions.jsx's own "Load more" bumps this and
+  // re-subscribes only when an admin actually asks for more; the StatCards
+  // there use getCount() below (an aggregate query) for the real totals
+  // regardless of how much is actually loaded.
+  listen: (cb, limitN = 500) => {
     let regs = [], newsletter = []
     const emit = () => {
       const merged = [
@@ -1346,12 +1417,19 @@ export const submissionsService = {
       ].sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
       cb(merged)
     }
-    const u1 = onSnapshot(query(col('webinarRegistrations'), orderBy('createdAt', 'desc')),
+    const u1 = onSnapshot(query(col('webinarRegistrations'), orderBy('createdAt', 'desc'), limit(limitN)),
       snap => { regs = snap.docs.map(d => ({ id: d.id, ...d.data() })); emit() },
       err => { console.error('webinarRegistrations snapshot error:', err); emit() })
-    const u3 = onSnapshot(query(col('newsletterSubscribers'), orderBy('createdAt', 'desc')),
+    const u3 = onSnapshot(query(col('newsletterSubscribers'), orderBy('createdAt', 'desc'), limit(limitN)),
       snap => { newsletter = snap.docs.map(d => ({ id: d.id, ...d.data() })); emit() },
       err => { console.error('newsletterSubscribers snapshot error:', err); emit() })
     return () => { u1(); u3() }
+  },
+  getCounts: async () => {
+    const [webinarRegs, newsletter] = await Promise.all([
+      getCountFromServer(col('webinarRegistrations')).then(s => s.data().count),
+      getCountFromServer(col('newsletterSubscribers')).then(s => s.data().count),
+    ])
+    return { webinarRegs, newsletter }
   },
 }

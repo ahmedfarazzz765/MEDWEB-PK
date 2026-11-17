@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { CheckCircle } from 'lucide-react'
-import { formsService, courseEnrollmentsService } from '../firebase/services'
+import { formsService, courseEnrollmentsService, studentsDbService } from '../firebase/services'
 import { sendCourseEnrollmentReceivedEmail } from '../firebase/email'
 import { applyNameTitleCase, resolveFormField } from '../lib/formFieldResolve'
 import { getCoursePricing } from '../lib/coursePricing'
@@ -58,6 +58,9 @@ export default function CourseLinkedForm({ course }) {
       const fullName = resolveFormField(fields, clean, { labelRegex: /name/i, flatKeys: ['name', 'fullName', 'full_name'] })
       const email = resolveFormField(fields, clean, { type: 'email', labelRegex: /email/i, flatKeys: ['email'] })
       const whatsapp = resolveFormField(fields, clean, { type: 'phone', labelRegex: /phone|whatsapp|contact/i, flatKeys: ['phone', 'whatsapp', 'contact'] })
+      const university = resolveFormField(fields, clean, { labelRegex: /university|institute|college/i, flatKeys: ['university', 'institute'] })
+      const degree = resolveFormField(fields, clean, { type: 'qualification', labelRegex: /degree|qualification|program/i, flatKeys: ['degree', 'qualification', 'degreeProgram'] })
+      const city = resolveFormField(fields, clean, { labelRegex: /city|town/i, flatKeys: ['city'] })
       // Label -> value map, per the required courseEnrollments shape —
       // file-type fields already hold the uploaded Cloudinary URL as
       // their value (DynamicFormFields' own file-upload handling).
@@ -70,6 +73,10 @@ export default function CourseLinkedForm({ course }) {
         })
         setEnrollmentId(newId)
         sendCourseEnrollmentReceivedEmail({ name: fullName, email, courseTitle: course.title, enrollmentId: newId, amountDue }).catch(() => {})
+        studentsDbService.upsertFromCourseEnrollment({
+          email, name: fullName, phone: whatsapp, university, degree, city,
+          courseId: course.id, courseTitle: course.title, enrolledAt: new Date().toISOString(),
+        }).catch(() => {})
       } else {
         // Free course, linked form — a plain submission, same shape
         // DynamicForm.jsx's own /form/:id pages already save (`values`
@@ -79,6 +86,14 @@ export default function CourseLinkedForm({ course }) {
           formId: course.registrationFormId, values: clean, courseId: course.id, courseTitle: course.title,
           submittedAt: new Date().toISOString(),
         })
+        // Still a real course enrollment (free, not paid) — the Student
+        // Database shouldn't only ever learn about PAID enrollments.
+        if (email) {
+          studentsDbService.upsertFromCourseEnrollment({
+            email, name: fullName, phone: whatsapp, university, degree, city,
+            courseId: course.id, courseTitle: course.title, enrolledAt: new Date().toISOString(),
+          }).catch(() => {})
+        }
       }
       setStatus('success')
     } catch (e) {

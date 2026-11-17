@@ -72,7 +72,7 @@ export default function DynamicForm() {
       // ever gets created, not just checked after the fact.
       const webinar = await webinarsService.getByFeedbackFormId(id).catch(() => null)
 
-      let rawName = '', email = '', phone = '', university = '', degree = ''
+      let rawName = '', email = '', phone = '', university = '', degree = '', city = ''
       if (webinar) {
         // Field keys in a Form-Builder-built form are random uids, not
         // semantic names — resolve name/email by searching the schema.
@@ -112,6 +112,7 @@ export default function DynamicForm() {
         // student's record already has (e.g. from their registration).
         university = resolveFormField(fields, clean, { labelRegex: /university|institute|college/i, flatKeys: ['university', 'institute'] })
         degree = resolveFormField(fields, clean, { type: 'qualification', labelRegex: /degree|qualification|program/i, flatKeys: ['degree', 'qualification', 'degreeProgram'] })
+        city = resolveFormField(fields, clean, { labelRegex: /city|town/i, flatKeys: ['city'] })
 
         // Duplicate guard — a student who fills this exact webinar's
         // feedback form twice (e.g. double-tapping Submit, or reopening the
@@ -160,7 +161,7 @@ export default function DynamicForm() {
         // Ensures the student's record exists / gets enriched even when the
         // webinar has no certificate template configured (upsertFromCertificate
         // below only fires once a certificate is actually issued).
-        studentsDbService.upsertFromFeedback({ email, name: rawName, phone, university, degree }).catch(() => {})
+        studentsDbService.upsertFromFeedback({ email, name: rawName, phone, university, degree, city }).catch(() => {})
 
         generateAndIssueCertificate({ submissionId, webinar, rawName, email, phone }).catch(() => {})
       } else {
@@ -175,7 +176,8 @@ export default function DynamicForm() {
           const phone = resolveFormField(fields, clean, { type: 'phone', labelRegex: /phone|whatsapp|contact/i, flatKeys: ['phone', 'whatsapp', 'contact'] })
           const university = resolveFormField(fields, clean, { labelRegex: /university|institute|college/i, flatKeys: ['university', 'institute'] })
           const degree = resolveFormField(fields, clean, { type: 'qualification', labelRegex: /degree|qualification|program/i, flatKeys: ['degree', 'qualification', 'degreeProgram'] })
-          if (email) studentsDbService.upsertFromAmbassador({ email, name, phone, university, degree }).catch(() => {})
+          const city = resolveFormField(fields, clean, { labelRegex: /city|town/i, flatKeys: ['city'] })
+          if (email) studentsDbService.upsertFromAmbassador({ email, name, phone, university, degree, city }).catch(() => {})
         }).catch(() => {})
       }
     } catch (e) { setStatus('error'); setError(e.message) }

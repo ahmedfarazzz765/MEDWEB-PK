@@ -91,6 +91,7 @@ export default function WebinarRegister() {
       clean = applyNameTitleCase(fields, clean)
       const webinarTitle = webinar?.topic || webinar?.title || ''
       const university = resolveFormField(fields, clean, { labelRegex: /university|institute|college/i, flatKeys: ['university', 'institute'] })
+      const city = resolveFormField(fields, clean, { labelRegex: /city|town/i, flatKeys: ['city'] })
       // Resolved the same way as everywhere else this app captures a
       // student's identity now — a custom registration form built via Form
       // Builder won't always key its phone field literally "whatsapp", so
@@ -121,7 +122,7 @@ export default function WebinarRegister() {
       // Auto-email confirmation (silently skips if EmailJS not configured)
       sendWebinarConfirmation({ name: clean.name || values.name, email: clean.email || values.email, webinar }).catch(() => {})
       studentsDbService.upsertFromRegistration({
-        email: clean.email || values.email, name: clean.name || values.name, phone: resolvedPhone || clean.whatsapp, degree,
+        email: clean.email || values.email, name: clean.name || values.name, phone: resolvedPhone || clean.whatsapp, degree, university, city,
         webinarId: id, webinarTitle, registeredAt: new Date().toISOString(),
       }).catch(() => {})
       setStatus('success')

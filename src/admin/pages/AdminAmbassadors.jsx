@@ -307,7 +307,7 @@ export default function AdminAmbassadors() {
           }).catch(() => {})
           studentsDbService.upsertFromAmbassador({
             email: payload.email, name: payload.name, phone: payload.phone,
-            university: payload.university, degree: payload.degreeProgram,
+            university: payload.university, degree: payload.degreeProgram, city: payload.city,
           }).catch(() => {})
         }
       } else {

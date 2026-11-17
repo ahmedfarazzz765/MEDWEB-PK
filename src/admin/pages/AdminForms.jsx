@@ -39,12 +39,22 @@ export default function AdminForms() {
   const [saving, setSaving]   = useState(false)
   const [viewSubs, setViewSubs] = useState(null) // form object
   const [search, setSearch]   = useState('')
+  const [subsPageSize, setSubsPageSize] = useState(500)
+  const [subsCount, setSubsCount] = useState(null)
 
   useEffect(() => {
     const u1 = formsService.listen(rows => { setData(rows); setLoading(false) })
-    const u2 = formsService.listenSubmissions(rows => setSubs(rows))
-    return () => { u1(); u2() }
+    return u1
   }, [])
+
+  useEffect(() => {
+    const u2 = formsService.listenSubmissions(rows => setSubs(rows), subsPageSize)
+    return u2
+  }, [subsPageSize])
+
+  // Independent of pagination — stays accurate even when not every
+  // submission is loaded yet (see "Load more" near the table below).
+  useEffect(() => { formsService.getSubmissionsCount().then(setSubsCount).catch(() => {}) }, [])
 
   const openAdd  = () => { setForm(emptyForm()); setEditId(null); setModal(true) }
   const openEdit = row => { setForm({ ...emptyForm(), ...row }); setEditId(row.id); setModal(true) }
@@ -161,12 +171,19 @@ export default function AdminForms() {
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard icon={FileText} label="Total Forms"   value={loading ? '…' : data.length} color="#1655c3" bg="#eff6ff" />
         <StatCard icon={Eye}      label="Active Forms"  value={loading ? '…' : data.filter(d => d.status === 'Active').length} color="#64ac37" bg="#f0fdf4" />
-        <StatCard icon={Download} label="Total Responses" value={subs.length} color="#1655c3" bg="#eff6ff" />
+        <StatCard icon={Download} label="Total Responses" value={subsCount === null ? '…' : subsCount} color="#1655c3" bg="#eff6ff" />
       </div>
 
       <DataTable title="Form Builder" columns={columns} data={data} searchKey="title" emptyMessage="No forms yet — click Create Form to build one"
         actions={canWrite && <AdminButton size="sm" onClick={openAdd}>+ Create Form</AdminButton>}
       />
+      {/* `subs.length === subsPageSize` is a heuristic for "there might be
+          more" — clicking this re-subscribes with a bigger limit. */}
+      {subs.length === subsPageSize && (
+        <div className="flex justify-center">
+          <AdminButton variant="secondary" onClick={() => setSubsPageSize(n => n + 500)}>Load more responses</AdminButton>
+        </div>
+      )}
 
       {/* BUILDER MODAL */}
       {modal && (

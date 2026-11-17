@@ -1,9 +1,11 @@
 import { useState } from 'react'
-import { Download } from 'lucide-react'
+import * as XLSX from 'xlsx'
+import { Download, Trash2 } from 'lucide-react'
 import Modal from './Modal'
 import { inputCls } from './FormField'
 import AdminButton from './AdminButton'
-import { toIsoString } from '../../firebase/services'
+import { toIsoString, formsService } from '../../firebase/services'
+import useAdminPermissions from '../hooks/useAdminPermissions'
 
 const formatDateStr = (val) => {
   const str = toIsoString(val)
@@ -27,8 +29,11 @@ const CERT_STATUS_STYLES = {
   failed:               { label: 'Generation Failed',    cls: 'bg-red-50 text-red-500' },
 }
 
-export default function ResponsesModal({ form, subs, onClose }) {
+export default function ResponsesModal({ form, subs: initialSubs, onClose }) {
+  const { canDelete } = useAdminPermissions()
   const [q, setQ] = useState('')
+  const [subs, setSubs] = useState(initialSubs)
+  const [deletingId, setDeletingId] = useState(null)
   const keys = Array.from(new Set(subs.flatMap(s => Object.keys(s.values || {}))))
   const labelFor = k => (form.fields || []).find(f => f.key === k)?.label || k
   const showCertColumn = subs.some(s => s.certificateStatus)
@@ -49,14 +54,47 @@ export default function ResponsesModal({ form, subs, onClose }) {
     a.click()
   }
 
+  const exportExcel = () => {
+    const header = ['Submitted At', ...keys.map(labelFor)]
+    const rows = filtered.map(s => [
+      formatDateStr(s.submittedAt || s.createdAt),
+      ...keys.map(k => (typeof s.values?.[k] === 'boolean' ? (s.values[k] ? 'Yes' : 'No') : (s.values?.[k] ?? ''))),
+    ])
+    const ws = XLSX.utils.aoa_to_sheet([header, ...rows])
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Responses')
+    XLSX.writeFile(wb, `${form.title.replace(/\s+/g, '_')}_responses.xlsx`)
+  }
+
+  // Hidden entirely when showCertColumn is true (AdminCertificates.jsx's
+  // own use of this modal, to show the feedback submission behind an
+  // issued certificate) — deleting that submission from here would orphan
+  // the certificate's own detail view for no reason; only shown for
+  // AdminForms.jsx's real "Responses" use of this modal.
+  const canDeleteHere = canDelete && !showCertColumn
+  const handleDelete = async sub => {
+    if (!confirm('Delete this response? This cannot be undone.')) return
+    setDeletingId(sub.id)
+    try {
+      await formsService.deleteSubmission(sub.id)
+      setSubs(prev => prev.filter(s => s.id !== sub.id))
+    } catch (e) { alert('Error: ' + e.message) }
+    finally { setDeletingId(null) }
+  }
+
   return (
     <Modal title={`Responses — ${form.title}`} onClose={onClose} wide>
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
           <input className={`${inputCls} sm:max-w-xs`} placeholder="Search responses…" value={q} onChange={e => setQ(e.target.value)} />
-          <AdminButton size="sm" onClick={exportCsv} disabled={!filtered.length}>
-            <Download size={13} className="mr-1.5" /> Export CSV ({filtered.length})
-          </AdminButton>
+          <div className="flex items-center gap-2">
+            <AdminButton size="sm" onClick={exportCsv} disabled={!filtered.length}>
+              <Download size={13} className="mr-1.5" /> CSV ({filtered.length})
+            </AdminButton>
+            <AdminButton size="sm" onClick={exportExcel} disabled={!filtered.length}>
+              <Download size={13} className="mr-1.5" /> Excel
+            </AdminButton>
+          </div>
         </div>
 
         {filtered.length === 0 ? (
@@ -69,6 +107,7 @@ export default function ResponsesModal({ form, subs, onClose }) {
                   <th className="px-3 py-2 font-semibold whitespace-nowrap">Date</th>
                   {showCertColumn && <th className="px-3 py-2 font-semibold whitespace-nowrap">Certificate</th>}
                   {keys.map(k => <th key={k} className="px-3 py-2 font-semibold whitespace-nowrap">{labelFor(k)}</th>)}
+                  {canDeleteHere && <th className="px-3 py-2 font-semibold whitespace-nowrap"></th>}
                 </tr>
               </thead>
               <tbody>
@@ -92,6 +131,13 @@ export default function ResponsesModal({ form, subs, onClose }) {
                           : (s.values?.[k] ?? '—')}
                       </td>
                     ))}
+                    {canDeleteHere && (
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <button onClick={() => handleDelete(s)} disabled={deletingId === s.id} className="p-1 rounded-lg hover:bg-red-50 text-red-500 disabled:opacity-40" title="Delete this response">
+                          <Trash2 size={13} />
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

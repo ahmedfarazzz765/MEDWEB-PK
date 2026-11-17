@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { CheckCircle } from 'lucide-react'
-import { courseEnrollmentsService } from '../firebase/services'
+import { courseEnrollmentsService, studentsDbService } from '../firebase/services'
 import { sendCourseEnrollmentReceivedEmail } from '../firebase/email'
 import { getCoursePricing } from '../lib/coursePricing'
 import PaymentProofUpload from './PaymentProofUpload'
@@ -52,6 +52,11 @@ export default function CourseEnrollForm({ course }) {
       })
       setEnrollmentId(newId)
       sendCourseEnrollmentReceivedEmail({ name: form.name.trim(), email: form.email.trim(), courseTitle: course.title, enrollmentId: newId, amountDue }).catch(() => {})
+      studentsDbService.upsertFromCourseEnrollment({
+        email: form.email.trim(), name: form.name.trim(), phone: form.whatsapp.trim(),
+        university: form.institution.trim(), degree: form.qualification.trim(), city: form.city.trim(),
+        courseId: course.id, courseTitle: course.title, enrolledAt: new Date().toISOString(),
+      }).catch(() => {})
       setStatus('success')
     } catch (e) {
       setStatus('error')

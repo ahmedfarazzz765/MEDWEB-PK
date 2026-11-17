@@ -288,12 +288,18 @@ service cloud.firestore {
       allow create: if true;
       // Exactly the fields studentsDbService's upsert transaction writes —
       // see upsertStudent() in services.js. No other field is ever
-      // touched by a public write.
+      // touched by a public write. `city` and `enrollments`/
+      // `enrollmentCount` (Round 14 Part B — course/workshop enrollments
+      // now also upsert into this collection, and `city` is captured
+      // alongside university/degree) added to this list; the admin
+      // Students page's duplicate-merge action writes the same fields
+      // too, covered by the isAdmin() branch instead.
       allow update: if isAdmin()
         || onlyFieldsChanged([
-          'name', 'email', 'phone', 'university', 'degree',
+          'name', 'email', 'phone', 'university', 'degree', 'city',
           'registrations', 'registrationCount',
           'certificates', 'certificateCount',
+          'enrollments', 'enrollmentCount',
           'portfolioSlug', 'createdAt', 'updatedAt',
         ]);
       allow delete: if isAdmin();
