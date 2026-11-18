@@ -167,7 +167,7 @@ function issue_certificate_for_attempt(Firestore $fs, array $attempt, array $moc
         throw new FirestoreError('Certificate image URL is not on our Cloudinary account.', 400);
     }
 
-    $certCode = new_cert_code($fs);
+    $certCode = derive_mock_test_cert_code($attempt['id']);
     $certId = $certCode; // certificatesService also keys docs by certCode — see services.js
     $fs->createDoc('certificates', $certId, [
         'certCode' => $certCode,

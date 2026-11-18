@@ -19,6 +19,17 @@ import { drawElement } from './certElements'
 const DEFAULT_NAME_POS = { xPct: 50, yPct: 28, fontSize: 48, color: '#1a1a1a', fontFamily: DEFAULT_CERT_FONT }
 const DEFAULT_ID_POS   = { xPct: 10, yPct: 90, fontSize: 26, color: '#1a1a1a' }
 
+// Must match derive_mock_test_cert_code() in
+// public/api/mocktest/_lib/util.php EXACTLY (same sha256 hex substring) —
+// see that function's comment for why mock-test certs use a deterministic
+// code instead of certificatesService.generateUniqueCode()'s random one.
+export async function deriveMockTestCertCode(attemptId) {
+  const bytes = new TextEncoder().encode(attemptId)
+  const digest = await crypto.subtle.digest('SHA-256', bytes)
+  const hex = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('')
+  return 'MEDWEB-' + hex.slice(0, 10)
+}
+
 function toTitleCase(str) {
   return String(str).trim().toLowerCase().replace(/\b\w/g, c => c.toUpperCase())
 }
@@ -33,7 +44,14 @@ function loadImage(url) {
   })
 }
 
-async function compositeCertificateCanvas({ templateUrl, studentName, certCode, namePos, idPos, customFields, elements }) {
+// Exported (not just used internally by compositeAndIssueCertificate below)
+// so the mock-test result page can render+upload a certificate image
+// itself while leaving the Firestore `certificates` doc creation to the
+// PHP API (server-authoritative — see public/api/mocktest/issue-cert.php)
+// instead of going through compositeAndIssueCertificate's own
+// certificatesService.add() call, which the mock-test flow deliberately
+// does NOT use.
+export async function compositeCertificateCanvas({ templateUrl, studentName, certCode, namePos, idPos, customFields, elements }) {
   const img = await loadImage(templateUrl)
   const canvas = document.createElement('canvas')
   canvas.width = img.naturalWidth
@@ -85,7 +103,7 @@ async function compositeCertificateCanvas({ templateUrl, studentName, certCode, 
 // Steps JPEG quality down until the file is comfortably under EmailJS's
 // 500KB attachment ceiling — a certificate doesn't need to be huge, so this
 // targets ~350KB to leave headroom.
-function canvasToCompressedBlob(canvas, targetBytes = 350 * 1024) {
+export function canvasToCompressedBlob(canvas, targetBytes = 350 * 1024) {
   return new Promise((resolve, reject) => {
     const tryQuality = quality => {
       canvas.toBlob(blob => {

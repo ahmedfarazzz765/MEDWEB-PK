@@ -89,9 +89,29 @@ function hash_token(string $token): string {
     return hash('sha256', $token);
 }
 
+// Mock-test certs use a DETERMINISTIC code (sha256(attemptId), first 10 hex
+// chars — hex is already a valid subset of the random scheme's base36
+// alphabet, so the format is indistinguishable from a webinar cert's) made
+// 'MEDWEB-' + that, rather than new_cert_code()'s random one. Reason: the
+// certificate IMAGE has the code drawn into its pixels by the browser
+// BEFORE this doc is created (see issue-cert.php's comment) — a random
+// code generated only at doc-creation time would never match what's
+// already baked into the uploaded image. The frontend computes this exact
+// same value independently (same algorithm, same attemptId, no network
+// round-trip needed) before compositing — see the mock-test result page.
+// Collision risk is a non-issue: createDoc()'s create-only semantics make
+// a repeat call for the same attempt land on the SAME existing doc rather
+// than erroring, which is actually a better idempotency story than the
+// random scheme's collision-check-and-retry loop.
+function derive_mock_test_cert_code(string $attemptId): string {
+    return 'MEDWEB-' . substr(hash('sha256', $attemptId), 0, 10);
+}
+
 // Same scheme as certificatesService.generateUniqueCode() in
 // src/firebase/services.js — MEDWEB-<10 random base36 chars>, so certs
 // created here verify on the exact same public page/query as webinar certs.
+// (Kept for completeness/future use — issue_certificate_for_attempt()
+// actually uses derive_mock_test_cert_code() above, not this.)
 function new_cert_code(Firestore $fs): string {
     $alphabet = '0123456789abcdefghijklmnopqrstuvwxyz';
     for ($attempt = 0; $attempt < 10; $attempt++) {

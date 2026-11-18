@@ -19,6 +19,11 @@ if (($attempt['status'] ?? '') !== 'completed') {
 json_response([
     'ok' => true,
     'status' => 'completed',
+    // Lets the browser independently derive the exact same cert code PHP
+    // will use (see derive_mock_test_cert_code() in _lib/util.php) BEFORE
+    // compositing the certificate image, so the code drawn into the image
+    // and the code on the Firestore doc issue-cert.php creates always match.
+    'attemptId' => $attempt['id'],
     'studentName' => $attempt['studentName'] ?? '',
     'courseTitle' => $attempt['courseTitle'] ?? '',
     'testTitle' => $attempt['mockTestTitle'] ?? '',
