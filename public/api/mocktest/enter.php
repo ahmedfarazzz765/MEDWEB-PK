@@ -7,7 +7,7 @@
 // match" — so the endpoint can't be used to enumerate valid registration
 // IDs or probe which field was wrong.
 declare(strict_types=1);
-require_once __DIR__ . '/_lib/util.php';
+require_once __DIR__ . '/_lib/attempt.php';
 
 require_post();
 $ip = client_ip();
@@ -31,6 +31,7 @@ function fail_ineligible(string $ip): void {
 }
 
 $fs = mocktest_firestore();
+maybe_run_fallback_sweep($fs);
 
 $course = $fs->queryOne('courses', [['slug', 'EQUAL', $courseSlug]]);
 if (!$course || empty($course['mockTestEnabled']) || empty($course['mockTestId'])) {

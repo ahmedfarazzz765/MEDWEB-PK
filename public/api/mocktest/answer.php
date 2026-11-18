@@ -12,6 +12,7 @@ require_once __DIR__ . '/_lib/attempt.php';
 
 require_post();
 $fs = mocktest_firestore();
+maybe_run_fallback_sweep($fs);
 $attempt = require_attempt_by_token($fs);
 
 if (($attempt['status'] ?? '') !== 'in_progress') {

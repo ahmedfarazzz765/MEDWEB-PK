@@ -6,6 +6,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/_lib/attempt.php';
 
 $fs = mocktest_firestore();
+maybe_run_fallback_sweep($fs);
 $attempt = require_attempt_by_token($fs);
 
 if (($attempt['status'] ?? '') !== 'completed') {

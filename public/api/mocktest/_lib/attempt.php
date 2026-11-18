@@ -210,6 +210,59 @@ function issue_certificate_for_attempt(Firestore $fs, array $attempt, array $moc
     return $attempt;
 }
 
+// The "eligible but no certificate within 10 minutes" fallback-email
+// sweep — core logic shared by cron-sweep.php (manual/on-demand, always
+// runs) and maybe_run_fallback_sweep() (opportunistic, throttled) below.
+// No scheduled GitHub Actions job runs this (would burn private-repo
+// Actions minutes for no real benefit) — instead it rides along on real
+// student/admin traffic.
+function run_fallback_sweep(Firestore $fs): array {
+    $candidates = $fs->query('mockAttempts', [
+        ['status', 'EQUAL', 'completed'],
+        ['eligible', 'EQUAL', true],
+        ['emailStatus', 'EQUAL', 'pending'],
+    ], 200);
+
+    $cutoff = time() - 600;
+    $processed = 0;
+    $mockTestCache = [];
+
+    foreach ($candidates as $attempt) {
+        $finishedAt = strtotime((string) ($attempt['finishedAt'] ?? ''));
+        if ($finishedAt === false || $finishedAt > $cutoff) continue;
+
+        $mtId = $attempt['mockTestId'];
+        if (!isset($mockTestCache[$mtId])) {
+            $mockTestCache[$mtId] = load_mock_test($fs, $mtId);
+        }
+        $sent = mocktest_send_result_email($attempt, $mockTestCache[$mtId], null, true);
+        if ($sent) {
+            $fs->patchDoc('mockAttempts/' . $attempt['id'], ['emailStatus' => 'sent_pending_cert']);
+            $processed++;
+        }
+    }
+
+    return ['processed' => $processed, 'checked' => count($candidates)];
+}
+
+// Opportunistic version called from enter.php/answer.php/result.php and
+// (once built) the admin Results tab — throttled to at most once per 60s
+// across ALL requests via a local file timestamp, so ordinary traffic
+// doesn't turn into a Firestore query on every single hit. Never lets a
+// sweep failure break the real request it's riding along on.
+function maybe_run_fallback_sweep(Firestore $fs): void {
+    $marker = mocktest_private_dir() . '/last_sweep.txt';
+    $last = is_file($marker) ? (int) @file_get_contents($marker) : 0;
+    if (time() - $last < 60) return;
+    @file_put_contents($marker, (string) time(), LOCK_EX);
+    try {
+        run_fallback_sweep($fs);
+    } catch (Throwable $e) {
+        // swallow — this is a best-effort side errand, never the reason a
+        // student-facing request fails
+    }
+}
+
 // Shared "where is this attempt right now" response shape for start.php,
 // state.php and answer.php — either the current question + its deadline,
 // or (if finish_attempt has already run) the final result.
