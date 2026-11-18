@@ -328,6 +328,17 @@ service cloud.firestore {
     match /customFonts/{id}   { allow read, write: if isAdmin(); }
     match /activityLog/{id}   { allow read: if isSuperAdmin(); allow create: if isAdmin(); allow update, delete: if false; }
 
+    // ── MOCK TESTS — admin-only, full stop. Students never touch Firestore
+    //    directly; they only ever talk to the PHP API under
+    //    public/api/mocktest/*.php (service-account auth, bypasses these
+    //    rules entirely, same as the Admin SDK) — see
+    //    CLAUDE_CODE_PROMPT_paid_workshop_enrollment.md section 1. A
+    //    mockTests doc holds answer keys (`questions[].correctIndex`), and
+    //    a mockAttempts doc holds a bearer-token hash — neither may ever be
+    //    client-readable, not even to the attempt's own student.
+    match /mockTests/{id}    { allow read, write: if isAdmin(); }
+    match /mockAttempts/{id} { allow read, write: if isAdmin(); }
+
     // ── ADMIN USER MANAGEMENT — Super Admin only to manage others; a
     //    brand-new invitee (AcceptInvite.jsx) who just created their own
     //    Firebase Auth account creates their OWN doc ONCE, proven by a

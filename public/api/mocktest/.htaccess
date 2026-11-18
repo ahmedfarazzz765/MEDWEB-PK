@@ -1,0 +1,10 @@
+# Many shared-hosting PHP setups (Hostinger included) strip the
+# Authorization header before it reaches PHP — getallheaders()/
+# $_SERVER['HTTP_AUTHORIZATION'] end up empty even though the client sent
+# it. This forwards it through explicitly so every endpoint's bearer-token
+# check (student attempt tokens, admin Firebase ID tokens) actually works.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{HTTP:Authorization} ^(.*)
+  RewriteRule .* - [E=HTTP_AUTHORIZATION:%1]
+</IfModule>

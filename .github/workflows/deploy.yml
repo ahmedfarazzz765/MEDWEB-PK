@@ -43,6 +43,33 @@ jobs:
           # generate real content instead of just the static routes.
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: npm run build
+      # Writes the mocktest PHP API's runtime secrets into the build output
+      # (never committed) — a separate copy from the build-time
+      # FIREBASE_SERVICE_ACCOUNT secret above, since that one is only ever
+      # used Node-side during this same job and shouldn't also become a
+      # standing runtime secret sitting on the server. Protected by
+      # public/api/mocktest/_private/.htaccess (Require all denied, copied
+      # into dist/ verbatim by Vite like any other public/ file).
+      - name: Write mocktest API runtime config
+        env:
+          MOCKTEST_FIREBASE_SERVICE_ACCOUNT: ${{ secrets.MOCKTEST_FIREBASE_SERVICE_ACCOUNT }}
+          MOCKTEST_BREVO_API_KEY: ${{ secrets.MOCKTEST_BREVO_API_KEY }}
+          MOCKTEST_BREVO_FROM_EMAIL: ${{ secrets.MOCKTEST_BREVO_FROM_EMAIL }}
+          MOCKTEST_CRON_SECRET: ${{ secrets.MOCKTEST_CRON_SECRET }}
+        run: |
+          mkdir -p dist/api/mocktest/_private
+          printf '%s' "$MOCKTEST_FIREBASE_SERVICE_ACCOUNT" > dist/api/mocktest/_private/service-account.json
+          cat > /tmp/write-mocktest-secrets.php << 'PHPSCRIPT'
+          <?php
+          $out = "<?php\nreturn [\n";
+          $out .= "    'BREVO_API_KEY' => " . var_export(getenv('MOCKTEST_BREVO_API_KEY'), true) . ",\n";
+          $out .= "    'BREVO_FROM_EMAIL' => " . var_export(getenv('MOCKTEST_BREVO_FROM_EMAIL') ?: 'no-reply@medwebpk.com', true) . ",\n";
+          $out .= "    'BREVO_FROM_NAME' => 'MEDWEB',\n";
+          $out .= "    'CRON_SECRET' => " . var_export(getenv('MOCKTEST_CRON_SECRET'), true) . ",\n";
+          $out .= "];\n";
+          file_put_contents('dist/api/mocktest/_private/secrets.php', $out);
+          PHPSCRIPT
+          php /tmp/write-mocktest-secrets.php
       # Every FTP-Deploy-Action variant (splitting by folder, then by file
       # type, with longer timeouts each time) hit the identical
       # ECONNRESET at the identical point — creating a folder — which
