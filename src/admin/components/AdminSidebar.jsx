@@ -34,6 +34,7 @@ const GROUPS = [
       { id: 'webinars',     label: 'Webinars',     icon: Video },
       { id: 'courses',      label: 'Courses',      icon: BookOpen, badgeKey: 'pendingEnrollments' },
       { id: 'certificates', label: 'Certificates', icon: Award },
+      { id: 'mockTests',    label: 'Mock Tests',   icon: ClipboardCheck },
     ],
   },
   {

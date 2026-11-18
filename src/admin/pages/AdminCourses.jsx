@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { BookOpen, Users, Star, Plus, X, Inbox, ExternalLink } from 'lucide-react'
+import { BookOpen, Users, Star, Plus, X, Inbox, ExternalLink, Copy } from 'lucide-react'
 import TagInput from '../components/TagInput'
 import StatCard    from '../components/StatCard'
 import DataTable   from '../components/DataTable'
@@ -14,7 +14,7 @@ import AdminCourseEnrollments from './AdminCourseEnrollments'
 import useAdminPermissions from '../hooks/useAdminPermissions'
 import { useToast } from '../components/Toast'
 import { useConfirm } from '../components/ConfirmDialog'
-import { coursesService, courseJoiningLinksService, formsService } from '../../firebase/services'
+import { coursesService, courseJoiningLinksService, formsService, mockTestsService } from '../../firebase/services'
 import { karachiLocalToIso, karachiLocalToMs, isoToKarachiLocal } from '../../lib/karachiTime'
 
 const emptyForm = () => ({
@@ -46,6 +46,10 @@ const emptyForm = () => ({
   slug: '', seoTitle: '', seoDescription: '', seoKeywords: '', ogImage: '',
   // Homepage popup
   popupEnabled: false, popupStartDate: '', popupEndDate: '',
+  // Mock Test — manual activation only, and only a Ready test can ever be
+  // selected here (the dropdown itself only lists Ready ones), so this
+  // can never end up enabled against a Draft/non-existent test.
+  mockTestEnabled: false, mockTestId: '',
 })
 
 function makeColumns(openEdit, handleDelete, openEnrollments) {
@@ -93,12 +97,14 @@ export default function AdminCourses() {
   const [editId,  setEditId]  = useState(null)
   const [saving,  setSaving]  = useState(false)
   const [enrollmentsFor, setEnrollmentsFor] = useState(null) // course row, or null
+  const [readyMockTests, setReadyMockTests] = useState([])
   const [slugTouched, setSlugTouched] = useState(false)
   const [forms, setForms] = useState([]) // Form Builder forms — same list Add Webinar's selector uses
 
   useEffect(() => {
     const unsub = coursesService.listen(rows => { setData(rows); setLoading(false) })
     const unsub2 = formsService.listen(rows => setForms(rows))
+    mockTestsService.getReady().then(setReadyMockTests).catch(() => setReadyMockTests([]))
     return () => { unsub(); unsub2() }
   }, [])
 
@@ -141,6 +147,7 @@ export default function AdminCourses() {
       discountEndsAt: isoToKarachiLocal(row.discountEndsAt), registrationClosesAt: isoToKarachiLocal(row.registrationClosesAt),
       slug: row.slug || '', seoTitle: row.seoTitle || '', seoDescription: row.seoDescription || '', seoKeywords: row.seoKeywords || '', ogImage: row.ogImage || '',
       popupEnabled: !!row.popupEnabled, popupStartDate: row.popupStartDate || '', popupEndDate: row.popupEndDate || '',
+      mockTestEnabled: !!row.mockTestEnabled, mockTestId: row.mockTestId || '',
     })
     setEditId(row.id); setSlugTouched(!!row.slug); setModal('edit')
     // Joining link lives in its own admin-only-readable doc (see
@@ -382,6 +389,52 @@ export default function AdminCourses() {
               </label>
             </div>
             <TagInput value={form.tags} onChange={setTags} label="Tags" placeholder="e.g. Pharmacology, Free, Certificate — press Enter" />
+
+            <div className="border-t border-gray-100 pt-4 mt-2">
+              <h4 className="font-bold text-[#1a1a1a] text-sm mb-3">Mock Test</h4>
+              <label className="flex items-center gap-3 cursor-pointer select-none mb-3">
+                <input
+                  type="checkbox"
+                  checked={form.mockTestEnabled}
+                  disabled={!form.mockTestId}
+                  onChange={e => setForm(prev => ({ ...prev, mockTestEnabled: e.target.checked }))}
+                  className="w-4 h-4 accent-[#1655c3]"
+                />
+                <span className="text-sm font-semibold text-gray-700">Enable Mock Test for this course</span>
+              </label>
+              <FormField label="Mock Test">
+                <select
+                  className={inputCls}
+                  value={form.mockTestId}
+                  onChange={e => setForm(prev => ({ ...prev, mockTestId: e.target.value, mockTestEnabled: e.target.value ? prev.mockTestEnabled : false }))}
+                >
+                  <option value="">— None —</option>
+                  {readyMockTests.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
+                </select>
+              </FormField>
+              {readyMockTests.length === 0 && (
+                <p className="text-xs text-gray-400 mt-1.5">No mock tests are marked Ready yet — create one under Programs → Mock Tests first.</p>
+              )}
+              {form.mockTestEnabled && form.mockTestId && (
+                <div className="mt-3 flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2.5">
+                  <span className="text-xs text-gray-500 flex-1 truncate font-mono">
+                    {form.slug ? `https://medwebpk.com/mock-test/${form.slug}` : 'Set a URL Slug below to get a shareable link.'}
+                  </span>
+                  {form.slug && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(`https://medwebpk.com/mock-test/${form.slug}`)
+                        toast.success('Link copied.')
+                      }}
+                      className="p-1.5 rounded-lg hover:bg-blue-100 text-[#1655c3] shrink-0"
+                    >
+                      <Copy size={14} />
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
 
             <div className="border-t border-gray-100 pt-4 mt-2">
               <h4 className="font-bold text-[#1a1a1a] text-sm mb-3">Course Detail Page</h4>

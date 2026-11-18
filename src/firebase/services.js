@@ -13,6 +13,8 @@ const COLS = {
   webinars: 'webinars',
   courses: 'courses',
   certificates: 'certificates',
+  mockTests: 'mockTests',
+  mockAttempts: 'mockAttempts',
   ambassadors: 'ambassadors',
   blog: 'blogPosts',
   team: 'team',
@@ -346,6 +348,47 @@ export const coursesService = {
     query(col(COLS.courses), orderBy('createdAt', 'desc')),
     snap => cb(applyManualOrder(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
     err => console.error("Firebase listen error:", err)
+  ),
+}
+
+// ─── MOCK TESTS ───────────────────────────────────────────────────────────────
+// Admin-only collection (Firestore rules: isAdmin() for both read and
+// write — students never touch this directly, see
+// public/api/mocktest/*.php). A test is "Ready" once it has >=1 valid
+// question and a certTemplate configured — AdminMockTests.jsx computes
+// that client-side before allowing the status toggle, same pattern as
+// `questions`/`certTemplate` below; nothing here enforces it server-side
+// beyond the PHP API's own `status === 'Ready'` check at entry time.
+//
+// questions[]: { questionText, options: [string,string,string,string],
+//                correctIndex: 0-3, seconds?: number }
+// certTemplate: { imageUrl, namePos, idPos, elements } — identical shape
+//                to a webinar's certTemplate (see AdminWebinars.jsx),
+//                reused by the mock-test result page's client-side
+//                certificateGenerator.js rendering.
+export const mockTestsService = {
+  getAll: () => getAll(COLS.mockTests, orderBy('createdAt', 'desc')),
+  getReady: () => getAll(COLS.mockTests, where('status', '==', 'Ready')),
+  getOne: id => getOne(COLS.mockTests, id),
+  add: data => add(COLS.mockTests, { questions: [], passPercent: 70, defaultSeconds: 60, status: 'Draft', certTemplate: null, ...data }),
+  update: (id, data) => update(COLS.mockTests, id, data),
+  delete: id => remove(COLS.mockTests, id),
+  listen: cb => onSnapshot(
+    query(col(COLS.mockTests), orderBy('createdAt', 'desc')),
+    snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+    err => console.error('Firebase mockTests listen error:', err)
+  ),
+}
+
+// Attempts are written exclusively by the PHP API (service-account auth,
+// bypasses these rules) — admin only ever READS here, for the Results tab.
+export const mockAttemptsService = {
+  getByMockTest: mockTestId => getAll(COLS.mockAttempts, where('mockTestId', '==', mockTestId), orderBy('createdAt', 'desc')),
+  getOne: id => getOne(COLS.mockAttempts, id),
+  listenByMockTest: (mockTestId, cb) => onSnapshot(
+    query(col(COLS.mockAttempts), where('mockTestId', '==', mockTestId), orderBy('createdAt', 'desc')),
+    snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+    err => console.error('Firebase mockAttempts listen error:', err)
   ),
 }
 

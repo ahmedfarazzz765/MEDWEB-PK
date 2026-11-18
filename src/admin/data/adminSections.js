@@ -26,6 +26,7 @@ export const ADMIN_SECTIONS = [
   { key: 'webinars',     label: 'Webinars',     group: 'Programs' },
   { key: 'courses',      label: 'Courses',      group: 'Programs' },
   { key: 'certificates', label: 'Certificates', group: 'Programs' },
+  { key: 'mockTests',    label: 'Mock Tests',   group: 'Programs' },
 
   { key: 'testimonials',        label: 'Testimonials',    group: 'Engagement' },
   { key: 'pendingTestimonials', label: 'Pending Reviews', group: 'Engagement' },

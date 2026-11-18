@@ -14,6 +14,7 @@ import CoursePopup from './components/CoursePopup'
 // own chunk, fetched only when that route is actually visited.
 const HomePage              = lazy(() => import('./pages/HomePage'))
 const WebinarRegister       = lazy(() => import('./pages/WebinarRegister'))
+const MockTestPage          = lazy(() => import('./pages/MockTestPage'))
 const WebinarDetailPage     = lazy(() => import('./pages/WebinarDetailPage'))
 const FounderMessagePage    = lazy(() => import('./pages/FounderMessagePage'))
 const AboutPage             = lazy(() => import('./pages/AboutPage'))
@@ -110,6 +111,7 @@ function App() {
         <Route path="/webinars"               element={<WebinarsListPage />} />
         <Route path="/courses"                element={<CoursesListPage />} />
         <Route path="/courses/:id"            element={<CourseDetailPage />} />
+        <Route path="/mock-test/:courseSlug"  element={<MockTestPage />} />
         <Route path="/team"                   element={<TeamListPage />} />
         <Route path="/speakers"               element={<SpeakersPage />} />
         <Route path="/ambassadors"            element={<AmbassadorsListPage />} />

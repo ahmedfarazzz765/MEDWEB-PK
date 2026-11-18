@@ -16,6 +16,18 @@ if (($attempt['status'] ?? '') !== 'completed') {
     json_response(['ok' => true, 'status' => $attempt['status'] ?? 'entered']);
 }
 
+// mockTests is admin-only in Firestore rules (it holds answer keys) — the
+// student's browser can never read it directly. certTemplate has no
+// answer-key material in it at all (just an image URL + text positions),
+// so it's the one piece of that doc safe to hand back here, needed so the
+// result page can render the certificate client-side exactly like the
+// admin's own CertPositionEditor preview does.
+$certTemplate = null;
+if (!empty($attempt['eligible']) && ($attempt['certificateStatus'] ?? '') !== 'issued') {
+    $mockTest = load_mock_test($fs, $attempt['mockTestId']);
+    $certTemplate = $mockTest['certTemplate'] ?? null;
+}
+
 json_response([
     'ok' => true,
     'status' => 'completed',
@@ -37,4 +49,5 @@ json_response([
     'certificateStatus' => $attempt['certificateStatus'] ?? 'not_applicable',
     'certCode' => $attempt['certCode'] ?? null,
     'certificateImageUrl' => $attempt['certificateImageUrl'] ?? null,
+    'certTemplate' => $certTemplate,
 ]);

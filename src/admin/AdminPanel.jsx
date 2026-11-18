@@ -15,6 +15,7 @@ import AdminStudents    from './pages/AdminStudents'
 import AdminWebinars    from './pages/AdminWebinars'
 import AdminCourses     from './pages/AdminCourses'
 import AdminCertificates from './pages/AdminCertificates'
+import AdminMockTests from './pages/AdminMockTests'
 import AdminAmbassadors from './pages/AdminAmbassadors'
 import AdminAnnouncements from './pages/AdminAnnouncements'
 import AdminBlog        from './pages/AdminBlog'
@@ -39,6 +40,7 @@ const pages = {
   webinars:     AdminWebinars,
   courses:      AdminCourses,
   certificates: AdminCertificates,
+  mockTests:    AdminMockTests,
   ambassadors:  AdminAmbassadors,
   announcements: AdminAnnouncements,
   blog:         AdminBlog,

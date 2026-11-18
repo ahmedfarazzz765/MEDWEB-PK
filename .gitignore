@@ -28,3 +28,10 @@ Pakistan Observer.pdf
 WhatsApp Unknown 2026-11-17 at 7.28.29 PM.zip
 WhatsApp Unknown 2026-11-17 at 7.28.29 PM/
 *.code-workspace
+
+# Firebase/GCP service account keys — real credentials, must never be
+# committed (they belong in GitHub Actions secrets instead, written to the
+# server at deploy time — see .github/workflows/deploy.yml and
+# public/api/mocktest/_private/).
+*firebase-adminsdk*.json
+service-account*.json

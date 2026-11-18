@@ -9,6 +9,7 @@ const pageTitles = {
   webinars:     { title: 'Webinars',        sub: 'Manage live sessions & registrations' },
   courses:      { title: 'Courses',         sub: 'Manage all programs & content' },
   certificates: { title: 'Certificates',   sub: 'Issue & verify student certificates' },
+  mockTests:    { title: 'Mock Tests',     sub: 'Create tests, import questions & review results' },
   ambassadors:  { title: 'Ambassadors',    sub: 'Manage student ambassador network' },
   blog:         { title: 'Blog Posts',     sub: 'Manage articles & knowledge hub' },
   events:       { title: 'Events & News',  sub: 'Manage events, conferences and medical news' },
@@ -48,7 +49,7 @@ const ROLE_LABELS = { superadmin: 'Super Admin', editor: 'Editor', viewer: 'View
 // Mirrors AdminSidebar.jsx's GROUPS exactly (Round 15 B reorganization).
 const GROUP_LABELS = {
   dashboard: 'Overview',
-  webinars: 'Programs', courses: 'Programs', certificates: 'Programs',
+  webinars: 'Programs', courses: 'Programs', certificates: 'Programs', mockTests: 'Programs',
   students: 'People', submissions: 'People', ambassadors: 'People', advisory: 'People', team: 'People',
   testimonials: 'Engagement', pendingTestimonials: 'Engagement', events: 'Engagement', blog: 'Engagement', forms: 'Engagement', reports: 'Engagement',
   sections: 'Website Content', announcements: 'Website Content', content: 'Website Content', footer: 'Website Content',

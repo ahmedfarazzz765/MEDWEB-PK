@@ -24,6 +24,7 @@ const PAGES = [
   { id: 'webinars', label: 'Webinars' },
   { id: 'courses', label: 'Courses', keywords: 'workshops enrollments' },
   { id: 'certificates', label: 'Certificates' },
+  { id: 'mockTests', label: 'Mock Tests' },
   { id: 'testimonials', label: 'Testimonials' },
   { id: 'pendingTestimonials', label: 'Pending Reviews' },
   { id: 'blog', label: 'Blog Posts' },
