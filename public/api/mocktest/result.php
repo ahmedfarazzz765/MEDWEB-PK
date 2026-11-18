@@ -22,19 +22,26 @@ if (($attempt['status'] ?? '') !== 'completed') {
 // so it's the one piece of that doc safe to hand back here, needed so the
 // result page can render the certificate client-side exactly like the
 // admin's own CertPositionEditor preview does.
+//
+// certCode: the browser can't compute derive_mock_test_cert_code() itself
+// (it's an HMAC keyed by the server-only CRON_SECRET, deliberately — see
+// that function's comment) — this is the one place a NOT-YET-issued
+// attempt's eventual code is revealed, and only to the attempt's own
+// token-holder, so the certificate image can be drawn with the exact code
+// issue-cert.php will use when it actually creates the record.
 $certTemplate = null;
-if (!empty($attempt['eligible']) && ($attempt['certificateStatus'] ?? '') !== 'issued') {
-    $mockTest = load_mock_test($fs, $attempt['mockTestId']);
-    $certTemplate = $mockTest['certTemplate'] ?? null;
+$certCode = $attempt['certCode'] ?? null;
+if (!empty($attempt['eligible'])) {
+    if (($attempt['certificateStatus'] ?? '') !== 'issued') {
+        $mockTest = load_mock_test($fs, $attempt['mockTestId']);
+        $certTemplate = $mockTest['certTemplate'] ?? null;
+        $certCode = derive_mock_test_cert_code($attempt['id']);
+    }
 }
 
 json_response([
     'ok' => true,
     'status' => 'completed',
-    // Lets the browser independently derive the exact same cert code PHP
-    // will use (see derive_mock_test_cert_code() in _lib/util.php) BEFORE
-    // compositing the certificate image, so the code drawn into the image
-    // and the code on the Firestore doc issue-cert.php creates always match.
     'attemptId' => $attempt['id'],
     'studentName' => $attempt['studentName'] ?? '',
     'courseTitle' => $attempt['courseTitle'] ?? '',
@@ -47,7 +54,7 @@ json_response([
     'passPercent' => $attempt['passPercent'] ?? 70,
     'eligible' => (bool) ($attempt['eligible'] ?? false),
     'certificateStatus' => $attempt['certificateStatus'] ?? 'not_applicable',
-    'certCode' => $attempt['certCode'] ?? null,
+    'certCode' => $certCode,
     'certificateImageUrl' => $attempt['certificateImageUrl'] ?? null,
     'certTemplate' => $certTemplate,
 ]);

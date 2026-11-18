@@ -89,22 +89,29 @@ function hash_token(string $token): string {
     return hash('sha256', $token);
 }
 
-// Mock-test certs use a DETERMINISTIC code (sha256(attemptId), first 10 hex
-// chars — hex is already a valid subset of the random scheme's base36
-// alphabet, so the format is indistinguishable from a webinar cert's) made
-// 'MEDWEB-' + that, rather than new_cert_code()'s random one. Reason: the
-// certificate IMAGE has the code drawn into its pixels by the browser
-// BEFORE this doc is created (see issue-cert.php's comment) — a random
-// code generated only at doc-creation time would never match what's
-// already baked into the uploaded image. The frontend computes this exact
-// same value independently (same algorithm, same attemptId, no network
-// round-trip needed) before compositing — see the mock-test result page.
+// Mock-test certs use a DETERMINISTIC code — HMAC-SHA256(attemptId,
+// CRON_SECRET), first 10 hex chars (hex is already a valid subset of the
+// random scheme's base36 alphabet, so the format is indistinguishable from
+// a webinar cert's), made 'MEDWEB-' + that, rather than new_cert_code()'s
+// random one. Reason: the certificate IMAGE has the code drawn into its
+// pixels by the browser BEFORE this doc is created (see issue-cert.php's
+// comment) — a random code generated only at doc-creation time would never
+// match what's already baked into the uploaded image.
+//
+// HMAC (not plain sha256(attemptId)) specifically so the code can't be
+// computed by anyone who only knows (or guesses) an attemptId — it needs
+// the server-only CRON_SECRET too. The browser never computes this itself;
+// it's handed the code by result.php (student) or admin-cert-code.php
+// (admin), both of which require a valid session (attempt token / Firebase
+// admin ID token) before revealing it for a given attempt.
+//
 // Collision risk is a non-issue: createDoc()'s create-only semantics make
 // a repeat call for the same attempt land on the SAME existing doc rather
 // than erroring, which is actually a better idempotency story than the
 // random scheme's collision-check-and-retry loop.
 function derive_mock_test_cert_code(string $attemptId): string {
-    return 'MEDWEB-' . substr(hash('sha256', $attemptId), 0, 10);
+    $secret = mocktest_secrets()['CRON_SECRET'] ?? '';
+    return 'MEDWEB-' . substr(hash_hmac('sha256', $attemptId, $secret), 0, 10);
 }
 
 // Same scheme as certificatesService.generateUniqueCode() in

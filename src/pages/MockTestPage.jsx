@@ -5,7 +5,7 @@ import { ClipboardCheck, ArrowLeft, Clock, CheckCircle, XCircle, Award, Download
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
 import { mocktestApi, getStoredToken, storeToken, clearStoredToken } from '../lib/mocktestClient'
-import { compositeCertificateCanvas, canvasToCompressedBlob, deriveMockTestCertCode } from '../lib/certificateGenerator'
+import { compositeCertificateCanvas, canvasToCompressedBlob } from '../lib/certificateGenerator'
 import { uploadToCloudinary } from '../firebase/cloudinary'
 
 const inputCls = 'w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-700 outline-none focus:border-[#1655c3] focus:ring-2 focus:ring-blue-100 transition-all bg-gray-50'
@@ -177,11 +177,14 @@ export default function MockTestPage() {
     setCertState('generating')
     ;(async () => {
       try {
-        const certCode = await deriveMockTestCertCode(result.attemptId)
+        // result.certCode is server-computed (HMAC-keyed, not derivable
+        // client-side — see derive_mock_test_cert_code() in
+        // public/api/mocktest/_lib/util.php) so it has to come from
+        // result.php rather than being computed here.
         const canvas = await compositeCertificateCanvas({
           templateUrl: result.certTemplate.imageUrl,
           studentName: result.studentName,
-          certCode,
+          certCode: result.certCode,
           namePos: result.certTemplate.namePos,
           idPos: result.certTemplate.idPos,
           elements: result.certTemplate.elements,

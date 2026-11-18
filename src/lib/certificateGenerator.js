@@ -19,17 +19,6 @@ import { drawElement } from './certElements'
 const DEFAULT_NAME_POS = { xPct: 50, yPct: 28, fontSize: 48, color: '#1a1a1a', fontFamily: DEFAULT_CERT_FONT }
 const DEFAULT_ID_POS   = { xPct: 10, yPct: 90, fontSize: 26, color: '#1a1a1a' }
 
-// Must match derive_mock_test_cert_code() in
-// public/api/mocktest/_lib/util.php EXACTLY (same sha256 hex substring) —
-// see that function's comment for why mock-test certs use a deterministic
-// code instead of certificatesService.generateUniqueCode()'s random one.
-export async function deriveMockTestCertCode(attemptId) {
-  const bytes = new TextEncoder().encode(attemptId)
-  const digest = await crypto.subtle.digest('SHA-256', bytes)
-  const hex = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('')
-  return 'MEDWEB-' + hex.slice(0, 10)
-}
-
 function toTitleCase(str) {
   return String(str).trim().toLowerCase().replace(/\b\w/g, c => c.toUpperCase())
 }

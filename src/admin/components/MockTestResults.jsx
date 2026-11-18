@@ -7,7 +7,7 @@ import { useToast } from './Toast'
 import { useConfirm } from './ConfirmDialog'
 import { mockAttemptsService } from '../../firebase/services'
 import { callMockTestAdminApi } from '../lib/mocktestApi'
-import { compositeCertificateCanvas, canvasToCompressedBlob, deriveMockTestCertCode } from '../../lib/certificateGenerator'
+import { compositeCertificateCanvas, canvasToCompressedBlob } from '../../lib/certificateGenerator'
 import { uploadToCloudinary } from '../../firebase/cloudinary'
 
 const STATUS_LABEL = { entered: 'Not started', in_progress: 'In progress', completed: 'Completed' }
@@ -26,7 +26,11 @@ function fmtDateTime(iso) {
 async function renderAndGenerateCert(mockTest, attempt) {
   const tpl = mockTest.certTemplate
   if (!tpl?.imageUrl) throw new Error('This mock test has no certificate template configured.')
-  const certCode = await deriveMockTestCertCode(attempt.id)
+  // certCode is HMAC-keyed server-side (not derivable in the browser, even
+  // an admin one — see derive_mock_test_cert_code()'s comment in
+  // public/api/mocktest/_lib/util.php) — admin-cert-code.php just reveals
+  // it, same as result.php does for the student, without creating anything.
+  const { certCode } = await callMockTestAdminApi('admin-cert-code.php', { attemptId: attempt.id })
   const canvas = await compositeCertificateCanvas({
     templateUrl: tpl.imageUrl,
     studentName: attempt.studentName,
