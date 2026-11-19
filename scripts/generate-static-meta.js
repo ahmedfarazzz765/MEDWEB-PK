@@ -28,11 +28,21 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { JSDOM } from 'jsdom'
+import createDOMPurify from 'dompurify'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const DIST = join(ROOT, 'dist')
 const SITE_URL = 'https://medwebpk.com'
 const DEFAULT_IMAGE = `${SITE_URL}/og-default.jpg`
+
+// Same sanitizer src/components/PostArticleView.jsx uses client-side
+// (DOMPurify.sanitize(post.content)) before dangerouslySetInnerHTML — blog
+// content is only ever sanitized at RENDER time, not when saved, so this
+// script needs its own pass too before writing it into prerendered HTML.
+// jsdom gives `dompurify` (browser-only by default) a DOM to run against in
+// Node.
+const DOMPurify = createDOMPurify(new JSDOM('').window)
 
 const escapeAttr = s => String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
 const escapeHtml = s => escapeAttr(s)
@@ -58,7 +68,25 @@ const STATIC_PAGES = [
   { path: '/refund-policy', title: 'Refund Policy', description: "MEDWEB-PK's refund policy." },
 ]
 
-function injectMeta(template, { title, description, path, image }) {
+// Builds the H1 + intro/summary (and, for a blog post, the full sanitized
+// article body) that gets written into <div id="root"> — so `view-source:`
+// shows real content instead of an empty shell, for the crawlers (and
+// "View Source" itself) that don't execute JavaScript. A real visitor's
+// browser still mounts the full interactive React app via createRoot(...)
+// .render(...) in main.jsx, which replaces every child of #root
+// unconditionally — no hydration mismatch is possible since nothing here
+// claims to BE the React tree, it's just plain markup React overwrites.
+function buildBodyHtml({ title, description, articleHtml }) {
+  const parts = [`<h1>${escapeHtml(title)}</h1>`]
+  if (description) parts.push(`<p>${escapeHtml(description)}</p>`)
+  if (articleHtml) {
+    const clean = DOMPurify.sanitize(articleHtml)
+    if (clean) parts.push(`<article>${clean}</article>`)
+  }
+  return `<main>${parts.join('\n')}</main>`
+}
+
+function injectMeta(template, { title, description, path, image, articleHtml }) {
   const fullTitle = `${title} | MEDWEB-PK`
   const canonical = `${SITE_URL}${path}`
   const img = image || DEFAULT_IMAGE
@@ -77,6 +105,7 @@ function injectMeta(template, { title, description, path, image }) {
     `<meta name="twitter:image" content="${escapeAttr(img)}" />`,
   ].join('\n    ')
   out = out.replace('</head>', `    ${extraTags}\n  </head>`)
+  out = out.replace('<div id="root"></div>', `<div id="root">${buildBodyHtml({ title, description, articleHtml })}</div>`)
   return out
 }
 
@@ -136,7 +165,7 @@ async function getDynamicItems() {
     blogPosts.forEach(d => {
       const p = d.data()
       if (!p.slug) return
-      items.push({ path: `/blog/${p.slug}`, title: p.title, description: p.excerpt, image: p.imageUrl })
+      items.push({ path: `/blog/${p.slug}`, title: p.title, description: p.excerpt, image: p.imageUrl, articleHtml: p.content })
     })
     news.forEach(d => {
       const n = d.data()
@@ -181,7 +210,17 @@ async function main() {
     `<meta property="og:url" content="${homeCanonical}" />`,
     `<meta name="twitter:card" content="summary_large_image" />`,
   ].join('\n    ')
-  writeFileSync(indexPath, template.replace('</head>', `    ${homeExtra}\n  </head>`), 'utf8')
+  let homeOut = template.replace('</head>', `    ${homeExtra}\n  </head>`)
+  // Mirrors Hero.jsx's own DEFAULTS (the admin-configurable settings
+  // override is only resolvable client-side) — enough real text for a
+  // non-JS crawler/view-source, not a pixel-perfect mirror of whatever an
+  // admin has customized it to client-side.
+  const homeBody = buildBodyHtml({
+    title: 'Transforming Medical Education in Pakistan',
+    description: 'Evidence-based courses, expert-led webinars, and certified programs for medical & healthcare students.',
+  })
+  homeOut = homeOut.replace('<div id="root"></div>', `<div id="root">${homeBody}</div>`)
+  writeFileSync(indexPath, homeOut, 'utf8')
 
   let count = 0
   for (const page of STATIC_PAGES) {
