@@ -276,6 +276,12 @@ service cloud.firestore {
       allow read, update, delete: if isAdmin();
     }
 
+    // ── CONTACT PAGE — public submits, admin-only read afterward ────────
+    match /contactMessages/{id} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
+
     // ── STUDENT DATABASE — upserted anonymously from every registration/
     //    certificate/ambassador flow (studentsDbService.upsertFromRegistration
     //    etc. — including its own internal tx.get(ref), which needs the

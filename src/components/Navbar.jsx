@@ -10,15 +10,16 @@ const DEFAULTS = {
   navTagline: 'Connecting Medical Minds',
   communityLink: '',
   navLinks: [
-    { label: 'Home', href: '#home' },
-    { label: 'Courses', href: '#courses-highlight' },
-    { label: 'Webinars', href: '#webinars' },
+    { label: 'Home', href: '/' },
+    { label: 'Courses', href: '/courses' },
+    { label: 'Webinars', href: '/webinars' },
     { label: 'Ambassador Program', href: '#ambassadors' },
     { label: 'Team', href: '/team' },
     { label: 'Certificates', href: '#certificates' },
-    { label: 'Blog', href: '#blog' },
+    { label: 'Blog', href: '/blog' },
     { label: 'Events', href: '/events' },
-    { label: 'Contact', href: '#contact' },
+    { label: 'About', href: '/about' },
+    { label: 'Contact', href: '/contact' },
   ],
 }
 

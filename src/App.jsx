@@ -15,6 +15,7 @@ import CoursePopup from './components/CoursePopup'
 const HomePage              = lazy(() => import('./pages/HomePage'))
 const WebinarRegister       = lazy(() => import('./pages/WebinarRegister'))
 const MockTestPage          = lazy(() => import('./pages/MockTestPage'))
+const ContactPage           = lazy(() => import('./pages/ContactPage'))
 const WebinarDetailPage     = lazy(() => import('./pages/WebinarDetailPage'))
 const FounderMessagePage    = lazy(() => import('./pages/FounderMessagePage'))
 const AboutPage             = lazy(() => import('./pages/AboutPage'))
@@ -96,13 +97,7 @@ function App() {
       <ErrorBoundary>
       <Suspense fallback={<PageLoader />}>
       <Routes>
-        {/* "Contact" everywhere else in the app (navbar/footer) is really
-            just the homepage's own Footer contact section (#contact) —
-            there was never a dedicated page, so a direct hit on the bare
-            path (someone typing it, an indexed URL, etc.) matched no
-            route and rendered blank. Redirects to the real anchor instead
-            of leaving that URL dead. */}
-        <Route path="/contact"                element={<Navigate to="/#contact" replace />} />
+        <Route path="/contact"                element={<ContactPage />} />
         <Route path="/"                       element={<HomePage />} />
         <Route path="/founder-message"        element={<FounderMessagePage />} />
         <Route path="/about"                  element={<AboutPage />} />

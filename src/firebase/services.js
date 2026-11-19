@@ -1263,6 +1263,15 @@ export const sectionVisibilityService = {
   listen: cb => onSnapshot(doc(db, 'settings', 'sectionVisibility'), snap => cb(snap.exists() ? snap.data() : null), err => console.error('Firebase sectionVisibility listen error:', err)),
 }
 
+// ─── CONTACT MESSAGES ────────────────────────────────────────────────────────
+// A visitor submission from the public Contact page — a straight public
+// create, admin-only read afterward, same shape as formSubmissions/
+// newsletterSubscribers' own public-create rules.
+export const contactMessagesService = {
+  add: data => add('contactMessages', data),
+  getAll: () => getAll('contactMessages', orderBy('createdAt', 'desc')),
+}
+
 // ─── NEWSLETTER SUBSCRIBERS (Round 17) ──────────────────────────────────────────
 export const newsletterService = {
   // Doc ID = the email itself, so dedup needs no public read/query (which would
