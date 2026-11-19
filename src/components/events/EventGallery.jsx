@@ -73,7 +73,7 @@ export default function EventGallery({ items = [] }) {
               className="max-w-4xl max-h-[85vh] flex flex-col items-center"
               onClick={e => e.stopPropagation()}
             >
-              <img src={items[openIndex].url} alt={items[openIndex].caption || ''} className="max-w-full max-h-[75vh] object-contain rounded" />
+              <img src={items[openIndex].url} alt={items[openIndex].caption || ''} loading="lazy" className="max-w-full max-h-[75vh] object-contain rounded" />
               {items[openIndex].caption && <p className="text-white/80 text-sm mt-3 text-center">{items[openIndex].caption}</p>}
               <p className="text-white/40 text-xs mt-1">{openIndex + 1} / {items.length}</p>
             </motion.div>

@@ -276,7 +276,7 @@ export default function EventPage() {
           <div className="flex flex-wrap items-center gap-6">
             {partners.map((p, i) => (
               <div key={i} className="flex items-center gap-2">
-                {p.logoUrl ? <img src={p.logoUrl} alt={p.name} className="h-10 object-contain" /> : null}
+                {p.logoUrl ? <img src={p.logoUrl} alt={p.name} loading="lazy" className="h-10 object-contain" /> : null}
                 <span className="text-sm font-semibold text-gray-600">{p.name}</span>
               </div>
             ))}

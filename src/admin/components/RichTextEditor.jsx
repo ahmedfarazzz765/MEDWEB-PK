@@ -111,9 +111,16 @@ export default function RichTextEditor({ value, onChange, folder = 'medweb/blog/
   const handleImageFile = async e => {
     const file = e.target.files?.[0]
     if (!file) return
+    // Asked up front (before the upload even starts) rather than after —
+    // an image inserted with no alt text is invisible to a screen reader
+    // and to image search, so this isn't optional the way the URL prompt
+    // for a link is. Cancelling the prompt still inserts the image (an
+    // empty alt is valid for a purely decorative image), it just skips
+    // asking a second time.
+    const altText = window.prompt('Image description (alt text) — describe what the image shows, for accessibility and search. Leave blank only if the image is purely decorative.', '')
     try {
       const url = await uploadToCloudinary(file, folder)
-      editor.chain().focus().setImage({ src: url }).run()
+      editor.chain().focus().setImage({ src: url, alt: altText || '' }).run()
     } catch (err) {
       toast.error('Image upload failed: ' + err.message)
     } finally {

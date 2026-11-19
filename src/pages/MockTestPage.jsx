@@ -321,7 +321,7 @@ export default function MockTestPage() {
                   {certState === 'generating' && <p className="text-sm text-gray-500">Generating your certificate…</p>}
                   {result.certificateStatus === 'issued' && result.certificateImageUrl ? (
                     <>
-                      <img src={result.certificateImageUrl} alt="Certificate" className="rounded-xl mx-auto mb-4 max-w-full shadow-md" />
+                      <img src={result.certificateImageUrl} alt="Your MEDWEB-PK mock test certificate" loading="lazy" className="rounded-xl mx-auto mb-4 max-w-full shadow-md" />
                       <div className="flex flex-wrap items-center justify-center gap-3">
                         <a href={result.certificateImageUrl} download className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white" style={{ background: '#1655c3' }}>
                           <Download size={14} /> Download
