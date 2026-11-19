@@ -2,6 +2,27 @@
   RewriteEngine On
 </IfModule>
 
+# Every prerendered route (scripts/generate-static-meta.js) is written as
+# <route>/index.html — a real directory on disk. Apache's mod_dir normally
+# 301-redirects a bare "/about" to "/about/" before even looking at
+# DirectoryIndex, which is exactly the extra redirect hop we don't want
+# (SEO.jsx's own canonical tag is the no-trailing-slash form, so a visitor/
+# crawler hitting "/about" should get a real 200 for THAT exact URL, not a
+# redirect to a different one). DirectorySlash Off stops that redirect;
+# the RewriteRule below then serves the directory's index.html directly
+# (internal rewrite, URL bar / canonical stays "/about") whenever the
+# requested path IS such a directory — everything else (a real file, or a
+# path that isn't a prerendered route at all) falls through to the
+# ErrorDocument 404 fallback below as before.
+<IfModule mod_dir.c>
+  DirectorySlash Off
+</IfModule>
+<IfModule mod_rewrite.c>
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteCond %{REQUEST_FILENAME}/index.html -f
+  RewriteRule ^(.*[^/])$ $1/index.html [L]
+</IfModule>
+
 # SPA fallback with a REAL 404 status for genuinely unknown paths — the
 # previous blanket RewriteRule silently rewrote every non-file/non-directory
 # path to /index.html with HTTP 200, so a typo'd/removed URL was

@@ -41,6 +41,16 @@ function urlEntry(loc, priority, lastmod) {
   return `  <url>\n    <loc>${SITE_URL}${loc}</loc>\n${lastmod ? `    <lastmod>${lastmod}</lastmod>\n` : ''}    <priority>${priority}</priority>\n  </url>`
 }
 
+// Firestore Admin SDK Timestamp (has .toDate()) -> 'YYYY-MM-DD', or
+// undefined if neither field is present/parseable. Prefers updatedAt
+// (most recent real edit) over createdAt.
+function lastmodOf(data) {
+  const raw = data.updatedAt || data.createdAt
+  if (!raw) return undefined
+  const d = typeof raw?.toDate === 'function' ? raw.toDate() : new Date(raw)
+  return isNaN(d.getTime()) ? undefined : d.toISOString().slice(0, 10)
+}
+
 async function getDynamicUrls() {
   const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT
   if (!serviceAccountJson) {
@@ -70,25 +80,28 @@ async function getDynamicUrls() {
     ])
 
     const urls = []
-    webinars.forEach(d => urls.push(urlEntry(`/webinar/${d.id}`, '0.7')))
+    webinars.forEach(d => {
+      const w = d.data()
+      urls.push(urlEntry(`/webinar/${d.id}`, '0.7', lastmodOf(w)))
+    })
     courses.forEach(d => {
       const c = d.data()
       if (c.status !== 'Active') return
-      urls.push(urlEntry(`/courses/${c.slug || d.id}`, '0.7'))
+      urls.push(urlEntry(`/courses/${c.slug || d.id}`, '0.7', lastmodOf(c)))
     })
     blogPosts.forEach(d => {
       const p = d.data()
-      if (p.slug) urls.push(urlEntry(`/blog/${p.slug}`, '0.6'))
+      if (p.slug) urls.push(urlEntry(`/blog/${p.slug}`, '0.6', lastmodOf(p)))
     })
     news.forEach(d => {
       const n = d.data()
       // `news` collection is also "Events & News" (Round 13) — same
       // Firestore collection, just /events/ as its public path now.
-      if (n.slug) urls.push(urlEntry(`/events/${n.slug}`, '0.6'))
+      if (n.slug) urls.push(urlEntry(`/events/${n.slug}`, '0.6', lastmodOf(n)))
     })
     announcements.forEach(d => {
       const a = d.data()
-      if (a.slug) urls.push(urlEntry(`/announcements/${a.slug}`, '0.5'))
+      if (a.slug) urls.push(urlEntry(`/announcements/${a.slug}`, '0.5', lastmodOf(a)))
     })
     return urls
   } catch (e) {
