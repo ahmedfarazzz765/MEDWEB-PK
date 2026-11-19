@@ -20,9 +20,9 @@ if (!$attempt || ($attempt['status'] ?? '') !== 'completed') {
 }
 $mockTest = load_mock_test($fs, $attempt['mockTestId']);
 
-$cert = !empty($attempt['certCode']) ? ['certCode' => $attempt['certCode']] : null;
+$cert = !empty($attempt['certCode']) ? ['certCode' => $attempt['certCode'], 'imageUrl' => $attempt['certificateImageUrl'] ?? null] : null;
 $certPending = !empty($attempt['eligible']) && !$cert;
-$sent = mocktest_send_result_email($attempt, $mockTest, $cert, $certPending);
+$sent = mocktest_send_result_email($fs, $attempt, $mockTest, $cert, $certPending);
 
 $fs->patchDoc('mockAttempts/' . $attemptId, ['emailStatus' => $sent ? 'sent' : 'failed']);
 $fs->createDoc('activityLog', bin2hex(random_bytes(12)), [

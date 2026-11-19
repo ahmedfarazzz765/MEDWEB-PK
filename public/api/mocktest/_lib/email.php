@@ -35,10 +35,105 @@ function mocktest_brevo_send(string $toEmail, string $toName, string $subject, s
     return $status >= 200 && $status < 300;
 }
 
-// $cert = null for a not-eligible result, or ['certCode'=>..., 'imageUrl'=>...]
-// once issued. A third case — eligible but cert not yet issued — is handled
-// by cron-sweep.php calling this with $certPending = true.
-function mocktest_send_result_email(array $attempt, array $mockTest, ?array $cert, bool $certPending = false): bool {
+// ── Branded HTML wrapper — PORTED FROM src/firebase/email.js's wrapHtml(),
+// identical markup/inline styles, so a mock-test result email looks exactly
+// like every other MEDWEB-PK email (webinar confirmation, webinar
+// certificate). Keep the two in sync by hand if that file's design ever
+// changes — PHP can't import a JS template literal.
+function mocktest_wrap_html(string $bodyHtml): string {
+    $year = gmdate('Y');
+    return <<<HTML
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f0f4f8;font-family:'Helvetica Neue',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f4f8;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+
+        <!-- HEADER -->
+        <tr><td style="background:linear-gradient(135deg,#1655c3,#64ac37);border-radius:16px 16px 0 0;padding:28px 32px;text-align:center;">
+          <h1 style="margin:0;color:#fff;font-size:22px;font-weight:900;letter-spacing:-0.5px;">MEDWEB<span style="color:rgba(255,255,255,0.7)">-PK</span></h1>
+          <p style="margin:4px 0 0;color:rgba(255,255,255,0.8);font-size:13px;">Connecting Medical Minds</p>
+        </td></tr>
+
+        <!-- BODY -->
+        <tr><td style="background:#fff;padding:32px;border-radius:0 0 16px 16px;box-shadow:0 4px 24px rgba(0,0,0,0.06);">
+          {$bodyHtml}
+        </td></tr>
+
+        <!-- FOOTER -->
+        <tr><td style="padding:20px;text-align:center;">
+          <p style="margin:0;color:#aaa;font-size:11px;">© {$year} MEDWEB-PK · Pakistan's Medical Education Platform</p>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>
+HTML;
+}
+
+// The "Don't stop here" / Join Community / Explore / socials block shared
+// by both the eligible and not-eligible mock-test emails — identical
+// content to the bottom of sendCertificateEmail() in src/firebase/email.js,
+// factored out here since both branches below need it but only one needs
+// the certificate-specific middle section.
+function mocktest_email_footer_sections(Firestore $fs, string $homeUrl): string {
+    $settings = $fs->getDoc('settings/site');
+    $communityLink = $settings['communityLink'] ?? '';
+    $socialLinks = [
+        'WhatsApp' => $settings['footerWhatsapp'] ?? '',
+        'Facebook' => $settings['footerFacebook'] ?? '',
+        'Instagram' => $settings['footerInstagram'] ?? '',
+        'LinkedIn' => $settings['footerLinkedin'] ?? '',
+    ];
+    $socialsHtml = '';
+    foreach ($socialLinks as $label => $url) {
+        if (!$url) continue;
+        $socialsHtml .= '<a href="' . htmlspecialchars($url, ENT_QUOTES) . '" style="display:inline-block;margin:0 8px;color:#1655c3;font-size:12px;font-weight:600;text-decoration:none;">' . $label . '</a>';
+    }
+
+    $communityHtml = $communityLink ? '
+      <div style="text-align:center;margin-bottom:20px;">
+        <a href="' . htmlspecialchars($communityLink, ENT_QUOTES) . '"
+           style="display:inline-block;background:linear-gradient(135deg,#25D366,#1655c3);color:#fff;text-decoration:none;padding:13px 28px;border-radius:10px;font-weight:700;font-size:13px;">
+          📲 Join the MEDWEB Community
+        </a>
+      </div>' : '';
+
+    $socialsBlock = $socialsHtml ? '
+      <div style="text-align:center;margin-top:20px;">
+        ' . $socialsHtml . '
+      </div>' : '';
+
+    return <<<HTML
+      <div style="border-top:1px solid #eee;padding-top:22px;margin-bottom:8px;">
+        <p style="margin:0 0 4px;color:#1a1a1a;font-size:15px;font-weight:800;">💡 Don't stop here!</p>
+        <p style="color:#666;font-size:13px;line-height:1.7;margin:0 0 16px;">
+          Keep the momentum going — MEDWEB-PK runs new expert-led webinars and courses every week to help you stay ahead in your field.
+        </p>
+      </div>
+      {$communityHtml}
+      <div style="text-align:center;margin-bottom:8px;">
+        <a href="{$homeUrl}" style="color:#1655c3;font-size:13px;font-weight:700;text-decoration:none;">Explore More Webinars & Courses →</a>
+      </div>
+      {$socialsBlock}
+      <br><p style="color:#888;font-size:13px;margin:0;text-align:center;">Proud of you — keep going! 🌱<br>— The MEDWEB-PK Team</p>
+HTML;
+}
+
+// $cert = null for a not-eligible result, or ['certCode'=>..., 'imageUrl'=>...|null]
+// once eligible (imageUrl may still be null if the student's own browser
+// hasn't rendered/uploaded it yet — the Certificate ID box + Verify button
+// still show, using the code's already known via derive_mock_test_cert_code()
+// even before issue-cert.php has created the actual certificates doc;
+// verification simply won't resolve until it does). $certPending is true
+// only for cron-sweep.php's/maybe_run_fallback_sweep()'s 10-minute fallback
+// — same body as the normal eligible email, since by then the code is
+// always known regardless of whether the image exists yet.
+function mocktest_send_result_email(Firestore $fs, array $attempt, array $mockTest, ?array $cert, bool $certPending = false): bool {
     $name = htmlspecialchars((string) ($attempt['studentName'] ?? 'Student'), ENT_QUOTES);
     $testTitle = htmlspecialchars((string) ($mockTest['title'] ?? $attempt['mockTestTitle'] ?? 'Mock Test'), ENT_QUOTES);
     $courseTitle = htmlspecialchars((string) ($attempt['courseTitle'] ?? ''), ENT_QUOTES);
@@ -46,26 +141,61 @@ function mocktest_send_result_email(array $attempt, array $mockTest, ?array $cer
     $correct = $attempt['correctCount'] ?? 0;
     $total = $attempt['totalQuestions'] ?? 0;
     $passPercent = $attempt['passPercent'] ?? ($mockTest['passPercent'] ?? 70);
+    $homeUrl = 'https://medwebpk.com';
+    $scoreLine = "{$correct}/{$total} ({$percent}%)";
 
     if (!empty($attempt['eligible']) && $cert) {
-        $verifyUrl = 'https://medwebpk.com/certificate/' . rawurlencode((string) $cert['certCode']);
-        $subject = "Your result for {$testTitle} — Certificate issued";
-        $body = "<p>Hi {$name},</p>"
-            . "<p>You scored <strong>{$correct}/{$total} ({$percent}%)</strong> on <strong>{$testTitle}</strong>"
-            . ($courseTitle ? " ({$courseTitle})" : '') . ". Congratulations — you're eligible for a certificate.</p>"
-            . "<p><a href=\"{$verifyUrl}\">View / download your certificate</a></p>";
-    } elseif (!empty($attempt['eligible']) && $certPending) {
-        $subject = "Your result for {$testTitle}";
-        $body = "<p>Hi {$name},</p>"
-            . "<p>You scored <strong>{$correct}/{$total} ({$percent}%)</strong> on <strong>{$testTitle}</strong>"
-            . ($courseTitle ? " ({$courseTitle})" : '') . ". You're eligible for a certificate — it's still being generated and we'll follow up with it shortly.</p>";
+        $certCode = htmlspecialchars((string) $cert['certCode'], ENT_QUOTES);
+        $imageUrl = $cert['imageUrl'] ?? null;
+        $verifyUrl = $homeUrl . '/certificate/' . rawurlencode((string) $cert['certCode']);
+        $subject = "🏆 You Did It, {$attempt['studentName']}! Your Certificate Is Ready";
+
+        $imageBlock = $imageUrl ? '
+      <div style="text-align:center;margin-bottom:24px;">
+        <img src="' . htmlspecialchars($imageUrl, ENT_QUOTES) . '" alt="Certificate" style="max-width:100%;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.1);" />
+      </div>' : '';
+
+        $footerSections = mocktest_email_footer_sections($fs, $homeUrl);
+        $body = <<<HTML
+      <h2 style="margin:0 0 6px;color:#1a1a1a;font-size:22px;">Congratulations, {$name}! 🏆</h2>
+      <p style="color:#555;margin:0 0 20px;line-height:1.7;">
+        That's one more step forward in your medical career! You've successfully passed
+        <strong>"{$testTitle}"</strong> for <strong>"{$courseTitle}"</strong> with MEDWEB-PK, scoring
+        <strong>{$scoreLine}</strong> — and your official certificate is ready below, proof of the time
+        and dedication you're putting into becoming an outstanding healthcare professional.
+      </p>
+      {$imageBlock}
+      <div style="background:#eff6ff;border:2px solid #1655c3;border-radius:12px;padding:16px;text-align:center;margin-bottom:24px;">
+        <p style="margin:0 0 4px;color:#666;font-size:11px;text-transform:uppercase;letter-spacing:1px;font-weight:700;">Certificate ID</p>
+        <p style="margin:0;color:#1655c3;font-size:20px;font-weight:900;font-family:monospace;">{$certCode}</p>
+      </div>
+      <div style="text-align:center;margin-bottom:8px;">
+        <a href="{$verifyUrl}"
+           style="display:inline-block;background:linear-gradient(135deg,#1655c3,#64ac37);color:#fff;text-decoration:none;padding:14px 32px;border-radius:10px;font-weight:700;font-size:14px;">
+          Verify Certificate →
+        </a>
+      </div>
+      <p style="color:#aaa;font-size:12px;margin:0 0 28px;text-align:center;">
+        Share your certificate link: <a href="{$verifyUrl}" style="color:#1655c3;">{$verifyUrl}</a>
+      </p>
+      {$footerSections}
+HTML;
     } else {
         $subject = "Your result for {$testTitle}";
-        $body = "<p>Hi {$name},</p>"
-            . "<p>You scored <strong>{$correct}/{$total} ({$percent}%)</strong> on <strong>{$testTitle}</strong>"
-            . ($courseTitle ? " ({$courseTitle})" : '') . ".</p>"
-            . "<p>The pass mark for a certificate is {$passPercent}%, so you are not eligible for a certificate this time.</p>";
+        $eligibilityLine = !empty($attempt['eligible'])
+            ? '<p style="color:#555;margin:0 0 20px;line-height:1.7;">You\'re eligible for a certificate — it\'s still being generated and we\'ll email you again shortly with it.</p>'
+            : '<p style="color:#555;margin:0 0 20px;line-height:1.7;"><strong>You are not eligible for a certificate.</strong> A minimum of ' . (int) $passPercent . '% is required.</p>';
+
+        $footerSections = mocktest_email_footer_sections($fs, $homeUrl);
+        $body = <<<HTML
+      <h2 style="margin:0 0 6px;color:#1a1a1a;font-size:22px;">Your Result, {$name}</h2>
+      <p style="color:#555;margin:0 0 12px;line-height:1.7;">
+        You scored <strong>{$scoreLine}</strong> on <strong>"{$testTitle}"</strong> for <strong>"{$courseTitle}"</strong> with MEDWEB-PK.
+      </p>
+      {$eligibilityLine}
+      {$footerSections}
+HTML;
     }
 
-    return mocktest_brevo_send((string) ($attempt['email'] ?? ''), (string) ($attempt['studentName'] ?? ''), $subject, $body);
+    return mocktest_brevo_send((string) ($attempt['email'] ?? ''), (string) ($attempt['studentName'] ?? ''), $subject, mocktest_wrap_html($body));
 }

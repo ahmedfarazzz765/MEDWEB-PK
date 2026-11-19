@@ -131,7 +131,7 @@ function finish_attempt(Firestore $fs, array $mockTest, array $attempt): array {
     $attempt = array_merge($attempt, $update);
 
     if (!$eligible) {
-        $sent = mocktest_send_result_email($attempt, $mockTest, null);
+        $sent = mocktest_send_result_email($fs, $attempt, $mockTest, null);
         $fs->patchDoc('mockAttempts/' . $attempt['id'], ['emailStatus' => $sent ? 'sent' : 'failed']);
         $attempt['emailStatus'] = $sent ? 'sent' : 'failed';
     }
@@ -202,7 +202,7 @@ function issue_certificate_for_attempt(Firestore $fs, array $attempt, array $moc
     // attempt) doesn't re-email if cron-sweep.php's fallback already went
     // out, matching "admin Resend is explicit" from the spec.
     if (($attempt['emailStatus'] ?? '') !== 'sent') {
-        $sent = mocktest_send_result_email($attempt, $mockTest, ['certCode' => $certCode]);
+        $sent = mocktest_send_result_email($fs, $attempt, $mockTest, ['certCode' => $certCode, 'imageUrl' => $imageUrl]);
         $fs->patchDoc('mockAttempts/' . $attempt['id'], ['emailStatus' => $sent ? 'sent' : 'failed']);
         $attempt['emailStatus'] = $sent ? 'sent' : 'failed';
     }
@@ -235,7 +235,7 @@ function run_fallback_sweep(Firestore $fs): array {
         if (!isset($mockTestCache[$mtId])) {
             $mockTestCache[$mtId] = load_mock_test($fs, $mtId);
         }
-        $sent = mocktest_send_result_email($attempt, $mockTestCache[$mtId], null, true);
+        $sent = mocktest_send_result_email($fs, $attempt, $mockTestCache[$mtId], null, true);
         if ($sent) {
             $fs->patchDoc('mockAttempts/' . $attempt['id'], ['emailStatus' => 'sent_pending_cert']);
             $processed++;
