@@ -13,7 +13,7 @@ const ACCENT_COLORS = {
  * (e.g. CertificateVerification's solid blue card) where black text would
  * be unreadable — the doodle/stacked-word structure stays identical either way.
  */
-export default function SectionHeading({ word1, word2, accent = 'green', subtitle, dark = false, className = '' }) {
+export default function SectionHeading({ word1, word2, accent = 'green', subtitle, dark = false, className = '', tag: Tag = 'h2' }) {
   const accentColor = ACCENT_COLORS[accent] || ACCENT_COLORS.green
 
   return (
@@ -26,10 +26,10 @@ export default function SectionHeading({ word1, word2, accent = 'green', subtitl
         <path d="M40 10 L50 15 L44 24" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
       </svg>
 
-      <h2 className="font-black leading-[0.95] mb-4">
+      <Tag className="font-black leading-[0.95] mb-4">
         <span className={`block text-5xl sm:text-7xl -rotate-1 ${dark ? 'text-white' : 'text-[#0f172a]'}`}>{word1}</span>
         <span className="block text-5xl sm:text-7xl rotate-1 -mt-1 sm:-mt-2" style={{ color: accentColor }}>{word2}</span>
-      </h2>
+      </Tag>
 
       {subtitle && (
         <p className={`max-w-xl mx-auto text-sm sm:text-[15px] ${dark ? 'text-white/70' : 'text-gray-500'}`}>{subtitle}</p>

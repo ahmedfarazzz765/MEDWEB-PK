@@ -140,6 +140,16 @@ export default function CourseDetailPage() {
     ...(course.rating > 0 ? { aggregateRating: { '@type': 'AggregateRating', ratingValue: course.rating, ratingCount: Math.max(course.students || 1, 1) } } : {}),
   }
 
+  const breadcrumbJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: SITE_URL },
+      { '@type': 'ListItem', position: 2, name: 'Courses', item: `${SITE_URL}/courses` },
+      { '@type': 'ListItem', position: 3, name: course.title, item: `${SITE_URL}${canonicalPath}` },
+    ],
+  }
+
   return (
     <div className="font-poppins bg-[#f7f9fc] min-h-screen">
       <SEO
@@ -149,7 +159,7 @@ export default function CourseDetailPage() {
         path={canonicalPath}
         image={course.ogImage || course.imageUrl}
         type="article"
-        jsonLd={courseJsonLd}
+        jsonLd={[courseJsonLd, breadcrumbJsonLd]}
       />
       <Navbar />
 

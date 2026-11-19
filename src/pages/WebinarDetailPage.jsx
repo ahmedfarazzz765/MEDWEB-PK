@@ -105,6 +105,16 @@ export default function WebinarDetailPage() {
     ...(speakers.length ? { performer: speakers.map(s => ({ '@type': 'Person', name: s.name })) } : {}),
   }
 
+  const breadcrumbJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: SITE_URL },
+      { '@type': 'ListItem', position: 2, name: 'Webinars', item: `${SITE_URL}/webinars` },
+      { '@type': 'ListItem', position: 3, name: webinarTitle, item: `${SITE_URL}/webinar/${id}` },
+    ],
+  }
+
   return (
     <div className="font-poppins bg-[#f7f9fc] min-h-screen">
       <SEO
@@ -113,7 +123,7 @@ export default function WebinarDetailPage() {
         path={`/webinar/${id}`}
         image={poster}
         type="article"
-        jsonLd={eventJsonLd}
+        jsonLd={[eventJsonLd, breadcrumbJsonLd]}
       />
       <Navbar />
 

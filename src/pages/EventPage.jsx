@@ -106,6 +106,16 @@ export default function EventPage() {
     organizer: { '@type': 'Organization', name: 'MEDWEB-PK', url: SITE_URL },
   } : undefined
 
+  const breadcrumbJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: SITE_URL },
+      { '@type': 'ListItem', position: 2, name: 'Events & News', item: `${SITE_URL}/events` },
+      { '@type': 'ListItem', position: 3, name: item.title, item: shareUrl },
+    ],
+  }
+
   return (
     <div className="font-poppins bg-[#f7f9fc] min-h-screen">
       <SEO
@@ -114,7 +124,7 @@ export default function EventPage() {
         path={canonicalPath}
         image={item.shareImage || poster}
         type="article"
-        jsonLd={eventJsonLd}
+        jsonLd={[eventJsonLd, breadcrumbJsonLd].filter(Boolean)}
       />
       <Navbar />
 

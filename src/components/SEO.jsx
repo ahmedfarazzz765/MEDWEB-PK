@@ -17,7 +17,7 @@ export const SITE_NAME = 'MEDWEB-PK'
 export const SITE_URL = 'https://medwebpk.com'
 export const DEFAULT_DESCRIPTION =
   "MEDWEB-PK is Pakistan's medical education platform — live webinars, expert-designed courses, verified certificates, and a nationwide student ambassador network for healthcare students."
-export const DEFAULT_IMAGE = `${SITE_URL}/favicon.png`
+export const DEFAULT_IMAGE = `${SITE_URL}/og-default.jpg`
 
 export default function SEO({ title, description, path, image, type = 'website', noindex = false, jsonLd, keywords }) {
   const fullTitle = title ? `${title} | ${SITE_NAME}` : `${SITE_NAME} — Pakistan's Medical Education Platform`

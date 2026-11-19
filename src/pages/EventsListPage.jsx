@@ -66,7 +66,7 @@ export default function EventsListPage() {
           <ArrowLeft size={16} /> Back to Home
         </Link>
 
-        <SectionHeading word1="Events" word2="& News" subtitle="Conferences, seminars, workshops, medical camps, and curated medical news." className="mb-8" />
+        <SectionHeading tag="h1" word1="Events" word2="& News" subtitle="Conferences, seminars, workshops, medical camps, and curated medical news." className="mb-8" />
 
         {items === null ? (
           <CardRowSkeleton count={6} cardWidth={320} cardHeight={320} gap={24} />

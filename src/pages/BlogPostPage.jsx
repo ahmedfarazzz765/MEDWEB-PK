@@ -5,7 +5,15 @@ import { blogService } from '../firebase/services'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
 import PostArticleView from '../components/PostArticleView'
-import SEO from '../components/SEO'
+import SEO, { SITE_URL, DEFAULT_IMAGE } from '../components/SEO'
+
+// Firestore Timestamp (has .toDate()) | ISO/plain date string | undefined -> ISO string | undefined
+function toIso(value) {
+  if (!value) return undefined
+  if (typeof value?.toDate === 'function') return value.toDate().toISOString()
+  const d = new Date(value)
+  return isNaN(d.getTime()) ? undefined : d.toISOString()
+}
 
 export default function BlogPostPage() {
   const { slug } = useParams()
@@ -51,14 +59,47 @@ export default function BlogPostPage() {
     )
   }
 
+  const canonicalPath = `/blog/${slug}`
+  const datePublished = toIso(post.published) || toIso(post.createdAt)
+  const dateModified = toIso(post.updatedAt) || datePublished
+
+  const blogPostingJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BlogPosting',
+    headline: post.title,
+    image: post.imageUrl ? [post.imageUrl] : [DEFAULT_IMAGE],
+    ...(datePublished ? { datePublished } : {}),
+    ...(dateModified ? { dateModified } : {}),
+    author: post.authorName
+      ? { '@type': 'Person', name: post.authorName }
+      : { '@type': 'Organization', name: 'MEDWEB-PK' },
+    publisher: {
+      '@type': 'Organization',
+      name: 'MEDWEB-PK',
+      logo: { '@type': 'ImageObject', url: `${SITE_URL}/favicon.png` },
+    },
+    mainEntityOfPage: { '@type': 'WebPage', '@id': `${SITE_URL}${canonicalPath}` },
+  }
+
+  const breadcrumbJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: SITE_URL },
+      { '@type': 'ListItem', position: 2, name: 'Blog', item: `${SITE_URL}/blog` },
+      { '@type': 'ListItem', position: 3, name: post.title, item: `${SITE_URL}${canonicalPath}` },
+    ],
+  }
+
   return (
     <div className="min-h-screen">
       <SEO
         title={post.title}
         description={post.excerpt}
-        path={`/blog/${slug}`}
+        path={canonicalPath}
         image={post.imageUrl}
         type="article"
+        jsonLd={[blogPostingJsonLd, breadcrumbJsonLd]}
       />
       <Navbar />
       <PostArticleView

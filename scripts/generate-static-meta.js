@@ -32,7 +32,7 @@ import { fileURLToPath } from 'node:url'
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const DIST = join(ROOT, 'dist')
 const SITE_URL = 'https://medwebpk.com'
-const DEFAULT_IMAGE = `${SITE_URL}/favicon.png`
+const DEFAULT_IMAGE = `${SITE_URL}/og-default.jpg`
 
 const escapeAttr = s => String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
 const escapeHtml = s => escapeAttr(s)
