@@ -44,6 +44,15 @@ export default function CourseDetailPage() {
       .finally(() => setLoading(false))
   }, [slugOrId, siteCourses, siteDataLoading])
 
+  // Accessed by its raw doc ID (an old shared link) but the course now
+  // has a slug — swap the address bar to the canonical slug URL so the
+  // page settles on one indexable, shareable address instead of two.
+  useEffect(() => {
+    if (course?.slug && slugOrId !== course.slug) {
+      navigate(`/courses/${course.slug}${location.hash || ''}`, { replace: true })
+    }
+  }, [course, slugOrId, navigate, location.hash])
+
   // A card's "Register Now" link arrives as /courses/<slug>#enroll — jump
   // to the form once the page (and its #enroll section) has actually
   // rendered, same pattern HomePage.jsx already uses for cross-page

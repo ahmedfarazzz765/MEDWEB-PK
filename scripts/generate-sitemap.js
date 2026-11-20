@@ -83,7 +83,7 @@ async function getDynamicUrls() {
     const urls = []
     webinars.forEach(d => {
       const w = d.data()
-      urls.push(urlEntry(`/webinar/${d.id}`, '0.7', lastmodOf(w)))
+      urls.push(urlEntry(`/webinar/${w.slug || d.id}`, '0.7', lastmodOf(w)))
     })
     courses.forEach(d => {
       const c = d.data()

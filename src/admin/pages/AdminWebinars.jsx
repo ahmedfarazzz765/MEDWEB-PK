@@ -18,7 +18,7 @@ import { webinarsService, formsService, settingsService, ensureDefaultWebinarFor
 const emptySpeaker = () => ({ image: '', name: '', qualification: '' })
 
 const emptyForm = () => ({
-  topic: '', date: '', time: '',
+  topic: '', date: '', time: '', slug: '',
   type: 'Free', status: 'Upcoming', registered: 0, attended: 0,
   description: '', highlights: '',
   webinarImage: '', speakers: [emptySpeaker()],
@@ -26,6 +26,19 @@ const emptyForm = () => ({
   feedbackEnabled: false, feedbackLink: '', feedbackFormId: '', feedbackButtonEnabled: true,
   certTemplate: null,
 })
+
+// Same slugify/uniqueSlug pattern as AdminCourses.jsx/AdminBlog.jsx (each
+// keeps its own small copy rather than sharing one across admin pages).
+function slugify(str) {
+  return String(str || '').toLowerCase().trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'webinar'
+}
+function uniqueSlug(base, existingSlugs) {
+  let slug = base, n = 2
+  while (existingSlugs.has(slug)) { slug = `${base}-${n}`; n++ }
+  return slug
+}
 
 function makeColumns(openEdit, handleDelete, regCounts) {
   return [
@@ -67,6 +80,7 @@ export default function AdminWebinars() {
   const [modal,   setModal]   = useState(false)
   const [form,    setForm]    = useState(emptyForm)
   const [editId,  setEditId]  = useState(null)
+  const [slugTouched, setSlugTouched] = useState(false)
   const [saving,  setSaving]  = useState(false)
   const [defaultCfg, setDefaultCfg] = useState({ webinarDefaultFormId: '' })
   const [defaultSaved, setDefaultSaved] = useState(false)
@@ -98,15 +112,24 @@ export default function AdminWebinars() {
     try { await settingsService.update(next); setDefaultSaved(true); setTimeout(() => setDefaultSaved(false), 1500) } catch (e) { toast.error(e.message) }
   }
 
-  const openAdd  = () => { setForm(emptyForm()); setEditId(null); setModal('add') }
+  const openAdd  = () => { setForm(emptyForm()); setEditId(null); setSlugTouched(false); setModal('add') }
   const openEdit = row => {
     const speakers = Array.isArray(row.speakers) && row.speakers.length ? row.speakers : [emptySpeaker()]
     setForm({ ...emptyForm(), ...row, speakers })
-    setEditId(row.id); setModal('edit')
+    setEditId(row.id); setSlugTouched(!!row.slug); setModal('edit')
   }
   const closeModal = () => { setModal(false); setEditId(null) }
   const set = field => e => setForm(prev => ({ ...prev, [field]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }))
   const setVal = (field, val) => setForm(prev => ({ ...prev, [field]: val }))
+  // Auto-fills a URL-safe slug from the topic the first time it's typed —
+  // same "convenience default the admin can still override" pattern as
+  // courses/blog slugs elsewhere in this admin — never overwrites one
+  // already edited by hand (or already saved on this webinar).
+  const setTopic = e => {
+    const topic = e.target.value
+    setForm(prev => ({ ...prev, topic, slug: slugTouched ? prev.slug : slugify(topic) }))
+  }
+  const setSlug = e => { setSlugTouched(true); setForm(prev => ({ ...prev, slug: e.target.value })) }
 
   const addSpeaker = () => setForm(prev => ({ ...prev, speakers: [...prev.speakers, emptySpeaker()] }))
   const removeSpeaker = i => setForm(prev => ({ ...prev, speakers: prev.speakers.filter((_, idx) => idx !== i) }))
@@ -120,7 +143,9 @@ export default function AdminWebinars() {
     setSaving(true)
     try {
       const speakers = form.speakers.filter(s => s.image.trim() || s.name.trim() || s.qualification.trim())
-      const payload = { ...form, speakers }
+      const existingSlugs = new Set(data.filter(w => w.id !== editId).map(w => w.slug).filter(Boolean))
+      const slug = uniqueSlug(slugify(form.slug || form.topic), existingSlugs)
+      const payload = { ...form, speakers, slug }
       if (modal === 'add') {
         const newId = await webinarsService.add(payload)
         activityLogService.log('webinar_created', { webinarId: newId, topic: payload.topic })
@@ -191,7 +216,11 @@ export default function AdminWebinars() {
             <ImageUpload label="Webinar Poster / Image" folder="medweb/webinars" value={form.webinarImage} onChange={v => setVal('webinarImage', v)} />
 
             <FormField label="Webinar Title">
-              <input className={inputCls} value={form.topic} onChange={set('topic')} placeholder="Webinar topic" />
+              <input className={inputCls} value={form.topic} onChange={setTopic} placeholder="Webinar topic" />
+            </FormField>
+            <FormField label="URL Slug (auto-generated from title — edit to customize)">
+              <input className={inputCls} value={form.slug} onChange={setSlug} placeholder="webinar-title" />
+              {form.slug && <p className="text-[11px] text-gray-400 mt-1">/webinar/{form.slug}</p>}
             </FormField>
             <FormField label="Short Description">
               <textarea rows={3} className={inputCls} value={form.description} onChange={set('description')} placeholder="Short description of the webinar (used as a plain-text fallback if no full write-up below)" />

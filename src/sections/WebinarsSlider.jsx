@@ -105,7 +105,7 @@ export function WebinarCard({ webinar, onRegister }) {
             action button below keeps its separate register/watch behavior */}
         <h3 className="font-bold text-[#1a1a1a] text-[15px] leading-snug line-clamp-2 min-h-[44px]">
           {webinar.id && !webinar.isStatic ? (
-            <Link to={`/webinar/${webinar.id}`} className="hover:text-[#1655c3] transition-colors">
+            <Link to={`/webinar/${webinar.slug || webinar.id}`} className="hover:text-[#1655c3] transition-colors">
               {webinar.topic || webinar.title}
             </Link>
           ) : (
@@ -222,7 +222,7 @@ export default function WebinarsSlider() {
     // Registration always opens the dedicated page now — never a popup.
     // WebinarRegister.jsx resolves the webinar's own form / sitewide default itself.
     if (webinar.isStatic) navigate('/webinar/static/register')
-    else navigate(`/webinar/${webinar.id}/register`)
+    else navigate(`/webinar/${webinar.slug || webinar.id}/register`)
   }
 
   return (

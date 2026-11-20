@@ -35,16 +35,32 @@ function Initials({ name }) {
 }
 
 export default function WebinarDetailPage() {
-  const { id } = useParams()
+  // Route param is whatever was in the URL — the shareable slug, or an
+  // old /webinar/<doc-id> link shared before slugs existed. Try slug
+  // first, fall back to a plain doc-id lookup so nothing already shared
+  // ever breaks.
+  const { id: slugOrId } = useParams()
   const navigate = useNavigate()
   const [webinar, setWebinar] = useState(undefined) // undefined = loading, null = not found
 
   useEffect(() => {
     window.scrollTo(0, 0)
-    webinarsService.getOne(id)
+    webinarsService.getBySlug(slugOrId)
+      .then(w => w || webinarsService.getOne(slugOrId))
       .then(w => setWebinar(w || null))
       .catch(() => setWebinar(null))
-  }, [id])
+  }, [slugOrId])
+
+  // Accessed by its raw doc ID (an old shared link) but the webinar now
+  // has a slug — swap the address bar to the canonical slug URL so the
+  // page settles on one indexable, shareable address instead of two.
+  useEffect(() => {
+    if (webinar?.slug && slugOrId !== webinar.slug) {
+      navigate(`/webinar/${webinar.slug}`, { replace: true })
+    }
+  }, [webinar, slugOrId, navigate])
+
+  const id = webinar?.slug || slugOrId
 
   if (webinar === undefined) {
     return (

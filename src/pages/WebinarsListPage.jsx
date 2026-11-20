@@ -22,7 +22,7 @@ export default function WebinarsListPage() {
     if (webinar._feedbackMode && webinar.feedbackFormId) { navigate(`/form/${webinar.feedbackFormId}`); return }
     if (webinar.registrationLink) { window.open(webinar.registrationLink, '_blank', 'noopener,noreferrer'); return }
     if (webinar.isStatic) navigate('/webinar/static/register')
-    else navigate(`/webinar/${webinar.id}/register`)
+    else navigate(`/webinar/${webinar.slug || webinar.id}/register`)
   }
 
   return (

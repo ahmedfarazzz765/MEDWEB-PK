@@ -12,7 +12,11 @@ import CoverImage from '../components/CoverImage'
 import DynamicFormFields, { visibleFields } from '../components/DynamicFormFields'
 
 export default function WebinarRegister() {
-  const { id } = useParams()
+  // Accepts either the shareable slug or an old /webinar/<doc-id>/register
+  // link — resolved to the real webinar object below; every write further
+  // down uses webinar.id (the real doc ID), never this raw param, since a
+  // slug isn't a valid doc ID to update/increment against.
+  const { id: slugOrId } = useParams()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const refCode = searchParams.get('ref')
@@ -34,7 +38,7 @@ export default function WebinarRegister() {
     let mounted = true
 
     async function load() {
-      const w = await webinarsService.getOne(id).catch(() => null)
+      const w = await webinarsService.getBySlug(slugOrId).catch(() => null) || await webinarsService.getOne(slugOrId).catch(() => null)
       if (!mounted) return
       setWebinar(w)
 
@@ -53,7 +57,7 @@ export default function WebinarRegister() {
     load()
 
     return () => { mounted = false }
-  }, [id])
+  }, [slugOrId])
 
   const setField = (key, val) => setValues(prev => ({ ...prev, [key]: val }))
 
@@ -103,7 +107,7 @@ export default function WebinarRegister() {
       // same resolver, or Degree silently never gets captured.
       const degree = resolveFormField(fields, clean, { type: 'qualification', labelRegex: /degree|qualification|program/i, flatKeys: ['degree', 'qualification', 'degreeProgram'] })
       await webinarsService.addRegistration({
-        webinarId: id,
+        webinarId: webinar?.id,
         webinarTopic: webinarTitle,
         speaker: webinar?.speakers?.[0]?.name || '',
         ...clean,
@@ -117,13 +121,13 @@ export default function WebinarRegister() {
       })
       if (referrer) ambassadorsService.addReferralPoint(referrer.id).catch(() => {})
       if (webinar && !webinar.isStatic) {
-        await webinarsService.register(id).catch(() => {})
+        await webinarsService.register(webinar.id).catch(() => {})
       }
       // Auto-email confirmation (silently skips if EmailJS not configured)
       sendWebinarConfirmation({ name: clean.name || values.name, email: clean.email || values.email, webinar }).catch(() => {})
       studentsDbService.upsertFromRegistration({
         email: clean.email || values.email, name: clean.name || values.name, phone: resolvedPhone || clean.whatsapp, degree, university, city,
-        webinarId: id, webinarTitle, registeredAt: new Date().toISOString(),
+        webinarId: webinar?.id, webinarTitle, registeredAt: new Date().toISOString(),
       }).catch(() => {})
       setStatus('success')
       window.scrollTo({ top: 0, behavior: 'smooth' })

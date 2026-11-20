@@ -147,7 +147,7 @@ async function getDynamicItems() {
     webinars.forEach(d => {
       const w = d.data()
       items.push({
-        path: `/webinar/${d.id}`,
+        path: `/webinar/${w.slug || d.id}`,
         title: w.topic || w.title || 'Webinar',
         description: w.description || `Join "${w.topic || w.title || 'this webinar'}" — a live MEDWEB-PK webinar for medical and pharmacy students.`,
         image: w.webinarImage || w.poster,

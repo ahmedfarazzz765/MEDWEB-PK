@@ -263,6 +263,13 @@ export const webinarsService = {
   getUpcoming: () => getAll(COLS.webinars, where('status', '==', 'Upcoming'), orderBy('date')).then(rows => rows.map(normalizeWebinarSpeakers)),
   getLive: () => getAll(COLS.webinars, where('status', '==', 'Live')).then(rows => rows.map(normalizeWebinarSpeakers)),
   getOne: id => getOne(COLS.webinars, id).then(w => w ? normalizeWebinarSpeakers(w) : w),
+  // Public lookup for the shareable /webinar/:slug URL — same
+  // slug-then-fall-back-to-id pattern as coursesService.getBySlug.
+  getBySlug: async slug => {
+    if (!slug) return null
+    const rows = await getAll(COLS.webinars, where('slug', '==', slug), limit(1))
+    return rows[0] ? normalizeWebinarSpeakers(rows[0]) : null
+  },
   add: data => add(COLS.webinars, { ...data, registered: 0, attended: 0 }).then(id => { triggerSiteDataRebuild(); return id }),
   update: (id, data) => update(COLS.webinars, id, data).then(() => triggerSiteDataRebuild()),
   delete: id => remove(COLS.webinars, id).then(() => triggerSiteDataRebuild()),

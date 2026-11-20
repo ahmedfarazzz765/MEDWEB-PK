@@ -70,7 +70,7 @@ export default function WebinarAnnouncementPopup() {
       window.open(w.registrationLink, '_blank', 'noopener,noreferrer')
       return
     }
-    navigate(w.isStatic ? '/webinar/static/register' : `/webinar/${w.id}/register`)
+    navigate(w.isStatic ? '/webinar/static/register' : `/webinar/${w.slug || w.id}/register`)
   }
 
   if (!webinar) return null
