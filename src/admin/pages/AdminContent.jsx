@@ -107,6 +107,9 @@ const DEFAULTS = {
   privacyPolicyContent: '',
   termsContent:         '',
   refundContent:        '',
+  medicalDisclaimerContent: '',
+  editorialPolicyContent:   '',
+  cookiePolicyContent:      '',
 }
 // Per-section heading fields (webinarsHeading1, coursesSubtitle, etc.)
 HEADING_SECTIONS.forEach(({ key, hasSubtitle }) => {
@@ -543,6 +546,9 @@ export default function AdminContent({ initialTab }) {
             <FormField label="Privacy Policy"><textarea rows={6} className={inputCls} value={s.privacyPolicyContent} onChange={e => set('privacyPolicyContent', e.target.value)} placeholder="Add your policy content in the admin panel." /></FormField>
             <FormField label="Terms of Service"><textarea rows={6} className={inputCls} value={s.termsContent} onChange={e => set('termsContent', e.target.value)} placeholder="Add your policy content in the admin panel." /></FormField>
             <FormField label="Refund Policy"><textarea rows={6} className={inputCls} value={s.refundContent} onChange={e => set('refundContent', e.target.value)} placeholder="Add your policy content in the admin panel." /></FormField>
+            <FormField label="Medical Disclaimer"><textarea rows={6} className={inputCls} value={s.medicalDisclaimerContent} onChange={e => set('medicalDisclaimerContent', e.target.value)} placeholder="Add your policy content in the admin panel." /></FormField>
+            <FormField label="Editorial Policy"><textarea rows={6} className={inputCls} value={s.editorialPolicyContent} onChange={e => set('editorialPolicyContent', e.target.value)} placeholder="Add your policy content in the admin panel." /></FormField>
+            <FormField label="Cookie Policy"><textarea rows={6} className={inputCls} value={s.cookiePolicyContent} onChange={e => set('cookiePolicyContent', e.target.value)} placeholder="Add your policy content in the admin panel." /></FormField>
           </div>
         </Card>
       )}

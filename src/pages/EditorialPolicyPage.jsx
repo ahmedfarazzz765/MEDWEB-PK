@@ -1,18 +1,45 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import { ArrowLeft } from 'lucide-react'
+import { settingsService } from '../firebase/services'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
 import SEO from '../components/SEO'
+import FormattedText from '../components/FormattedText'
 
-// Placeholder content throughout — written to be replaced/edited by the
-// MEDWEB-PK team, not published as-is. Same static-page pattern as
-// AboutPage.jsx/ContactPage.jsx (no Firestore-backed content yet; wire up
-// an admin-editable settings doc later if this needs to change often).
+// Same settings-driven pattern as PrivacyPolicyPage/TermsOfServicePage/etc —
+// editable at AdminContent -> Legal Pages (editorialPolicyContent). This
+// placeholder (## headings so FormattedText renders them, not the actual
+// policy) shows until the team replaces it there.
+const PLACEHOLDER = `## Our Mission
+[Describe, in 2-3 sentences, why MEDWEB-PK publishes educational medical content and who it's written for.]
+
+## How We Create Content
+[Describe who writes articles — in-house team, invited contributors, students — and the general process from draft to publish.]
+
+## Medical Review Process
+[Describe when and how an article is medically reviewed, who is qualified to review, and what "Medically reviewed by" on an article means in practice.]
+
+## Sources & Accuracy
+[Describe the kinds of sources used — e.g. peer-reviewed journals, clinical guidelines, textbooks — and how outdated or inaccurate content is corrected.]
+
+## Corrections
+[Describe how a reader can report an error, and how corrections are handled/disclosed once published.]
+
+## Advertising & Sponsorship
+[State whether articles are ever sponsored/paid, and how that's disclosed if so — or state plainly that none currently are.]`
+
 export default function EditorialPolicyPage() {
   const navigate = useNavigate()
+  const [content, setContent] = useState(PLACEHOLDER)
 
-  useEffect(() => { window.scrollTo(0, 0) }, [])
+  useEffect(() => {
+    window.scrollTo(0, 0)
+    settingsService.get().then(s => {
+      if (s?.editorialPolicyContent) setContent(s.editorialPolicyContent)
+    }).catch(() => {})
+  }, [])
 
   return (
     <div className="font-poppins bg-[#f7f9fc] min-h-screen">
@@ -30,47 +57,15 @@ export default function EditorialPolicyPage() {
       </div>
 
       <div className="max-w-4xl mx-auto px-4 -mt-12 sm:-mt-16 pb-16">
-        <div className="bg-white rounded-3xl shadow-[0_8px_40px_rgba(0,0,0,0.06)] p-8 sm:p-12 space-y-8 text-gray-700 leading-relaxed">
-          <p className="text-sm text-gray-400 italic">
-            [Placeholder — replace every bracketed section below before publishing. This page exists mainly to give search engines and
-            readers a clear, linkable statement of how MEDWEB-PK's content is produced and checked.]
-          </p>
-
-          <section>
-            <h2 className="text-xl font-black text-[#1a1a1a] mb-3">Our Mission</h2>
-            <p>[Describe, in 2-3 sentences, why MEDWEB-PK publishes educational medical content and who it's written for.]</p>
-          </section>
-
-          <section>
-            <h2 className="text-xl font-black text-[#1a1a1a] mb-3">How We Create Content</h2>
-            <p>[Describe who writes articles — in-house team, invited contributors, students — and the general process from draft to publish.]</p>
-          </section>
-
-          <section>
-            <h2 className="text-xl font-black text-[#1a1a1a] mb-3">Medical Review Process</h2>
-            <p>[Describe when and how an article is medically reviewed, who is qualified to review, and what "Medically reviewed by" on an article means in practice.]</p>
-          </section>
-
-          <section>
-            <h2 className="text-xl font-black text-[#1a1a1a] mb-3">Sources & Accuracy</h2>
-            <p>[Describe the kinds of sources used — e.g. peer-reviewed journals, clinical guidelines, textbooks — and how outdated or inaccurate content is corrected.]</p>
-          </section>
-
-          <section>
-            <h2 className="text-xl font-black text-[#1a1a1a] mb-3">Corrections</h2>
-            <p>[Describe how a reader can report an error, and how corrections are handled/disclosed once published.]</p>
-          </section>
-
-          <section>
-            <h2 className="text-xl font-black text-[#1a1a1a] mb-3">Advertising & Sponsorship</h2>
-            <p>[State whether articles are ever sponsored/paid, and how that's disclosed if so — or state plainly that none currently are.]</p>
-          </section>
-
-          <section>
-            <h2 className="text-xl font-black text-[#1a1a1a] mb-3">Contact</h2>
-            <p>Questions about this policy or a specific article can be sent via our <a href="/contact" className="text-[#1655c3] font-semibold hover:underline">Contact page</a>.</p>
-          </section>
-        </div>
+        <motion.div className="bg-white rounded-3xl shadow-[0_8px_40px_rgba(0,0,0,0.06)] overflow-hidden"
+          initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }}>
+          <div className="p-6 sm:p-10">
+            <FormattedText text={content} />
+            <p className="mt-8 pt-4 border-t border-gray-100 text-sm text-gray-500">
+              Questions about this policy or a specific article can be sent via our <a href="/contact" className="text-[#1655c3] font-semibold hover:underline">Contact page</a>.
+            </p>
+          </div>
+        </motion.div>
       </div>
 
       <Footer />

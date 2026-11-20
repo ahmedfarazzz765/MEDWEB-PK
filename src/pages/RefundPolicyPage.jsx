@@ -6,6 +6,7 @@ import { settingsService } from '../firebase/services'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
 import SEO from '../components/SEO'
+import FormattedText from '../components/FormattedText'
 
 const PLACEHOLDER = 'Add your policy content in the admin panel.'
 
@@ -19,8 +20,6 @@ export default function RefundPolicyPage() {
       if (s?.refundContent) setContent(s.refundContent)
     }).catch(() => {})
   }, [])
-
-  const paras = (content || '').split('\n').map(p => p.trim()).filter(Boolean)
 
   return (
     <div className="font-poppins bg-[#f7f9fc] min-h-screen">
@@ -39,8 +38,8 @@ export default function RefundPolicyPage() {
       <div className="max-w-4xl mx-auto px-4 -mt-12 sm:-mt-16 pb-16">
         <motion.div className="bg-white rounded-3xl shadow-[0_8px_40px_rgba(0,0,0,0.06)] overflow-hidden"
           initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }}>
-          <div className="p-6 sm:p-10 space-y-4">
-            {paras.map((p, i) => <p key={i} className="text-gray-600 text-sm sm:text-[15px] leading-relaxed">{p}</p>)}
+          <div className="p-6 sm:p-10">
+            <FormattedText text={content} />
           </div>
         </motion.div>
       </div>

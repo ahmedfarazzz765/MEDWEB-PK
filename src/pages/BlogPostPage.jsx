@@ -113,7 +113,7 @@ export default function BlogPostPage() {
             <ArrowLeft size={16} /> Back
           </button>
         }
-        afterContent={(post.authorRef || reviewer) && (
+        afterContent={(
           <div className="mt-8 pt-6 border-t border-gray-100 space-y-4">
             {post.authorRef && (
               <Link to={authorLink} className="flex items-center gap-4 group">
@@ -135,6 +135,9 @@ export default function BlogPostPage() {
                 Medically reviewed by <span className="font-semibold text-[#1a1a1a]">{reviewer.name}</span>{reviewer.role ? `, ${reviewer.role}` : ''}
               </p>
             )}
+            <p className="text-xs text-gray-400">
+              For education only — not medical advice. See our <Link to="/medical-disclaimer" className="text-[#1655c3] hover:underline">Medical Disclaimer</Link>.
+            </p>
           </div>
         )}
       />

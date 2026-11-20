@@ -36,6 +36,8 @@ const STATIC_ROUTES = [
   { path: '/privacy-policy', priority: '0.2' },
   { path: '/terms-of-service', priority: '0.2' },
   { path: '/refund-policy', priority: '0.2' },
+  { path: '/medical-disclaimer', priority: '0.3' },
+  { path: '/cookie-policy', priority: '0.2' },
 ]
 
 function urlEntry(loc, priority, lastmod) {

@@ -7,6 +7,7 @@ import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
 import CoverImage from '../components/CoverImage'
 import SEO from '../components/SEO'
+import FormattedText from '../components/FormattedText'
 
 export default function AboutPage() {
   const navigate = useNavigate()
@@ -28,7 +29,6 @@ export default function AboutPage() {
     }).catch(() => {})
   }, [])
 
-  const paras = (d.wwaFull || '').split('\n').map(p => p.trim()).filter(Boolean)
   const imgSrc = d.wwaImage || 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=900&q=80'
 
   return (
@@ -54,7 +54,7 @@ export default function AboutPage() {
             </div>
           )}
           <div className="p-6 sm:p-10 space-y-4">
-            {paras.map((p, i) => <p key={i} className="text-gray-600 text-sm sm:text-[15px] leading-relaxed">{p}</p>)}
+            <FormattedText text={d.wwaFull} />
             <div className="grid sm:grid-cols-2 gap-3 pt-4">
               {[
                 "Pakistan's leading medical education platform for allied health sciences",

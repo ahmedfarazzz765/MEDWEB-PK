@@ -55,6 +55,8 @@ const STATIC_PAGES = [
   { path: '/about', title: 'About Us', description: "MEDWEB is Pakistan's premier medical education platform dedicated to pharmacy, biotech, psychology, and allied health sciences students." },
   { path: '/contact', title: 'Contact Us', description: "Get in touch with MEDWEB-PK — Pakistan's medical education platform. Reach out for support, partnerships, or questions about our courses and webinars." },
   { path: '/editorial-policy', title: 'Editorial Policy', description: 'How MEDWEB-PK creates, reviews, and maintains the accuracy of its articles and educational content.' },
+  { path: '/medical-disclaimer', title: 'Medical Disclaimer', description: "MEDWEB-PK's medical disclaimer — our content is for education only, not medical advice." },
+  { path: '/cookie-policy', title: 'Cookie Policy', description: "MEDWEB-PK's cookie policy." },
   { path: '/webinars', title: 'All Webinars', description: 'Every MEDWEB-PK webinar — live, upcoming, and recorded sessions for medical and pharmacy students.' },
   { path: '/courses', title: 'All Courses', description: "Browse MEDWEB-PK's full catalog of structured courses for medical and pharmacy students." },
   { path: '/team', title: 'Our Team', description: "Meet the team behind MEDWEB-PK, Pakistan's medical education platform." },

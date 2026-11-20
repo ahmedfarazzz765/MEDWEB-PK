@@ -17,6 +17,8 @@ const WebinarRegister       = lazy(() => import('./pages/WebinarRegister'))
 const MockTestPage          = lazy(() => import('./pages/MockTestPage'))
 const ContactPage           = lazy(() => import('./pages/ContactPage'))
 const EditorialPolicyPage   = lazy(() => import('./pages/EditorialPolicyPage'))
+const MedicalDisclaimerPage = lazy(() => import('./pages/MedicalDisclaimerPage'))
+const CookiePolicyPage      = lazy(() => import('./pages/CookiePolicyPage'))
 const WebinarDetailPage     = lazy(() => import('./pages/WebinarDetailPage'))
 const FounderMessagePage    = lazy(() => import('./pages/FounderMessagePage'))
 const AboutPage             = lazy(() => import('./pages/AboutPage'))
@@ -100,6 +102,8 @@ function App() {
       <Routes>
         <Route path="/contact"                element={<ContactPage />} />
         <Route path="/editorial-policy"       element={<EditorialPolicyPage />} />
+        <Route path="/medical-disclaimer"     element={<MedicalDisclaimerPage />} />
+        <Route path="/cookie-policy"          element={<CookiePolicyPage />} />
         <Route path="/"                       element={<HomePage />} />
         <Route path="/founder-message"        element={<FounderMessagePage />} />
         <Route path="/about"                  element={<AboutPage />} />

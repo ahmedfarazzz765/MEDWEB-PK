@@ -264,10 +264,13 @@ export default function Footer() {
           <p className="text-white/50 text-xs">
             © {new Date().getFullYear()} <strong className="text-white/70">MEDWEB-PK</strong> — All Rights Reserved
           </p>
-          <div className="flex gap-5 text-xs text-white/40">
+          <div className="flex flex-wrap justify-center gap-x-5 gap-y-1.5 text-xs text-white/40">
             <a href="/privacy-policy" className="hover:text-white/70 transition-colors">Privacy Policy</a>
             <a href="/terms-of-service" className="hover:text-white/70 transition-colors">Terms of Service</a>
             <a href="/refund-policy" className="hover:text-white/70 transition-colors">Refund Policy</a>
+            <a href="/medical-disclaimer" className="hover:text-white/70 transition-colors">Medical Disclaimer</a>
+            <a href="/editorial-policy" className="hover:text-white/70 transition-colors">Editorial Policy</a>
+            <a href="/cookie-policy" className="hover:text-white/70 transition-colors">Cookie Policy</a>
           </div>
         </div>
       </div>
