@@ -16,6 +16,7 @@ const HomePage              = lazy(() => import('./pages/HomePage'))
 const WebinarRegister       = lazy(() => import('./pages/WebinarRegister'))
 const MockTestPage          = lazy(() => import('./pages/MockTestPage'))
 const ContactPage           = lazy(() => import('./pages/ContactPage'))
+const EditorialPolicyPage   = lazy(() => import('./pages/EditorialPolicyPage'))
 const WebinarDetailPage     = lazy(() => import('./pages/WebinarDetailPage'))
 const FounderMessagePage    = lazy(() => import('./pages/FounderMessagePage'))
 const AboutPage             = lazy(() => import('./pages/AboutPage'))
@@ -98,6 +99,7 @@ function App() {
       <Suspense fallback={<PageLoader />}>
       <Routes>
         <Route path="/contact"                element={<ContactPage />} />
+        <Route path="/editorial-policy"       element={<EditorialPolicyPage />} />
         <Route path="/"                       element={<HomePage />} />
         <Route path="/founder-message"        element={<FounderMessagePage />} />
         <Route path="/about"                  element={<AboutPage />} />

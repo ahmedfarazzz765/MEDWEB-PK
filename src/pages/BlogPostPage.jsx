@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, ShieldCheck } from 'lucide-react'
 import { blogService } from '../firebase/services'
+import CoverImage from '../components/CoverImage'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
 import PostArticleView from '../components/PostArticleView'
@@ -70,8 +71,8 @@ export default function BlogPostPage() {
     image: post.imageUrl ? [post.imageUrl] : [DEFAULT_IMAGE],
     ...(datePublished ? { datePublished } : {}),
     ...(dateModified ? { dateModified } : {}),
-    author: post.authorName
-      ? { '@type': 'Person', name: post.authorName }
+    author: post.authorRef?.name || post.author
+      ? { '@type': 'Person', name: post.authorRef?.name || post.author }
       : { '@type': 'Organization', name: 'MEDWEB-PK' },
     publisher: {
       '@type': 'Organization',
@@ -91,6 +92,9 @@ export default function BlogPostPage() {
     ],
   }
 
+  const authorLink = post.authorRef?.source === 'advisory' ? '/advisory-board' : '/team'
+  const reviewer = post.reviewedByRef
+
   return (
     <div className="min-h-screen">
       <SEO
@@ -109,6 +113,30 @@ export default function BlogPostPage() {
             <ArrowLeft size={16} /> Back
           </button>
         }
+        afterContent={(post.authorRef || reviewer) && (
+          <div className="mt-8 pt-6 border-t border-gray-100 space-y-4">
+            {post.authorRef && (
+              <Link to={authorLink} className="flex items-center gap-4 group">
+                {post.authorRef.imageUrl ? (
+                  <CoverImage src={post.authorRef.imageUrl} alt={post.authorRef.name} bias="center 25%" className="w-14 h-14 rounded-full shrink-0" />
+                ) : (
+                  <div className="w-14 h-14 rounded-full bg-blue-50 flex items-center justify-center text-[#1655c3] font-black shrink-0">{post.authorRef.name?.[0]}</div>
+                )}
+                <div className="min-w-0">
+                  <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Written by</p>
+                  <p className="font-bold text-[#1a1a1a] group-hover:text-[#1655c3] transition-colors">{post.authorRef.name}</p>
+                  {post.authorRef.role && <p className="text-sm text-gray-500">{post.authorRef.role}</p>}
+                </div>
+              </Link>
+            )}
+            {reviewer && (
+              <p className="flex items-center gap-2 text-sm text-gray-500">
+                <ShieldCheck size={15} className="text-[#64ac37] shrink-0" />
+                Medically reviewed by <span className="font-semibold text-[#1a1a1a]">{reviewer.name}</span>{reviewer.role ? `, ${reviewer.role}` : ''}
+              </p>
+            )}
+          </div>
+        )}
       />
       <Footer />
     </div>

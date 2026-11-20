@@ -9,7 +9,7 @@ import AdminButton from '../components/AdminButton'
 import ActionButtons from '../components/ActionButtons'
 import NewsletterSendModal from '../components/NewsletterSendModal'
 import BlogContentEditor from '../components/BlogContentEditor'
-import { blogService, blogCategoriesService, newsletterService } from '../../firebase/services'
+import { blogService, blogCategoriesService, newsletterService, teamService, advisoryService } from '../../firebase/services'
 import { sendNewsletterEmail, getRemainingEmailQuota } from '../../firebase/email'
 import { DEFAULT_BLOG_CATEGORIES } from '../../constants/blogCategories'
 import CoverImage from '../../components/CoverImage'
@@ -30,6 +30,13 @@ function truncateExcerpt(content, max = 200) {
 const emptyForm = () => ({
   title: '', author: '', category: '',
   excerpt: '', imageUrl: '', slug: '',
+  // authorRef/reviewedByRef: { source: 'team'|'advisory', id, name, imageUrl, role }
+  // — a denormalized snapshot taken at save time (not a live reference), so
+  // the author box on BlogPostPage still renders correctly even if the
+  // Team/Advisory member is later renamed or removed. `author` (free text,
+  // pre-existing) is kept in sync with authorRef.name when one is picked,
+  // so every existing reader of `post.author` keeps working unchanged.
+  authorRef: null, reviewedByRef: null,
 })
 
 const emptyCatForm = () => ({ name: '' })
@@ -79,6 +86,20 @@ export default function AdminBlog() {
   const [editId,  setEditId]  = useState(null)
   const [saving,  setSaving]  = useState(false)
   const [sendModal, setSendModal] = useState(null)
+  // Combined Team + Advisory Board roster for the Author / Medically
+  // Reviewed By pickers — fetched once, not live-synced (picking one just
+  // snapshots its current name/image/role into authorRef/reviewedByRef).
+  const [people, setPeople] = useState([])
+  useEffect(() => {
+    Promise.all([teamService.getAll(), advisoryService.getAll()]).then(([team, advisory]) => {
+      setPeople([
+        ...team.map(m => ({ source: 'team', id: m.id, name: m.name, imageUrl: m.imageUrl || '', role: m.role || '' })),
+        ...advisory.map(m => ({ source: 'advisory', id: m.id, name: m.name, imageUrl: m.imageUrl || '', role: m.qualification || m.role || '' })),
+      ])
+    }).catch(() => setPeople([]))
+  }, [])
+  const personKey = p => p ? `${p.source}:${p.id}` : ''
+  const findPerson = key => people.find(p => personKey(p) === key) || null
 
   // Step 2: full-page content editor (BlogContentEditor.jsx). `editorPost`
   // holds the currently-open post's basic fields + status (kept in sync when
@@ -136,7 +157,10 @@ export default function AdminBlog() {
 
   const openAdd  = () => { setForm({ ...emptyForm(), category: categoryNames[0] || '' }); setEditId(null); setModal('add') }
   const openEdit = row => {
-    setForm({ title: row.title, author: row.author, category: row.category, excerpt: row.excerpt || '', imageUrl: row.imageUrl || '', slug: row.slug || '' })
+    setForm({
+      title: row.title, author: row.author, category: row.category, excerpt: row.excerpt || '', imageUrl: row.imageUrl || '', slug: row.slug || '',
+      authorRef: row.authorRef || null, reviewedByRef: row.reviewedByRef || null,
+    })
     setEditId(row.id); setModal('edit')
   }
   // While the content editor is open, Cancel on a reopened "Edit Details"
@@ -166,6 +190,8 @@ export default function AdminBlog() {
         title: form.title.trim(),
         slug: uniqueSlug(slugify(form.slug || form.title), existingSlugs),
         author: form.author,
+        authorRef: form.authorRef,
+        reviewedByRef: form.reviewedByRef,
         category: form.category,
         excerpt: form.excerpt,
         imageUrl: form.imageUrl,
@@ -407,6 +433,24 @@ export default function AdminBlog() {
               <FormField label="Category">
                 <select className={inputCls} value={form.category} onChange={set('category')}>
                   {categoryNames.map(c => <option key={c}>{c}</option>)}
+                </select>
+              </FormField>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <FormField label="Attribute author to (Team/Advisory, optional)">
+                <select className={inputCls} value={personKey(form.authorRef)} onChange={e => {
+                  const p = findPerson(e.target.value)
+                  setForm(prev => ({ ...prev, authorRef: p, author: p ? p.name : prev.author }))
+                }}>
+                  <option value="">— Free text above —</option>
+                  {people.map(p => <option key={personKey(p)} value={personKey(p)}>{p.name}{p.role ? ` — ${p.role}` : ''}</option>)}
+                </select>
+                <p className="text-[11px] text-gray-400 mt-1">Shows a photo + author box on the article. Leave unset to just show the plain-text name above.</p>
+              </FormField>
+              <FormField label="Medically reviewed by (optional)">
+                <select className={inputCls} value={personKey(form.reviewedByRef)} onChange={e => setForm(prev => ({ ...prev, reviewedByRef: findPerson(e.target.value) }))}>
+                  <option value="">— None —</option>
+                  {people.map(p => <option key={personKey(p)} value={personKey(p)}>{p.name}{p.role ? ` — ${p.role}` : ''}</option>)}
                 </select>
               </FormField>
             </div>

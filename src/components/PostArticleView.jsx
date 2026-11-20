@@ -9,7 +9,7 @@ import CoverImage from './CoverImage'
 // the real page, it's the literal same markup/classes. `topLeft` is an
 // optional slot inside the hero band for page-specific chrome (BlogPostPage's
 // "Back" button) that doesn't belong in a reusable preview component itself.
-export default function PostArticleView({ post, topLeft }) {
+export default function PostArticleView({ post, topLeft, afterContent }) {
   return (
     <div className="font-poppins bg-[#f7f9fc]">
       <div className="px-4 pt-10 pb-20 sm:pt-14 sm:pb-28" style={{ background: 'linear-gradient(135deg, #1655c3, #64ac37)' }}>
@@ -40,6 +40,7 @@ export default function PostArticleView({ post, topLeft }) {
               className="blog-content text-gray-700 text-[15px] sm:text-base leading-[1.85]"
               dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(post.content || '') }}
             />
+            {afterContent}
           </div>
         </motion.div>
       </div>

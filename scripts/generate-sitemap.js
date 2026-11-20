@@ -22,6 +22,7 @@ const STATIC_ROUTES = [
   { path: '/', priority: '1.0' },
   { path: '/about', priority: '0.7' },
   { path: '/contact', priority: '0.6' },
+  { path: '/editorial-policy', priority: '0.3' },
   { path: '/founder-message', priority: '0.5' },
   { path: '/webinars', priority: '0.9' },
   { path: '/courses', priority: '0.9' },
