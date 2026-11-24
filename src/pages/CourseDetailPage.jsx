@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, ExternalLink, Star, Users, PlayCircle, Clock, ListChecks, Calendar, MapPin, Award, Banknote } from 'lucide-react'
+import { ArrowLeft, ExternalLink, Star, PlayCircle, Clock, ListChecks, Calendar, MapPin, Award, Banknote } from 'lucide-react'
 import { coursesService } from '../firebase/services'
 import { useSiteData } from '../hooks/useSiteData'
 import Navbar from '../components/Navbar'
@@ -185,7 +185,6 @@ export default function CourseDetailPage() {
           <h1 className="text-white font-black text-3xl sm:text-4xl lg:text-5xl leading-tight">{course.title}</h1>
           <div className="flex items-center gap-4 mt-4 text-white/85 text-sm flex-wrap">
             {course.rating > 0 && <span className="flex items-center gap-1"><Star size={14} className="fill-white" /> {course.rating}</span>}
-            {course.students > 0 && <span className="flex items-center gap-1"><Users size={14} /> {Number(course.students).toLocaleString()} students</span>}
             {course.courseDuration && <span className="flex items-center gap-1"><Clock size={14} /> {course.courseDuration}</span>}
           </div>
           {tags.length > 0 && (

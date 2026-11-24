@@ -63,11 +63,6 @@ export function CourseCard({ c, i }) {
               <Star size={13} fill="currentColor" /> {c.rating}
             </div>
           )}
-          {(c.students > 0) && (
-            <div className="text-xs text-gray-400">
-              <span className="font-bold" style={{ color }}>{Number(c.students).toLocaleString()}</span> students
-            </div>
-          )}
           {c.courseDuration && (
             <div className="flex items-center gap-1 text-xs text-gray-400">
               <Clock size={12} /> {c.courseDuration}
