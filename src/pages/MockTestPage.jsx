@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ClipboardCheck, ArrowLeft, Clock, CheckCircle, XCircle, Award, Download, ShieldCheck, FileDown } from 'lucide-react'
+import { ClipboardCheck, ArrowLeft, Clock, XCircle, Award, Download, ShieldCheck } from 'lucide-react'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
+import MockTestResultHero from '../components/MockTestResultHero'
 import MockTestReviewList from '../components/MockTestReviewList'
 import MockTestCtaBox from '../components/MockTestCtaBox'
 import { mocktestApi, getStoredToken, storeToken, clearStoredToken } from '../lib/mocktestClient'
@@ -52,6 +53,7 @@ export default function MockTestPage() {
 
   const [result, setResult] = useState(null)
   const [certState, setCertState] = useState('idle') // idle | generating | done | failed
+  const reviewRef = useRef(null) // "View Detailed Review" button scroll target
 
   // ── Resume on mount ──────────────────────────────────────────────────
   useEffect(() => {
@@ -210,9 +212,10 @@ export default function MockTestPage() {
   const ss = String(secondsLeft % 60).padStart(2, '0')
 
   return (
-    <div className="font-poppins bg-[#f7f9fc] min-h-screen">
+    <div className="font-poppins bg-[#f7f9fc] min-h-screen relative overflow-hidden">
+      {phase === 'result' && <MedicalCrossBackdrop />}
       <Navbar />
-      <div className="max-w-3xl mx-auto px-4 py-10 sm:py-16">
+      <div className="max-w-3xl mx-auto px-4 py-10 sm:py-16 relative z-10">
         {phase === 'entry' && (
           <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-sm text-gray-500 hover:text-[#1655c3] mb-6 transition-colors">
             <ArrowLeft size={16} /> Back
@@ -300,25 +303,12 @@ export default function MockTestPage() {
         )}
 
         {phase === 'result' && result && (
-          <motion.div className="bg-white rounded-3xl shadow-[0_8px_40px_rgba(0,0,0,0.06)] overflow-hidden" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }}>
-            <div className="px-6 sm:px-10 pt-8 pb-6 text-center" style={{ background: result.eligible ? 'linear-gradient(135deg, #1655c3, #64ac37)' : 'linear-gradient(135deg, #64748b, #475569)' }}>
-              {result.eligible ? <CheckCircle size={44} className="text-white mx-auto mb-3" /> : <XCircle size={44} className="text-white mx-auto mb-3" />}
-              <h1 className="text-white font-black text-xl sm:text-2xl">{result.eligible ? "You're Eligible! 🎉" : 'Test Completed'}</h1>
-              <p className="text-white/85 text-sm mt-1">{result.testTitle} {result.courseTitle ? `· ${result.courseTitle}` : ''}</p>
-            </div>
-            <div className="p-6 sm:p-10 space-y-6">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-                {[
-                  ['Correct', result.correctCount], ['Incorrect', result.incorrectCount],
-                  ['Unanswered', result.unansweredCount], ['Score', `${result.percent}%`],
-                ].map(([label, value]) => (
-                  <div key={label} className="bg-gray-50 rounded-xl py-3">
-                    <div className="text-xl font-black text-[#1a1a1a]">{value}</div>
-                    <div className="text-[11px] text-gray-400 font-semibold">{label}</div>
-                  </div>
-                ))}
-              </div>
+          <motion.div className="space-y-6" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }}>
+            <MockTestResultHero result={result}
+              onDownloadPdf={() => generateMockTestResultPdf(result)}
+              onViewReview={() => reviewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })} />
 
+            <div className="bg-white rounded-3xl shadow-[0_8px_40px_rgba(0,0,0,0.06)] overflow-hidden p-6 sm:p-10 space-y-6">
               {result.eligible ? (
                 <div className="rounded-2xl border border-green-100 bg-green-50 p-5 text-center">
                   {certState === 'generating' && <p className="text-sm text-gray-500">Generating your certificate…</p>}
@@ -345,13 +335,8 @@ export default function MockTestPage() {
                 </div>
               )}
 
-              <button onClick={() => generateMockTestResultPdf(result)}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-[#1655c3] border border-[#1655c3] hover:bg-blue-50 transition-colors">
-                <FileDown size={15} /> Download Result (PDF)
-              </button>
-
               {Array.isArray(result.review) && result.review.length > 0 && (
-                <div className="pt-4 border-t border-gray-100">
+                <div ref={reviewRef} className="pt-4 border-t border-gray-100">
                   <h3 className="font-bold text-[#1a1a1a] mb-3">Full Question Review</h3>
                   <MockTestReviewList review={result.review} />
                 </div>
@@ -365,6 +350,28 @@ export default function MockTestPage() {
         )}
       </div>
       <Footer />
+    </div>
+  )
+}
+
+// Faint decorative medical "+" shapes behind the result hero — pure CSS,
+// pointer-events-none so they never interfere with the real content above.
+function MedicalCrossBackdrop() {
+  const crosses = [
+    { top: '8%', left: '6%', size: 46, rotate: 12 },
+    { top: '22%', left: '88%', size: 60, rotate: -8 },
+    { top: '55%', left: '3%', size: 38, rotate: 20 },
+    { top: '72%', left: '92%', size: 50, rotate: -15 },
+    { top: '85%', left: '15%', size: 34, rotate: 5 },
+  ]
+  return (
+    <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
+      {crosses.map((c, i) => (
+        <div key={i} className="absolute" style={{ top: c.top, left: c.left, width: c.size, height: c.size, transform: `rotate(${c.rotate}deg)`, opacity: 0.06 }}>
+          <div className="absolute bg-[#1655c3]" style={{ left: '35%', top: 0, width: '30%', height: '100%', borderRadius: 4 }} />
+          <div className="absolute bg-[#1655c3]" style={{ top: '35%', left: 0, width: '100%', height: '30%', borderRadius: 4 }} />
+        </div>
+      ))}
     </div>
   )
 }

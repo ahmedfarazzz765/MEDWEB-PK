@@ -178,6 +178,50 @@ HTML;
 HTML;
 }
 
+// Score card — big percent (green/amber by eligibility) + a 2-column stat
+// grid (Marks Obtained/Time Taken/Correct/Incorrect/Unanswered/Pass Mark).
+// Table-based (not flex/grid) so it survives Gmail's CSS stripping.
+function mocktest_score_card_html(array $attempt, string $duration): string {
+    $percent = htmlspecialchars((string) ($attempt['percent'] ?? 0), ENT_QUOTES);
+    $color = !empty($attempt['eligible']) ? '#64ac37' : '#d97706';
+    $correct = (int) ($attempt['correctCount'] ?? 0);
+    $incorrect = (int) ($attempt['incorrectCount'] ?? 0);
+    $unanswered = (int) ($attempt['unansweredCount'] ?? 0);
+    $total = (int) ($attempt['totalQuestions'] ?? 0);
+    $passPercent = (int) ($attempt['passPercent'] ?? 70);
+
+    $cell = function (string $label, string $value): string {
+        $label = htmlspecialchars($label, ENT_QUOTES);
+        $value = htmlspecialchars($value, ENT_QUOTES);
+        return '<td style="width:50%;padding:6px;"><div style="background:#f7f9fc;border-radius:10px;padding:12px;text-align:center;"><div style="font-size:16px;font-weight:800;color:#1a1a1a;">' . $value . '</div><div style="font-size:10px;color:#999;text-transform:uppercase;font-weight:700;letter-spacing:0.5px;margin-top:2px;">' . $label . '</div></div></td>';
+    };
+
+    $rows = '<tr>' . $cell('Marks Obtained', "{$correct}/{$total}") . $cell('Time Taken', $duration) . '</tr>'
+        . '<tr><td colspan="2" style="height:8px;line-height:8px;font-size:0;">&nbsp;</td></tr>'
+        . '<tr>' . $cell('Correct', (string) $correct) . $cell('Incorrect', (string) $incorrect) . '</tr>'
+        . '<tr><td colspan="2" style="height:8px;line-height:8px;font-size:0;">&nbsp;</td></tr>'
+        . '<tr>' . $cell('Unanswered', (string) $unanswered) . $cell('Pass Mark', "{$passPercent}%") . '</tr>';
+
+    return '
+      <div style="text-align:center;margin:8px 0 18px;">
+        <div style="font-size:46px;font-weight:900;color:' . $color . ';line-height:1;">' . $percent . '%</div>
+        <div style="font-size:11px;color:#999;text-transform:uppercase;font-weight:700;letter-spacing:1px;">Your Score</div>
+      </div>
+      <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:18px;">' . $rows . '</table>';
+}
+
+// "View Full Result & Download PDF" — links back to the public mock-test
+// page for this course (re-entering with the same Reg ID/name/phone just
+// re-opens this same completed attempt's result — see enter.php).
+function mocktest_view_result_button_html(string $resultUrl): string {
+    return '
+      <div style="text-align:center;margin-bottom:20px;">
+        <a href="' . htmlspecialchars($resultUrl, ENT_QUOTES) . '" style="display:inline-block;background:#fff;color:#1655c3;text-decoration:none;padding:12px 28px;border-radius:10px;font-weight:700;font-size:13px;border:2px solid #1655c3;">
+          View Full Result &amp; Download PDF
+        </a>
+      </div>';
+}
+
 // $cert = null for a not-eligible result, or ['certCode'=>..., 'imageUrl'=>...|null]
 // once eligible (imageUrl may still be null if the student's own browser
 // hasn't rendered/uploaded it yet — the Certificate ID box + Verify button
@@ -191,20 +235,31 @@ function mocktest_send_result_email(Firestore $fs, array $attempt, array $mockTe
     $name = htmlspecialchars((string) ($attempt['studentName'] ?? 'Student'), ENT_QUOTES);
     $testTitle = htmlspecialchars((string) ($mockTest['title'] ?? $attempt['mockTestTitle'] ?? 'Mock Test'), ENT_QUOTES);
     $courseTitle = htmlspecialchars((string) ($attempt['courseTitle'] ?? ''), ENT_QUOTES);
-    $percent = $attempt['percent'] ?? 0;
-    $correct = $attempt['correctCount'] ?? 0;
-    $total = $attempt['totalQuestions'] ?? 0;
+    $percentDisplay = $attempt['percent'] ?? 0;
     $passPercent = $attempt['passPercent'] ?? ($mockTest['passPercent'] ?? 70);
     $homeUrl = 'https://medwebpk.com';
-    $scoreLine = "{$correct}/{$total} ({$percent}%)";
+    $duration = mocktest_format_duration($attempt['startedAt'] ?? null, $attempt['finishedAt'] ?? null);
+    $resultUrl = $homeUrl . '/mock-test/' . rawurlencode((string) ($attempt['courseSlug'] ?? ''));
+
     $reviewHtml = mocktest_incorrect_review_html(build_review($mockTest, $attempt));
     $ctaHtml = mocktest_cta_box_html();
+    $scoreCardHtml = mocktest_score_card_html($attempt, $duration);
+    $viewResultHtml = mocktest_view_result_button_html($resultUrl);
+    $subject = "Your MEDWEB Mock Test Result — {$percentDisplay}%";
+    $courseSuffix = $courseTitle === '' ? '' : " ({$courseTitle})";
+
+    $intro = <<<HTML
+      <h2 style="margin:0 0 4px;color:#1a1a1a;font-size:20px;">Dear {$name},</h2>
+      <p style="color:#555;margin:0 0 16px;line-height:1.7;">
+        Here is your result for <strong>"{$testTitle}"</strong>{$courseSuffix}.
+      </p>
+      {$scoreCardHtml}
+HTML;
 
     if (!empty($attempt['eligible']) && $cert) {
         $certCode = htmlspecialchars((string) $cert['certCode'], ENT_QUOTES);
         $imageUrl = $cert['imageUrl'] ?? null;
         $verifyUrl = $homeUrl . '/certificate/' . rawurlencode((string) $cert['certCode']);
-        $subject = "🏆 You Did It, {$attempt['studentName']}! Your Certificate Is Ready";
 
         $imageBlock = $imageUrl ? '
       <div style="text-align:center;margin-bottom:24px;">
@@ -213,13 +268,10 @@ function mocktest_send_result_email(Firestore $fs, array $attempt, array $mockTe
 
         $footerSections = mocktest_email_footer_sections($fs, $homeUrl);
         $body = <<<HTML
-      <h2 style="margin:0 0 6px;color:#1a1a1a;font-size:22px;">Congratulations, {$name}! 🏆</h2>
-      <p style="color:#555;margin:0 0 20px;line-height:1.7;">
-        That's one more step forward in your medical career! You've successfully passed
-        <strong>"{$testTitle}"</strong> for <strong>"{$courseTitle}"</strong> with MEDWEB-PK, scoring
-        <strong>{$scoreLine}</strong> — and your official certificate is ready below, proof of the time
-        and dedication you're putting into becoming an outstanding healthcare professional.
-      </p>
+      {$intro}
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px 16px;text-align:center;margin-bottom:20px;color:#166534;font-weight:700;font-size:13px;">
+        🎉 Congratulations! You are eligible for the certificate (pass mark {$passPercent}%).
+      </div>
       {$imageBlock}
       <div style="background:#eff6ff;border:2px solid #1655c3;border-radius:12px;padding:16px;text-align:center;margin-bottom:24px;">
         <p style="margin:0 0 4px;color:#666;font-size:11px;text-transform:uppercase;letter-spacing:1px;font-weight:700;">Certificate ID</p>
@@ -231,26 +283,24 @@ function mocktest_send_result_email(Firestore $fs, array $attempt, array $mockTe
           Verify Certificate →
         </a>
       </div>
-      <p style="color:#aaa;font-size:12px;margin:0 0 28px;text-align:center;">
+      <p style="color:#aaa;font-size:12px;margin:0 0 20px;text-align:center;">
         Share your certificate link: <a href="{$verifyUrl}" style="color:#1655c3;">{$verifyUrl}</a>
       </p>
+      {$viewResultHtml}
       {$reviewHtml}
       {$ctaHtml}
       {$footerSections}
 HTML;
     } else {
-        $subject = "Your result for {$testTitle}";
-        $eligibilityLine = !empty($attempt['eligible'])
-            ? '<p style="color:#555;margin:0 0 20px;line-height:1.7;">You\'re eligible for a certificate — it\'s still being generated and we\'ll email you again shortly with it.</p>'
-            : '<p style="color:#555;margin:0 0 20px;line-height:1.7;"><strong>You are not eligible for a certificate.</strong> A minimum of ' . (int) $passPercent . '% is required.</p>';
+        $eligibilityBlock = !empty($attempt['eligible'])
+            ? '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px 16px;text-align:center;margin-bottom:20px;color:#1655c3;font-weight:700;font-size:13px;">You\'re eligible for a certificate — it\'s still being generated and we\'ll email you again shortly with it.</div>'
+            : '<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px 16px;text-align:center;margin-bottom:20px;color:#92400e;font-weight:700;font-size:13px;">Not eligible yet — required ' . (int) $passPercent . '%. Review your answers below.</div>';
 
         $footerSections = mocktest_email_footer_sections($fs, $homeUrl);
         $body = <<<HTML
-      <h2 style="margin:0 0 6px;color:#1a1a1a;font-size:22px;">Your Result, {$name}</h2>
-      <p style="color:#555;margin:0 0 12px;line-height:1.7;">
-        You scored <strong>{$scoreLine}</strong> on <strong>"{$testTitle}"</strong> for <strong>"{$courseTitle}"</strong> with MEDWEB-PK.
-      </p>
-      {$eligibilityLine}
+      {$intro}
+      {$eligibilityBlock}
+      {$viewResultHtml}
       {$reviewHtml}
       {$ctaHtml}
       {$footerSections}

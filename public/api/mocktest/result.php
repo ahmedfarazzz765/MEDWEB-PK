@@ -56,6 +56,8 @@ json_response([
     'unansweredCount' => $attempt['unansweredCount'] ?? 0,
     'percent' => $attempt['percent'] ?? 0,
     'passPercent' => $attempt['passPercent'] ?? 70,
+    'startedAt' => $attempt['startedAt'] ?? null,
+    'finishedAt' => $attempt['finishedAt'] ?? null,
     'eligible' => (bool) ($attempt['eligible'] ?? false),
     'certificateStatus' => $attempt['certificateStatus'] ?? 'not_applicable',
     'certCode' => $certCode,

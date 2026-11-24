@@ -81,6 +81,19 @@ function normalize_phone(string $phone): string {
     return substr($digits, -10);
 }
 
+// Mirrors formatMockTestDuration() in src/lib/mockTestFormat.js exactly —
+// used by the result email's score card. Keep both in sync by hand.
+function mocktest_format_duration(?string $startIso, ?string $endIso): string {
+    if (!$startIso || !$endIso) return '—';
+    $start = strtotime($startIso);
+    $end = strtotime($endIso);
+    if ($start === false || $end === false || $end < $start) return '—';
+    $totalSec = $end - $start;
+    $min = intdiv($totalSec, 60);
+    $sec = $totalSec % 60;
+    return $min > 0 ? "{$min} min {$sec} sec" : "{$sec} sec";
+}
+
 function new_token(): string {
     return bin2hex(random_bytes(32));
 }
