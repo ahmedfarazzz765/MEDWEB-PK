@@ -7,7 +7,7 @@ import { siteDataService } from '../firebase/services'
 // just because five sections mounted at once), and that result is also
 // kept in localStorage for 30 minutes so a repeat visit/reload in the same
 // browser doesn't cost a read at all until the cache goes stale.
-const CACHE_KEY = 'medweb_siteData_v1'
+const CACHE_KEY = 'medweb_siteData_v2'
 const TTL_MS = 30 * 60 * 1000
 
 const EMPTY = {
