@@ -16,6 +16,12 @@ import useAdminPermissions from '../hooks/useAdminPermissions'
 import { mockTestsService } from '../../firebase/services'
 
 const EXPECTED_HEADERS = ['Question', 'Option A', 'Option B', 'Option C', 'Option D', 'Correct Answer']
+// Optional columns — may be absent entirely from an older sheet, and may be
+// blank on individual rows; both are carried over from the previous
+// question (matched by text) on re-import exactly like the Seconds
+// override, so re-importing a sheet without them never wipes out values an
+// admin already typed into the Questions table.
+const OPTIONAL_HEADERS = ['Question ID', 'Explanation']
 
 function emptyTest() {
   return { title: '', description: '', passPercent: 70, defaultSeconds: 60, questions: [], certTemplate: null, status: 'Draft' }
@@ -43,8 +49,10 @@ function parseQuestionSheet(rows) {
     correct: header.indexOf('correct answer'),
   }
   if (Object.values(idx).some(i => i === -1)) {
-    return { questions: [], errors: [{ row: 1, message: `Header row must be exactly: ${EXPECTED_HEADERS.join(' | ')}` }] }
+    return { questions: [], errors: [{ row: 1, message: `Header row must include: ${EXPECTED_HEADERS.join(' | ')}` }] }
   }
+  const idxQid = header.indexOf('question id')
+  const idxExplanation = header.indexOf('explanation')
 
   const questions = []
   for (let r = 1; r < rows.length; r++) {
@@ -59,7 +67,11 @@ function parseQuestionSheet(rows) {
     if (options.some(o => !o)) { errors.push({ row: rowNum, message: 'One or more options (A–D) are empty.' }); continue }
     if (!['A', 'B', 'C', 'D'].includes(correctRaw)) { errors.push({ row: rowNum, message: `Correct Answer must be A, B, C or D — got "${row[idx.correct] ?? ''}".` }); continue }
 
-    questions.push({ questionText, options, correctIndex: 'ABCD'.indexOf(correctRaw) })
+    questions.push({
+      questionText, options, correctIndex: 'ABCD'.indexOf(correctRaw),
+      questionId: idxQid !== -1 ? String(row[idxQid] ?? '').trim() || undefined : undefined,
+      explanation: idxExplanation !== -1 ? String(row[idxExplanation] ?? '').replace(/\r\n/g, '\n').trim() || undefined : undefined,
+    })
   }
 
   if (questions.length === 0 && errors.length === 0) {
@@ -70,9 +82,11 @@ function parseQuestionSheet(rows) {
 
 function downloadSample() {
   const ws = XLSX.utils.aoa_to_sheet([
-    EXPECTED_HEADERS,
-    ['AMR stands for?', 'Antimicrobial Resistance', 'Acute Medical Response', 'Advanced Medical Research', 'Automated Medicine Review', 'A'],
-    ['Which organ primarily metabolizes most drugs?', 'Kidney', 'Liver', 'Heart', 'Lungs', 'B'],
+    [...EXPECTED_HEADERS, ...OPTIONAL_HEADERS],
+    ['AMR stands for?', 'Antimicrobial Resistance', 'Acute Medical Response', 'Advanced Medical Research', 'Automated Medicine Review', 'A', 'Q1',
+      'Correct: Antimicrobial Resistance — AMR is the ability of microbes to resist drugs designed to kill them.\n✗ Acute Medical Response — unrelated clinical term.\n✗ Advanced Medical Research — unrelated.\n✗ Automated Medicine Review — not a real term.\nLearning objective: Define AMR correctly.'],
+    ['Which organ primarily metabolizes most drugs?', 'Kidney', 'Liver', 'Heart', 'Lungs', 'B', 'Q2',
+      "Correct: Liver — the liver is the primary site of drug metabolism.\n✗ Kidney — mainly excretes, doesn't metabolize.\nLearning objective: Identify the liver's metabolic role."],
   ])
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'Questions')
@@ -175,7 +189,15 @@ export default function AdminMockTests() {
       // exact question text — a pure text/option edit keeps its custom
       // timer, a genuinely new question gets the test's default.
       const prevByText = new Map((form.questions || []).map(q => [q.questionText, q]))
-      const merged = questions.map(q => ({ ...q, seconds: prevByText.get(q.questionText)?.seconds }))
+      const merged = questions.map(q => {
+        const prev = prevByText.get(q.questionText)
+        return {
+          ...q,
+          seconds: prev?.seconds,
+          questionId: q.questionId || prev?.questionId,
+          explanation: q.explanation || prev?.explanation,
+        }
+      })
       setVal('questions', merged)
       toast.success(`Imported ${merged.length} question(s). Remember to Save.`)
     } catch (err) {
@@ -183,9 +205,10 @@ export default function AdminMockTests() {
     }
   }
 
-  const updateQuestionSeconds = (index, seconds) => {
-    setVal('questions', form.questions.map((q, i) => i === index ? { ...q, seconds: seconds || undefined } : q))
+  const updateQuestionField = (index, key, value) => {
+    setVal('questions', form.questions.map((q, i) => i === index ? { ...q, [key]: value || undefined } : q))
   }
+  const updateQuestionSeconds = (index, seconds) => updateQuestionField(index, 'seconds', seconds)
   const deleteQuestion = index => {
     setVal('questions', form.questions.filter((_, i) => i !== index))
   }
@@ -194,6 +217,14 @@ export default function AdminMockTests() {
     { key: 'questionText', label: 'Question' },
     { key: 'options', label: 'Options', render: v => <span className="text-xs text-gray-500">{v.join(' / ')}</span> },
     { key: 'correctIndex', label: 'Correct', render: v => <span className="font-bold text-[#64ac37]">{'ABCD'[v]}</span> },
+    { key: 'explanation', label: 'Explanation', render: (v, row) => (
+      <textarea rows={2} className={inputCls + ' w-56 text-xs'} placeholder="Shown after test completion"
+        value={v || ''} onChange={e => updateQuestionField(form.questions.indexOf(row), 'explanation', e.target.value)} />
+    )},
+    { key: 'questionId', label: 'Question ID', render: (v, row) => (
+      <input className={inputCls + ' w-24 text-xs'} placeholder="optional" value={v || ''}
+        onChange={e => updateQuestionField(form.questions.indexOf(row), 'questionId', e.target.value)} />
+    )},
     { key: 'seconds', label: 'Seconds', render: (v, row, i) => (
       <input type="number" min={5} className={inputCls + ' w-20'} placeholder={String(form.defaultSeconds)} value={v ?? ''}
         onChange={e => updateQuestionSeconds(form.questions.indexOf(row), e.target.value ? Number(e.target.value) : undefined)} />
@@ -284,7 +315,7 @@ export default function AdminMockTests() {
             <AdminButton size="sm" onClick={() => fileInputRef.current?.click()}><Upload size={13} className="mr-1.5" /> Import Excel/CSV</AdminButton>
             <AdminButton size="sm" variant="ghost" onClick={downloadSample}><Download size={13} className="mr-1.5" /> Download sample</AdminButton>
             <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFile} />
-            <span className="text-xs text-gray-400">Columns: {EXPECTED_HEADERS.join(' | ')}. Re-importing replaces all questions.</span>
+            <span className="text-xs text-gray-400">Columns: {EXPECTED_HEADERS.join(' | ')}. Optional: {OPTIONAL_HEADERS.join(' | ')}. Re-importing replaces all questions.</span>
           </div>
           {importErrors.length > 0 && (
             <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 space-y-1">

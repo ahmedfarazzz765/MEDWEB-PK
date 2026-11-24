@@ -9,6 +9,8 @@ import { mockAttemptsService } from '../../firebase/services'
 import { callMockTestAdminApi } from '../lib/mocktestApi'
 import { compositeCertificateCanvas, canvasToCompressedBlob } from '../../lib/certificateGenerator'
 import { uploadToCloudinary } from '../../firebase/cloudinary'
+import { buildMockTestReview } from '../../lib/mockTestReview'
+import MockTestReviewList from '../../components/MockTestReviewList'
 
 const STATUS_LABEL = { entered: 'Not started', in_progress: 'In progress', completed: 'Completed' }
 
@@ -193,6 +195,12 @@ export default function MockTestResults({ mockTest }) {
                 <Row label="Email status" value={detail.emailStatus} />
                 <Row label="Started" value={fmtDateTime(detail.startedAt)} />
                 <Row label="Finished" value={fmtDateTime(detail.finishedAt)} />
+                {Array.isArray(detail.questionOrder) && detail.questionOrder.length > 0 && (
+                  <div className="pt-3">
+                    <h3 className="font-bold text-[#1a1a1a] mb-2">Question Review</h3>
+                    <MockTestReviewList review={buildMockTestReview(mockTest, detail)} />
+                  </div>
+                )}
               </>}
             </div>
           </div>

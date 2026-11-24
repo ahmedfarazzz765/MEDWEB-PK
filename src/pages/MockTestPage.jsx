@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ClipboardCheck, ArrowLeft, Clock, CheckCircle, XCircle, Award, Download, ShieldCheck } from 'lucide-react'
+import { ClipboardCheck, ArrowLeft, Clock, CheckCircle, XCircle, Award, Download, ShieldCheck, FileDown } from 'lucide-react'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
+import MockTestReviewList from '../components/MockTestReviewList'
+import MockTestCtaBox from '../components/MockTestCtaBox'
 import { mocktestApi, getStoredToken, storeToken, clearStoredToken } from '../lib/mocktestClient'
 import { compositeCertificateCanvas, canvasToCompressedBlob } from '../lib/certificateGenerator'
 import { uploadToCloudinary } from '../firebase/cloudinary'
+import { generateMockTestResultPdf } from '../lib/mockTestResultPdf'
 
 const inputCls = 'w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-700 outline-none focus:border-[#1655c3] focus:ring-2 focus:ring-blue-100 transition-all bg-gray-50'
 
@@ -341,6 +344,21 @@ export default function MockTestPage() {
                   <p className="text-xs text-gray-400 mt-1">A minimum of {result.passPercent}% is required.</p>
                 </div>
               )}
+
+              <button onClick={() => generateMockTestResultPdf(result)}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-[#1655c3] border border-[#1655c3] hover:bg-blue-50 transition-colors">
+                <FileDown size={15} /> Download Result (PDF)
+              </button>
+
+              {Array.isArray(result.review) && result.review.length > 0 && (
+                <div className="pt-4 border-t border-gray-100">
+                  <h3 className="font-bold text-[#1a1a1a] mb-3">Full Question Review</h3>
+                  <MockTestReviewList review={result.review} />
+                </div>
+              )}
+
+              <MockTestCtaBox />
+
               <p className="text-center text-xs text-gray-400">A copy of this result has been emailed to you.</p>
             </div>
           </motion.div>

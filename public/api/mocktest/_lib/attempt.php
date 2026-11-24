@@ -141,6 +141,40 @@ function finish_attempt(Firestore $fs, array $mockTest, array $attempt): array {
     return $attempt;
 }
 
+// Full per-question "what happened" view for a COMPLETED attempt — question
+// text, options, the student's selected index, the correct index, and the
+// Explanation text (from the mockTests admin import, option-letter-free
+// since options are shuffled). Safe to reveal only now: mockTests itself is
+// admin-only in Firestore rules because it holds the answer key, but once
+// the attempt is finished there's nothing left to protect for THIS
+// attempt's own questions. Shared by result.php (student) and
+// mocktest_send_result_email() (the incorrect-questions block) — the
+// admin Results tab computes the identical shape client-side from its own
+// already-available mockTest+attempt docs (see src/lib/mockTestReview.js).
+function build_review(array $mockTest, array $attempt): array {
+    $order = $attempt['questionOrder'] ?? [];
+    $answers = $attempt['answers'] ?? [];
+    $questions = $mockTest['questions'] ?? [];
+    $review = [];
+    foreach ($order as $pos => $qIndex) {
+        $q = $questions[$qIndex] ?? [];
+        $a = $answers[$pos] ?? $answers[(string) $pos] ?? null;
+        $selected = is_array($a) ? ($a['selected'] ?? null) : null;
+        $correctIndex = (int) ($q['correctIndex'] ?? -1);
+        $review[] = [
+            'position' => $pos,
+            'questionText' => $q['questionText'] ?? '',
+            'options' => $q['options'] ?? [],
+            'selectedIndex' => $selected,
+            'correctIndex' => $correctIndex,
+            'correct' => $selected !== null && (int) $selected === $correctIndex,
+            'unanswered' => $selected === null,
+            'explanation' => $q['explanation'] ?? '',
+        ];
+    }
+    return $review;
+}
+
 // Cloudinary cloud name used by the existing webinar/course certificate
 // pipeline (src/lib/certificateGenerator.js) — the browser uploads there
 // unsigned via an upload preset, so this is public info already shipped in

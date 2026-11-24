@@ -124,6 +124,60 @@ function mocktest_email_footer_sections(Firestore $fs, string $homeUrl): string 
 HTML;
 }
 
+// Bottom CTA block — identical copy/links on the result screen
+// (src/components/MockTestCtaBox.jsx) and the PDF export
+// (src/lib/mockTestResultPdf.js). Keep all three in sync by hand.
+function mocktest_cta_box_html(): string {
+    return <<<HTML
+      <div style="background:linear-gradient(135deg,#1655c3,#64ac37);border-radius:14px;padding:22px 24px;text-align:center;margin:28px 0;">
+        <p style="margin:0 0 4px;color:#fff;font-size:16px;font-weight:900;">Want in-depth AMR clinical case studies?</p>
+        <p style="margin:0 0 14px;color:rgba(255,255,255,0.95);font-size:14px;font-weight:700;">Join our ONE-WEEK course on Antimicrobial Resistance with clinical case studies.</p>
+        <p style="margin:0;color:#fff;font-size:13px;">
+          <a href="tel:+923291692899" style="color:#fff;text-decoration:underline;font-weight:700;">0329 169 2899</a>
+          (<a href="https://wa.me/923291692899" style="color:#fff;text-decoration:underline;">WhatsApp</a>/Call)
+          &nbsp;|&nbsp; Email: <a href="mailto:medwebpk@gmail.com" style="color:#fff;text-decoration:underline;font-weight:700;">medwebpk@gmail.com</a>
+        </p>
+      </div>
+HTML;
+}
+
+// The "here's what you got wrong, with why" block — only the INCORRECT
+// questions, each with the student's answer, the correct one, and the
+// Explanation text from the admin import (option-letter-free, since
+// options are shuffled per student). Empty string (nothing rendered) when
+// everything was correct.
+function mocktest_incorrect_review_html(array $review): string {
+    $incorrect = array_values(array_filter($review, fn($r) => empty($r['correct'])));
+    if (!$incorrect) return '';
+
+    $rows = '';
+    foreach ($incorrect as $r) {
+        $q = htmlspecialchars((string) $r['questionText'], ENT_QUOTES);
+        $your = $r['selectedIndex'] !== null
+            ? htmlspecialchars((string) ($r['options'][$r['selectedIndex']] ?? ''), ENT_QUOTES)
+            : '<em>Not answered</em>';
+        $correct = htmlspecialchars((string) ($r['options'][$r['correctIndex']] ?? ''), ENT_QUOTES);
+        $explanation = (string) ($r['explanation'] ?? '');
+        $explanationBlock = $explanation !== '' ? '
+            <p style="margin:6px 0 0;color:#666;font-size:12px;line-height:1.6;background:#f7f9fc;border-radius:8px;padding:10px 12px;">' . nl2br(htmlspecialchars($explanation, ENT_QUOTES)) . '</p>' : '';
+        $rows .= <<<HTML
+          <div style="border-left:3px solid #ef4444;padding:10px 14px;margin-bottom:12px;background:#fff8f8;border-radius:0 8px 8px 0;">
+            <p style="margin:0 0 4px;color:#1a1a1a;font-size:13px;font-weight:700;">{$q}</p>
+            <p style="margin:0;color:#888;font-size:12px;">Your answer: <strong style="color:#ef4444;">{$your}</strong></p>
+            <p style="margin:2px 0 0;color:#888;font-size:12px;">Correct answer: <strong style="color:#16a34a;">{$correct}</strong></p>
+            {$explanationBlock}
+          </div>
+HTML;
+    }
+
+    return <<<HTML
+      <div style="margin:22px 0;">
+        <p style="margin:0 0 10px;color:#1a1a1a;font-size:14px;font-weight:800;">Review — Questions You Missed</p>
+        {$rows}
+      </div>
+HTML;
+}
+
 // $cert = null for a not-eligible result, or ['certCode'=>..., 'imageUrl'=>...|null]
 // once eligible (imageUrl may still be null if the student's own browser
 // hasn't rendered/uploaded it yet — the Certificate ID box + Verify button
@@ -143,6 +197,8 @@ function mocktest_send_result_email(Firestore $fs, array $attempt, array $mockTe
     $passPercent = $attempt['passPercent'] ?? ($mockTest['passPercent'] ?? 70);
     $homeUrl = 'https://medwebpk.com';
     $scoreLine = "{$correct}/{$total} ({$percent}%)";
+    $reviewHtml = mocktest_incorrect_review_html(build_review($mockTest, $attempt));
+    $ctaHtml = mocktest_cta_box_html();
 
     if (!empty($attempt['eligible']) && $cert) {
         $certCode = htmlspecialchars((string) $cert['certCode'], ENT_QUOTES);
@@ -178,6 +234,8 @@ function mocktest_send_result_email(Firestore $fs, array $attempt, array $mockTe
       <p style="color:#aaa;font-size:12px;margin:0 0 28px;text-align:center;">
         Share your certificate link: <a href="{$verifyUrl}" style="color:#1655c3;">{$verifyUrl}</a>
       </p>
+      {$reviewHtml}
+      {$ctaHtml}
       {$footerSections}
 HTML;
     } else {
@@ -193,6 +251,8 @@ HTML;
         You scored <strong>{$scoreLine}</strong> on <strong>"{$testTitle}"</strong> for <strong>"{$courseTitle}"</strong> with MEDWEB-PK.
       </p>
       {$eligibilityLine}
+      {$reviewHtml}
+      {$ctaHtml}
       {$footerSections}
 HTML;
     }

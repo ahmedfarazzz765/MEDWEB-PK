@@ -17,11 +17,15 @@ if (($attempt['status'] ?? '') !== 'completed') {
 }
 
 // mockTests is admin-only in Firestore rules (it holds answer keys) — the
-// student's browser can never read it directly. certTemplate has no
-// answer-key material in it at all (just an image URL + text positions),
-// so it's the one piece of that doc safe to hand back here, needed so the
-// result page can render the certificate client-side exactly like the
-// admin's own CertPositionEditor preview does.
+// student's browser can never read it directly, so it's loaded here
+// server-side for both the certTemplate (below) and the full per-question
+// review (build_review() — safe now that the attempt is finished).
+$mockTest = load_mock_test($fs, $attempt['mockTestId']);
+
+// certTemplate has no answer-key material in it at all (just an image URL +
+// text positions), so it's the one piece of that doc safe to hand back
+// here, needed so the result page can render the certificate client-side
+// exactly like the admin's own CertPositionEditor preview does.
 //
 // certCode: the browser can't compute derive_mock_test_cert_code() itself
 // (it's an HMAC keyed by the server-only CRON_SECRET, deliberately — see
@@ -33,7 +37,6 @@ $certTemplate = null;
 $certCode = $attempt['certCode'] ?? null;
 if (!empty($attempt['eligible'])) {
     if (($attempt['certificateStatus'] ?? '') !== 'issued') {
-        $mockTest = load_mock_test($fs, $attempt['mockTestId']);
         $certTemplate = $mockTest['certTemplate'] ?? null;
         $certCode = derive_mock_test_cert_code($attempt['id']);
     }
@@ -44,6 +47,7 @@ json_response([
     'status' => 'completed',
     'attemptId' => $attempt['id'],
     'studentName' => $attempt['studentName'] ?? '',
+    'enrollmentId' => $attempt['enrollmentId'] ?? '',
     'courseTitle' => $attempt['courseTitle'] ?? '',
     'testTitle' => $attempt['mockTestTitle'] ?? '',
     'totalQuestions' => $attempt['totalQuestions'] ?? 0,
@@ -57,4 +61,5 @@ json_response([
     'certCode' => $certCode,
     'certificateImageUrl' => $attempt['certificateImageUrl'] ?? null,
     'certTemplate' => $certTemplate,
+    'review' => build_review($mockTest, $attempt),
 ]);
