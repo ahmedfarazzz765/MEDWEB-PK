@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { toOptimizedUrl } from '../../firebase/cloudinary'
 
 // Framed masonry gallery (CSS columns — a real masonry layout without a
 // layout library) with a fullscreen lightbox; swipe-to-navigate on touch
@@ -45,7 +46,7 @@ export default function EventGallery({ items = [] }) {
             className="block w-full mb-3 bg-white rounded-sm p-1.5 shadow-[0_4px_16px_rgba(0,0,0,0.08)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.15)] transition-shadow"
             style={{ border: '1px solid #d4d4d8' }}
           >
-            <img src={img.url} alt={img.caption || ''} loading="lazy" className="w-full rounded-[1px]" />
+            <img src={toOptimizedUrl(img.url)} alt={img.caption || ''} loading="lazy" className="w-full rounded-[1px]" />
             {img.caption && <p className="text-[11px] text-gray-500 mt-1.5 px-0.5 text-left">{img.caption}</p>}
           </button>
         ))}
@@ -73,7 +74,7 @@ export default function EventGallery({ items = [] }) {
               className="max-w-4xl max-h-[85vh] flex flex-col items-center"
               onClick={e => e.stopPropagation()}
             >
-              <img src={items[openIndex].url} alt={items[openIndex].caption || ''} loading="lazy" className="max-w-full max-h-[75vh] object-contain rounded" />
+              <img src={toOptimizedUrl(items[openIndex].url)} alt={items[openIndex].caption || ''} loading="lazy" className="max-w-full max-h-[75vh] object-contain rounded" />
               {items[openIndex].caption && <p className="text-white/80 text-sm mt-3 text-center">{items[openIndex].caption}</p>}
               <p className="text-white/40 text-xs mt-1">{openIndex + 1} / {items.length}</p>
             </motion.div>

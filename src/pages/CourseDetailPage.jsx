@@ -3,6 +3,7 @@ import { useParams, useNavigate, useLocation, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, ExternalLink, Star, PlayCircle, Clock, ListChecks, Calendar, MapPin, Award, Banknote } from 'lucide-react'
 import { coursesService } from '../firebase/services'
+import { toOptimizedUrl } from '../firebase/cloudinary'
 import { useSiteData } from '../hooks/useSiteData'
 import Navbar from '../components/Navbar'
 import Footer from '../sections/Footer'
@@ -218,7 +219,7 @@ export default function CourseDetailPage() {
               <div className="flex items-center gap-4 p-4 rounded-2xl border border-gray-100 bg-gray-50">
                 <div className="w-20 h-20 rounded-2xl overflow-hidden flex-shrink-0 ring-2 ring-white shadow-sm bg-[#1655c3] flex items-center justify-center">
                   {course.instructorImage
-                    ? <img src={course.instructorImage} alt={course.instructor} className="w-full h-full object-contain" loading="lazy" />
+                    ? <img src={toOptimizedUrl(course.instructorImage)} alt={course.instructor} className="w-full h-full object-contain" loading="lazy" />
                     : <div className="w-full h-full flex items-center justify-center text-white font-bold text-base">{instructorInitials}</div>}
                 </div>
                 <div className="min-w-0">
@@ -231,7 +232,7 @@ export default function CourseDetailPage() {
 
             {course.posterImage && (
               <img
-                src={course.posterImage}
+                src={toOptimizedUrl(course.posterImage)}
                 alt={`${course.title}${course.instructor ? ` – ${course.instructor}` : ''} workshop poster`}
                 loading="lazy"
                 className="block mx-auto w-full h-auto object-contain rounded-2xl"

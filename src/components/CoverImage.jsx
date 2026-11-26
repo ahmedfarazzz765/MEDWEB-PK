@@ -1,3 +1,5 @@
+import { toOptimizedUrl } from '../firebase/cloudinary'
+
 // Drop-in replacement for the `<img className="w-full h-full object-cover" />`
 // pattern used all over the site — one shared spot for the "make an
 // uploaded image of ANY aspect ratio fill its container cleanly, cropped and
@@ -23,10 +25,18 @@
 // a Tailwind specificity gamble (both target the same CSS property; which
 // one wins depends on stylesheet generation order, not className order) —
 // so sizing always stays 100% under the caller's control.
+//
+// `src` is passed through toOptimizedUrl() (Cloudinary f_auto,q_auto) so
+// every photo rendered through this component is auto-compressed/served as
+// WebP/AVIF where supported, instead of whatever raw format was uploaded —
+// the single biggest fix for the site's PageSpeed image-delivery warning,
+// since this component is already the shared render path for team, blog,
+// webinar, course, testimonial, event and announcement images. Safe no-op
+// on non-Cloudinary src values (local assets, data URLs, etc).
 export default function CoverImage({ src, alt = '', bias = 'center', className = '', style, loading = 'lazy', decoding = 'async', ...rest }) {
   return (
     <img
-      src={src}
+      src={toOptimizedUrl(src)}
       alt={alt}
       loading={loading}
       decoding={decoding}

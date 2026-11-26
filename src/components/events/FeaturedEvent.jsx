@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Calendar, MapPin, ArrowRight } from 'lucide-react'
 import { CATEGORY_COLORS } from './EventCard'
+import { toOptimizedUrl } from '../../firebase/cloudinary'
 
 // Large framed hero for the single most recent featured event — a slow
 // continuous Ken Burns zoom on the photo plus one light-sweep pass across
@@ -21,7 +22,7 @@ export default function FeaturedEvent({ item, reduceMotion = false }) {
               animate={reduceMotion ? {} : { scale: [1, 1.12] }}
               transition={reduceMotion ? {} : { duration: 18, repeat: Infinity, repeatType: 'reverse', ease: 'easeInOut' }}
             >
-              <img src={poster} alt={item.title} className="w-full h-full object-cover" />
+              <img src={toOptimizedUrl(poster)} alt={item.title} className="w-full h-full object-cover" />
             </motion.div>
           )}
           {/* light sweep */}
