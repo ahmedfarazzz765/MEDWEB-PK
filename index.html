@@ -23,11 +23,13 @@
          inside /admin stay on Poppins (the site-wide default already
          loaded above); only this adds Inter for admin body/table/form
          text, not loaded by the public site's own typography. -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" onload="this.onload=null;this.rel='stylesheet'" />
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" /></noscript>
     <!-- Certificate Name-field font options (src/constants/certificateFonts.js) — loaded
          site-wide so the fonts are available both in the admin preview AND on the public
          feedback-form pages where the certificate canvas is actually composited. -->
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Cormorant+Garamond:wght@400;700&family=Marcellus&family=Alex+Brush&family=Great+Vibes&family=Dancing+Script&family=Tangerine&display=swap" rel="stylesheet" />
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Cormorant+Garamond:wght@400;700&family=Marcellus&family=Alex+Brush&family=Great+Vibes&family=Dancing+Script&family=Tangerine&display=swap" onload="this.onload=null;this.rel='stylesheet'" />
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Cormorant+Garamond:wght@400;700&family=Marcellus&family=Alex+Brush&family=Great+Vibes&family=Dancing+Script&family=Tangerine&display=swap" /></noscript>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
   </head>
   <body>
