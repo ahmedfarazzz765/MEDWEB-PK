@@ -8,9 +8,11 @@ name: Daily Health News Draft
 # review and publish manually.
 
 on:
-  schedule:
-    # 05:00 UTC = 10:00 AM PKT — well before an evening admin review.
-    - cron: '0 5 * * *'
+  # Daily auto-schedule disabled on request (not needed right now) —
+  # script and manual trigger kept intact, just not auto-firing.
+  # Re-enable by restoring:
+  #   schedule:
+  #     - cron: '0 5 * * *'
   workflow_dispatch: {} # manual "Run workflow" button, for testing
 
 jobs:
