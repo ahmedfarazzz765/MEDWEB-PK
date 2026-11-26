@@ -36,6 +36,67 @@ const DIST = join(ROOT, 'dist')
 const SITE_URL = 'https://medwebpk.com'
 const DEFAULT_IMAGE = `${SITE_URL}/og-default.jpg`
 
+// Site-wide Organization schema (Schema.org / JSON-LD) — added so Google
+// can show MEDWEB-PK's logo/knowledge-panel info in search and understand
+// what kind of entity this site represents. Only real, verified links
+// (found in the codebase's own share/footer links) are listed in sameAs.
+const ORG_SOCIAL_LINKS = [
+  'https://facebook.com/medwebpk',
+  'https://instagram.com/medwebpk',
+  'https://linkedin.com/company/medwebpk',
+]
+
+function organizationJsonLd() {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'EducationalOrganization',
+    name: 'MEDWEB-PK',
+    alternateName: 'MEDWEB',
+    url: SITE_URL,
+    logo: DEFAULT_IMAGE,
+    sameAs: ORG_SOCIAL_LINKS,
+  }
+}
+
+function breadcrumbJsonLd(title, routePath) {
+  if (!routePath || routePath === '/') return null
+  const segments = routePath.split('/').filter(Boolean)
+  const items = [{ '@type': 'ListItem', position: 1, name: 'Home', item: SITE_URL }]
+  segments.forEach((seg, i) => {
+    const isLast = i === segments.length - 1
+    items.push({
+      '@type': 'ListItem',
+      position: i + 2,
+      name: isLast ? title : seg.replace(/-/g, ' '),
+      item: `${SITE_URL}/${segments.slice(0, i + 1).join('/')}`,
+    })
+  })
+  return { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: items }
+}
+
+function articleJsonLd({ title, description, image, path: routePath, datePublished, hasArticleBody }) {
+  if (!hasArticleBody) return null
+  const data = {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: title,
+    description,
+    image: image || DEFAULT_IMAGE,
+    url: `${SITE_URL}${routePath}`,
+    author: { '@type': 'Organization', name: 'MEDWEB-PK' },
+    publisher: { '@type': 'Organization', name: 'MEDWEB-PK', logo: { '@type': 'ImageObject', url: DEFAULT_IMAGE } },
+  }
+  if (datePublished) data.datePublished = datePublished
+  return data
+}
+
+function jsonLdScripts(schemas) {
+  return schemas
+    .filter(Boolean)
+    .map(schema => `<script type="application/ld+json">${JSON.stringify(schema)}</script>`)
+    .join('\n    ')
+}
+
 // Same sanitizer src/components/PostArticleView.jsx uses client-side
 // (DOMPurify.sanitize(post.content)) before dangerouslySetInnerHTML — blog
 // content is only ever sanitized at RENDER time, not when saved, so this
@@ -89,7 +150,7 @@ function buildBodyHtml({ title, description, articleHtml }) {
   return `<main>${parts.join('\n')}</main>`
 }
 
-function injectMeta(template, { title, description, path, image, articleHtml }) {
+function injectMeta(template, { title, description, path, image, articleHtml, datePublished }) {
   const fullTitle = `${title} | MEDWEB-PK`
   const canonical = `${SITE_URL}${path}`
   const img = image || DEFAULT_IMAGE
@@ -108,6 +169,13 @@ function injectMeta(template, { title, description, path, image, articleHtml }) 
     `<meta name="twitter:image" content="${escapeAttr(img)}" />`,
   ].join('\n    ')
   out = out.replace('</head>', `    ${extraTags}\n  </head>`)
+  const jsonLd = jsonLdScripts([
+    organizationJsonLd(),
+    breadcrumbJsonLd(title, path),
+    articleJsonLd({ title: fullTitle, description, image: img, path, datePublished, hasArticleBody: Boolean(articleHtml) }),
+  ])
+  out = out.replace('</head>', `    ${jsonLd}\n  </head>`)
+
   out = out.replace('<div id="root"></div>', `<div id="root">${buildBodyHtml({ title, description, articleHtml })}</div>`)
   return out
 }
@@ -168,7 +236,8 @@ async function getDynamicItems() {
     blogPosts.forEach(d => {
       const p = d.data()
       if (!p.slug) return
-      items.push({ path: `/blog/${p.slug}`, title: p.title, description: p.excerpt, image: p.imageUrl, articleHtml: p.content })
+      const pDate = p.createdAt && typeof p.createdAt.toDate === 'function' ? p.createdAt.toDate().toISOString() : undefined
+      items.push({ path: `/blog/${p.slug}`, title: p.title, description: p.excerpt, image: p.imageUrl, articleHtml: p.content, datePublished: pDate })
     })
     news.forEach(d => {
       const n = d.data()
@@ -177,11 +246,14 @@ async function getDynamicItems() {
       // module) — seoTitle/seoDescription/shareImage are the new fields;
       // metaTitle/metaDescription/imageUrl are what pre-this-round docs
       // (including the automated news-fetch pipeline) still only have.
+      const nDate = n.createdAt && typeof n.createdAt.toDate === 'function' ? n.createdAt.toDate().toISOString() : undefined
       items.push({
         path: `/events/${n.slug}`,
         title: n.seoTitle || n.metaTitle || n.title,
         description: n.seoDescription || n.metaDescription || n.summary,
         image: n.shareImage || n.coverImage || n.imageUrl,
+        articleHtml: n.content,
+        datePublished: nDate,
       })
     })
     announcements.forEach(d => {
@@ -214,6 +286,9 @@ async function main() {
     `<meta name="twitter:card" content="summary_large_image" />`,
   ].join('\n    ')
   let homeOut = template.replace('</head>', `    ${homeExtra}\n  </head>`)
+  const homeJsonLd = jsonLdScripts([organizationJsonLd()])
+  homeOut = homeOut.replace('</head>', `    ${homeJsonLd}\n  </head>`)
+
   // Mirrors Hero.jsx's own DEFAULTS (the admin-configurable settings
   // override is only resolvable client-side) — enough real text for a
   // non-JS crawler/view-source, not a pixel-perfect mirror of whatever an
